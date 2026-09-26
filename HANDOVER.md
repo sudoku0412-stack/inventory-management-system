@@ -192,6 +192,13 @@ Do not launch Cursor cloud agents for this project. Read this file at the start 
 - Acceptance requires conditional one-versus-many rendering, role clarity, header propagation, dirty-form cancellation, safe loading/error states, old-state clearing, local fallback, and cross-Shop isolation tests, plus desktop/mobile checks at 320px, 200% zoom, keyboard-only, visible focus, long names, reduced motion, and screen-reader announcements. Exact copy and detailed criteria are in `ARCHITECTURE.md`.
 - Out of scope: creating another Shop, admin promotion or other role changes, ownership transfer, member removal, and invitation redesign.
 
+## Shop selector implementation (pending review/merge)
+
+- The Profile-only selector now waits behind the access gate for a valid `GET /api/shops` response before loading any Shop-scoped screen data. It validates that `activeShopId` is one of the returned memberships, pins it as `X-Shop-Id` for page-scoped API calls, and keeps malformed, empty, and failed contexts in a retry/sign-out safe state. A local `/api/shops` 404 retains the existing single-Shop local experience.
+- Multi-Shop users see a native labelled **Current Shop** selector with Owner/Member option and role copy; single-Shop cloud users retain only their static role, and local users receive no fabricated role. The sidebar identifies the active role and directs multi-Shop users to Profile.
+- Switching requires confirmation when Profile is dirty, validates the selected id through `GET /api/shops` with `X-Shop-Id`, then reloads `#profile` so no prior-Shop in-memory state remains. A one-use session marker restores selector focus and announces the confirmed Shop only after the application shell is visible. Failure restores and focuses the prior option with explicit retry/reload guidance.
+- Saved batch-photo views now use a header-pinned fetch and short-lived object URL rather than a direct image URL. Stale batch/Shop responses are ignored, and object URLs are revoked when the relevant dialog or preview closes. `public/sw.js` also no longer reads `/api/notifications` during a push because a service worker has no page-bound active Shop context; it shows the existing generic reminder instead. Behavioral coverage in `test/shop-selector-ui.test.js` exercises request headers, photo isolation/lifecycle, dirty cancellation, switch confirmation/failure, and post-reveal focus. This has not been merged, deployed, or browser-verified on a real authenticated account.
+
 ## Secure Shop onboarding and administration foundation (deployed 2026-09-26)
 
 - Shop remains the visible product term; internal household tables and routes remain intact for deployed-client compatibility.
