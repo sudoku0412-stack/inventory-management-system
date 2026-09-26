@@ -71,7 +71,7 @@ Local development
 - Inventory, settings, notifications, push subscriptions, photos, and Shop access routes use that resolved context, so an id from another Shop cannot be read or mutated. Context and Shop API responses use `Cache-Control: no-store`.
 - This slice deliberately does not add a browser switcher, role changes, ownership transfer, or a redesign of invitation enrollment.
 
-## Finalized, pending implementation: Shop selector
+## Implemented, pending review/merge: Shop selector
 
 ### Placement and responsive presentation
 
@@ -105,6 +105,8 @@ Local development
 6. Desktop and mobile browser checks cover long Shop names, 320px width, 200% zoom, keyboard-only operation, visible focus, and screen-reader announcements.
 
 This chunk does not create another Shop, promote an admin, change roles, transfer ownership, remove members, or redesign invitations.
+
+The implementation keeps the access gate visible until `GET /api/shops` validates that the declared active Shop is among the signed-in caller's memberships. It pins that id into subsequent page requests with `X-Shop-Id`; local `/api/shops` 404 responses retain the single-Shop local flow. Saved packaging photos are fetched through that pinned request path and displayed with revocable object URLs, so native image loads cannot resolve against a changed Shop context. A service-worker push is deliberately generic because it has no page-bound context and therefore must not issue an unpinned notification request.
 
 ## Finalized, pending deployment: secure Shop administration onboarding
 

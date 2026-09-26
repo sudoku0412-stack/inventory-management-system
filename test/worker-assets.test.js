@@ -6,6 +6,7 @@ import { assetCacheControl, handleRequest } from '../worker/index.js';
 test('worker cache policy requires fresh shell and bootstrap assets', () => {
   assert.equal(assetCacheControl('/index.html'), 'no-store');
   assert.equal(assetCacheControl('/app.js'), 'no-cache, must-revalidate');
+  assert.equal(assetCacheControl('/shop-client.js'), 'no-cache, must-revalidate');
   assert.equal(assetCacheControl('/styles.css'), 'no-cache, must-revalidate');
   assert.equal(assetCacheControl('/sw.js'), 'no-cache, must-revalidate');
 });

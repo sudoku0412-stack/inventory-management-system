@@ -1,22 +1,8 @@
 self.addEventListener('push', event => {
   event.waitUntil((async () => {
-    let title = 'Medicine expiry reminder';
-    let body = 'Open Medicine Tracker to review items due in the next 30 days.';
-    try {
-      const items = await fetch('/api/notifications', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : []);
-      const unread = (items || []).filter(n => !n.read_at);
-      if (unread.length === 1) {
-        const days = unread[0].expiry_date ? Math.ceil((new Date(`${unread[0].expiry_date}T00:00:00`) - new Date()) / 86400000) : null;
-        title = unread[0].name;
-        body = days === 0 ? 'Expires today.' : `Expires in ${Math.max(0, days)} days.`;
-      } else if (unread.length > 1) {
-        title = `${unread.length} medicines need attention`;
-        body = 'Open the app to review expiry reminders.';
-      }
-    } catch {
-      /* still show a generic alert */
-    }
-    await self.registration.showNotification(title, { body, data: { url: '/#notifications' } });
+    // A service worker has no page-bound active Shop context. Keep its push
+    // generic so it cannot make an unpinned cross-Shop notification request.
+    await self.registration.showNotification('Medicine expiry reminder', { body: 'Open Medicine Tracker to review items due in the next 30 days.', data: { url: '/#notifications' } });
   })());
 });
 

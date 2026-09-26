@@ -59,9 +59,9 @@
           </button>
         </nav>
 
-        <button class="household-card" type="button" data-view="profile" aria-label="Open Profile and settings">
+        <button class="household-card" id="sideHouseholdCard" type="button" data-view="profile" aria-label="Open Profile and settings">
           <div class="household-icon" aria-hidden="true">KS</div>
-          <div><strong id="sideHouseholdName">My Shop</strong><span>Shop inventory</span></div>
+          <div><strong id="sideHouseholdName">My Shop</strong><span id="sideShopRole">Shop inventory</span></div>
           <span class="household-more" aria-hidden="true">•••</span>
         </button>
       </aside>
@@ -205,6 +205,14 @@
           <div class="page-heading">
             <div><p class="eyebrow">YOUR SHOP</p><h1>Profile &amp; settings</h1><p>Keep the names and defaults your Shop sees every day up to date.</p></div>
           </div>
+          <section class="profile-card shop-selector-card" id="shopSelectorCard" aria-labelledby="shopSelectorTitle" hidden>
+            <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">⌁</span><div><h2 id="shopSelectorTitle">Current Shop</h2><p>Choose the Shop whose inventory and settings you want to use.</p></div></div>
+            <div id="shopSelectorBusy">
+              <label class="form-field" for="shopSelector"><span>Shop</span><select id="shopSelector" aria-describedby="shopSwitchStatus"></select></label>
+              <p class="shop-role" id="shopSelectorRole"></p>
+              <p class="shop-switch-status" id="shopSwitchStatus" role="status" aria-live="polite"></p>
+            </div>
+          </section>
           <form class="profile-layout" id="profileSettingsForm" novalidate>
             <section class="profile-card" aria-labelledby="profileDetailsTitle">
               <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">●</span><div><h2 id="profileDetailsTitle">Profile</h2><p>Your name appears in the dashboard greeting and avatar.</p></div></div>
@@ -212,6 +220,7 @@
             </section>
             <section class="profile-card" aria-labelledby="householdDetailsTitle">
               <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">⌂</span><div><h2 id="householdDetailsTitle">Shop</h2><p>This is the label shown in the sidebar.</p></div></div>
+              <p class="shop-role" id="shopRole" hidden></p>
               <div class="form-field"><label for="householdName">Shop name</label><input id="householdName" name="household_name" type="text" minlength="1" maxlength="80" required autocomplete="organization" aria-describedby="householdNameHelp" /><small id="householdNameHelp">1–80 characters</small></div>
             </section>
             <section class="profile-card" aria-labelledby="medicineDefaultsTitle">
