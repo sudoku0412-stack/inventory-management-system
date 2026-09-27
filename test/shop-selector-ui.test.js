@@ -13,6 +13,8 @@ test('Shop selector is a native Profile control with explicit live status and ro
   assert.match(page, /id="shopSelectorRole"/);
   assert.match(page, /id="shopSwitchStatus" role="status" aria-live="polite"/);
   assert.match(css, /shop-selector-card select \{ min-height: 44px; \}/);
+  assert.match(css, /\.shop-role \{ margin: 8px 0 16px;/, 'role text must remain below the select with positive spacing');
+  assert.doesNotMatch(css, /\.shop-role \{ margin: -/, 'role text must not use a negative offset that overlaps the select');
 });
 
 test('scoped page requests receive the resolved Shop header while onboarding requests do not', async () => {
