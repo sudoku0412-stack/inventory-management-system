@@ -4,7 +4,8 @@
 
 - The Profile Current Shop card's `Your role: Owner` label used a negative top margin, which could overlap the native Shop select on narrow iPhone widths and at 200% zoom.
 - Changed `.shop-role` to use explicit positive spacing (`margin: 8px 0 16px`) so the role/status text stays below the select without changing the switch-status behavior or wider layout structure.
-- Added a focused CSS contract assertion in `test/shop-selector-ui.test.js`; the focused selector suite passes (7/7) and `git diff --check` is clean.
+- Added a focused CSS contract assertion in `test/shop-selector-ui.test.js`; the focused selector suite passes (7/7), the full suite passes (111/111), and `git diff --check` is clean.
+- PR #49 merged as `fd62249897f5dba921acc044f37fe7d8b203c539` and was deployed to production as Worker version `47b64a50-81ca-409a-b515-863c36fd4fb3`. The custom domain returned the expected Cloudflare Access 302 with private/no-store headers. No migration, Access, DNS, or secret change was needed.
 
 ## Owner promotion implementation and deployment (2026-09-27)
 
