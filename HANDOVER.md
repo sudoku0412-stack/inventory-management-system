@@ -1,5 +1,13 @@
 # Medicine Inventory Tracker — handover
 
+## Next bounded lifecycle slice — owner promotion design (2026-09-27, not implemented)
+
+- Finalized in `ARCHITECTURE.md`: **Make owner** promotes an already accepted Member of the current Shop to the existing Owner role. Multiple equal Owners provide administration without an admin schema/tier; the acting Owner keeps ownership. Separate membership rows retain isolation across Shops.
+- Add owner-only roster `user_id` and POST `/api/household/members/:userId/promote` with `{ operationId }`, mandatory pinned Shop header, strict same-origin JSON, fresh and transactional owner checks, five-owned-Shop target cap, atomic promotion receipt/audit and safe no-op/replay. Planned 0013 widens audit events with `member_promoted` and adds receipts; no migration or code was created in this design task.
+- Smallest slice excludes demotion, removal, resignation, transfer and additional invitation joins. Today's acceptance rejects users who already have a membership; a target must already belong to this Shop. Additive promotion cannot remove its last Owner; future destructive endpoints need serialized last-owner guards and stronger lifecycle concurrency design.
+- Senior amendments: dispatch promotion before `resolveTenant`, use a read-only identity/membership join for its mandatory pinned Shop header, and preserve all preferences on every outcome. Include the scheduler compatibility fix: process each distinct Shop once using a stable owner context, deliver once per notification/subscription/Shop despite multiple Owners, preserve expired subscription cleanup and test these behaviors. Earlier phase-specific owner/admin-promotion deferrals are superseded by this design; the separate admin tier and destructive role changes remain deferred.
+- Next implementation requires one implementer, UI Designer pass, consolidated Senior review, transactional race/rollback and cross-Shop tests, plus authenticated responsive/access verification before deployment. Existing production/browser verification gaps above remain open. Design work changed only these two documents; no commit, push, PR or deployment.
+
 ## Current state
 
 - Product: household medicine inventory (responsive web). Long-term: optional native clients; not a commercial store product.
