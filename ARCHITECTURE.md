@@ -118,7 +118,7 @@ The implementation keeps the access gate visible until `GET /api/shops` validate
 - The browser gates unaffiliated authenticated users before loading inventory or cache-backed views: eligible owners receive explicit setup, invitees receive acceptance, and other users receive lock, retry, and sign-out guidance. Members see the current application; only owners see Shop-access controls.
 - Recheck owner authorization and same-origin protections on every administration mutation. Coverage includes concurrent setup, forged identity input, invitation expiry/revocation, cross-Shop isolation, and audit rollback.
 
-## Finalized design, not implemented: create another Shop
+## Finalized design, implemented locally but not deployed: create another Shop
 
 ### Scope and authority
 
@@ -166,4 +166,13 @@ Explicit deferrals: self-service creation by users with no memberships; existing
 
 - Pull/change feed and offline synchronization reconciliation.
 - Native mobile clients.
-- Export, account deletion, configurable reminder windows, ownership transfer, admin promotion, member removal, and non-owner roster or pending-invitation visibility. Creating another Shop is finalized above but not implemented.
+- Export, account deletion, configurable reminder windows, ownership transfer, admin promotion, member removal, and non-owner roster or pending-invitation visibility.
+
+## Create another Shop implementation status (2026-09-27, not deployed)
+
+- Migration `0012_shop_creation.sql` adds account-scoped creation receipts and safely rebuilds `access_audit` with the additive `shop_created` event while preserving its columns, relationships, and index. The migration is intentionally forward-only; it does not alter the deployed 0010 file.
+- `POST /api/shops` now executes before tenant resolution. It verifies the Access JWT, checks the migration lock, requires same-origin JSON, ignores every `X-Shop-Id`, resolves the verified provider/subject to an existing member, and performs replay/creation independently of the active-Shop preference.
+- The guarded D1 batch creates only an empty destination Shop, owner membership, user-sourced settings, receipt, and one audit event. It preserves the old Shop selection and enforces the documented ownership and rolling-creation limits. It is implemented and tested locally, but has not been migrated or deployed to production.
+- `GET /api/shops` additively returns the authenticated internal `users.id` as `accountContextKey`. The Profile dialog persists an account-scoped intent before mutation, exposes an explicit retry/resume path only to that same key, and never switches Shop context after success.
+- `bindShopCreation` owns the actual app dialog bindings, persistence, in-flight guard, retry and success/refetch sequence. A confirmed success clears its intent; failed or mismatched context refresh leaves the current Shop intact, shows a persistent status and restores focus to the creation action. Tests execute that controller with DOM event/service doubles, preserving unsaved Profile fields; native modal/mobile semantics are checked separately against markup and CSS.
+- Concurrency coverage uses a two-caller barrier before SQLite-backed D1-style atomic batches, covering duplicate replay and distinct-operation owner/rolling caps. Missing receipt schema fails closed, eligible audit failure rolls back, and route preference snapshots are byte-for-byte invariant. Full automated suite: 85 passing. Real-browser responsive/accessibility and authenticated production verification remain outstanding; no remote migration or deployment has occurred for this slice.
