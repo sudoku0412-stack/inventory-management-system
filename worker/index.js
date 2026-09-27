@@ -8,12 +8,12 @@ import {
   visionConfig
 } from '../lib/shared.js';
 import { createD1Store, loadVapid } from '../lib/store-d1.js';
-import { createAdditionalShop, listShops, onboardingStatus, resolveTenant, setupInitialShop, shopContext } from '../lib/tenants.js';
-import { acceptHouseholdInvitation, createHouseholdInvitation, listHouseholdAccess, pendingHouseholdInvitations, revokeHouseholdInvitation } from '../lib/household-access.js';
+import { createAdditionalShop, listShops, onboardingStatus, pinnedTenant, resolveTenant, setupInitialShop, shopContext } from '../lib/tenants.js';
+import { acceptHouseholdInvitation, createHouseholdInvitation, listHouseholdAccess, pendingHouseholdInvitations, promoteHouseholdMember, revokeHouseholdInvitation, validateOwnerPromotion } from '../lib/household-access.js';
 
 const jwksCache = { at: 0, keys: null };
 
-const bootstrapAssetPaths = new Set(['/index.html', '/app.js', '/greeting.js', '/shop-client.js', '/shop-creation-client.js', '/styles.css', '/sw.js']);
+const bootstrapAssetPaths = new Set(['/index.html', '/app.js', '/greeting.js', '/shop-client.js', '/shop-creation-client.js', '/owner-promotion-client.js', '/styles.css', '/sw.js']);
 
 export function assetCacheControl(path) {
   if (path === '/index.html') return 'no-store';
@@ -85,6 +85,11 @@ function requireCreationRequest(request, url) {
   if (request.headers.get('origin') !== url.origin || request.headers.get('sec-fetch-site') === 'cross-site') throw Object.assign(new Error('This Shop creation request must come from this site.'), { status: 403 });
 }
 
+function requirePromotionRequest(request, url) {
+  if (!/^application\/json(?:\s*;|$)/i.test(request.headers.get('content-type') || '')) throw Object.assign(new Error('Content-Type must be application/json.'), { status: 400 });
+  if (request.headers.get('origin') !== url.origin || request.headers.get('sec-fetch-site') === 'cross-site') throw Object.assign(new Error('This owner promotion request must come from this site.'), { status: 403 });
+}
+
 export async function handleRequest(request, env, ctx) {
   const url = new URL(request.url);
   if (url.pathname.startsWith('/api/')) {
@@ -103,6 +108,18 @@ export async function handleRequest(request, env, ctx) {
         requireCreationRequest(request, url);
         const created = await createAdditionalShop(env.DB, principal, await readJson(request), { requestId });
         return json(created, created.created ? 201 : 200);
+      }
+      const promotion = url.pathname.match(/^\/api\/household\/members\/([^/]+)\/promote$/);
+      // Promotion pins the caller's explicit Shop but must never update the
+      // advisory preference used by ordinary Shop-scoped requests.
+      if (promotion) {
+        if (request.method !== 'POST') return json({ error: 'Not found' }, 404);
+        if (await migrationIsActive(env.DB)) return json({ error: 'Inventory is temporarily read-only while a migration is in progress.' }, 503);
+        requirePromotionRequest(request, url);
+        const body = await readJson(request);
+        validateOwnerPromotion(promotion[1], body);
+        const tenant = await pinnedTenant(env.DB, principal, request.headers.get('x-shop-id'));
+        return json(await promoteHouseholdMember(env.DB, principal, tenant, promotion[1], body, requestId));
       }
       if (request.method === 'GET' && url.pathname === '/api/shop/onboarding-status') return json(await onboardingStatus(env.DB, principal, env));
       if (request.method === 'POST' && url.pathname === '/api/shop/onboarding') {
@@ -194,16 +211,18 @@ export async function handleRequest(request, env, ctx) {
   return fetchAsset(request, env, assetPath);
 }
 
+export async function deliverScheduledPushes(env, { storeFactory = createD1Store, loadKeys = loadVapid } = {}) {
+  const memberships = await env.DB.prepare("SELECT household_id,MIN(user_id) AS user_id FROM memberships WHERE role='owner' GROUP BY household_id").all();
+  const vapid = await loadKeys(env.KV, env);
+  await Promise.all((memberships.results || []).map(({ household_id, user_id }) =>
+    storeFactory(env.DB, env.PHOTOS, vapid, { householdId: household_id, userId: user_id }).deliverPushes({ contact: env.PUSH_CONTACT })));
+}
+
 export default {
   async fetch(request, env, ctx) {
     return handleRequest(request, env, ctx);
   },
   async scheduled(event, env, ctx) {
-    ctx.waitUntil((async () => {
-      const memberships = await env.DB.prepare("SELECT household_id,user_id FROM memberships WHERE role='owner'").all();
-      const vapid = await loadVapid(env.KV, env);
-      await Promise.all((memberships.results || []).map(({ household_id, user_id }) =>
-        createD1Store(env.DB, env.PHOTOS, vapid, { householdId: household_id, userId: user_id }).deliverPushes({ contact: env.PUSH_CONTACT })));
-    })());
+    ctx.waitUntil(deliverScheduledPushes(env));
   }
 };
