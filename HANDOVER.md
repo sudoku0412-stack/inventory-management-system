@@ -1,5 +1,11 @@
 # Medicine Inventory Tracker — handover
 
+## Current Shop role label overlap fix (2026-09-27)
+
+- The Profile Current Shop card's `Your role: Owner` label used a negative top margin, which could overlap the native Shop select on narrow iPhone widths and at 200% zoom.
+- Changed `.shop-role` to use explicit positive spacing (`margin: 8px 0 16px`) so the role/status text stays below the select without changing the switch-status behavior or wider layout structure.
+- Added a focused CSS contract assertion in `test/shop-selector-ui.test.js`; the focused selector suite passes (7/7) and `git diff --check` is clean.
+
 ## Owner promotion implementation and deployment (2026-09-27)
 
 - Finalized in `ARCHITECTURE.md`: **Make owner** promotes an already accepted Member of the current Shop to the existing Owner role. Multiple equal Owners provide administration without an admin schema/tier; the acting Owner keeps ownership. Separate membership rows retain isolation across Shops.

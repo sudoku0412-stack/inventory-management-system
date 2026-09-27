@@ -145,7 +145,7 @@ tbody tr:hover { background: #f9fbfa; }
 #promoteMemberModal .modal-header, #promoteMemberModal .modal-footer { flex-shrink: 0; }
 #promoteMemberModal .button, #householdAccessStatus .button { min-height: 44px; }
 .profile-card { padding: 23px; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; box-shadow: 0 4px 16px rgba(18,62,61,.03); }
-.shop-selector-card { max-width: 900px; margin: 0 0 18px; }.shop-selector-card .form-field { max-width: 560px; }.shop-selector-card select { min-height: 44px; }.shop-switch-status { min-height: 1.5em; margin: 10px 0 0; color: var(--ink-soft); }.shop-role { margin: -8px 0 16px; color: var(--ink-soft); font-size: .88rem; font-weight: 600; }
+.shop-selector-card { max-width: 900px; margin: 0 0 18px; }.shop-selector-card .form-field { max-width: 560px; }.shop-selector-card select { min-height: 44px; }.shop-switch-status { min-height: 1.5em; margin: 10px 0 0; color: var(--ink-soft); }.shop-role { margin: 8px 0 16px; color: var(--ink-soft); font-size: .88rem; font-weight: 600; }
 .create-shop-card { max-width: 900px; margin: 0 0 18px; }.create-shop-card .button { min-height: 44px; }
 .profile-card-heading { display: flex; gap: 13px; margin-bottom: 20px; }.profile-card-heading h2 { margin: 0; font-size: 1.1rem; }.profile-card-heading p { margin: 3px 0 0; color: var(--ink-soft); font-size: .86rem; }
 .profile-icon { display: grid; place-items: center; width: 39px; height: 39px; flex: none; border-radius: 12px; background: #e2f2f0; color: var(--teal-dark); font-weight: 800; }
