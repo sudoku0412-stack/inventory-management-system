@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { bootstrapEmails, onboardingStatus, resolveTenant as lookupTenant, setupInitialShop } from '../lib/tenants.js';
 import { createD1Store } from '../lib/store-d1.js';
 import { createVapidKeys } from '../lib/shared.js';
-import { acceptHouseholdInvitation, createHouseholdInvitation, listHouseholdAccess, pendingHouseholdInvitations, revokeHouseholdInvitation } from '../lib/household-access.js';
+import { acceptHouseholdInvitation, createHouseholdInvitation, listHouseholdAccess, pendingHouseholdInvitations, promoteHouseholdMember, revokeHouseholdInvitation } from '../lib/household-access.js';
 
 // Older tenant tests need a member fixture; production membership lookup stays
 // read-only and setup is always made explicit by this test helper.
@@ -269,7 +269,7 @@ test('only owners can list, create, and revoke household invitations', async () 
   const created = await createHouseholdInvitation(db, owner, { email: '  New@Example.test ' }, () => '2026-10-03T00:00:00.000Z');
   assert.deepEqual({ email: created.email, role: created.role, created_at: created.created_at }, { email: 'new@example.test', role: 'member', created_at: '2026-10-03T00:00:00.000Z' });
   const access = await listHouseholdAccess(db, owner);
-  assert.deepEqual(access.members, [{ email: 'owner@example.test', role: 'owner', is_you: true }, { email: 'member@example.test', role: 'member', is_you: false }]);
+  assert.deepEqual(access.members, [{ user_id: owner.userId, email: 'owner@example.test', role: 'owner', is_you: true }, { user_id: 'member', email: 'member@example.test', role: 'member', is_you: false }]);
   assert.equal(access.invitations.length, 1);
   await assert.rejects(() => revokeHouseholdInvitation(db, member, created.id), { status: 403 });
   await revokeHouseholdInvitation(db, owner, created.id);
@@ -278,6 +278,24 @@ test('only owners can list, create, and revoke household invitations', async () 
     { event: 'invite_created', target_identifier: 'new@example.test' },
     { event: 'invite_revoked', target_identifier: 'new@example.test' }
   ]);
+  sqlite.close();
+});
+
+test('owner promotion is pinned, replay-safe, audited, and preserves the acting owner', async () => {
+  const { sqlite, db } = tenantDatabase();
+  sqlite.exec(readFileSync(new URL('../migrations/0012_shop_creation.sql', import.meta.url), 'utf8'));
+  sqlite.exec(readFileSync(new URL('../migrations/0013_shop_owner_promotion.sql', import.meta.url), 'utf8'));
+  const principal = { provider: 'cloudflare_access', subject: 'owner-promotion', email: 'owner@example.test' };
+  const owner = await resolveTenant(db, principal, { INITIAL_OWNER_EMAILS: principal.email });
+  const target = '11111111-1111-4111-8111-111111111111', operationId = '22222222-2222-4222-8222-222222222222';
+  sqlite.prepare('INSERT INTO users VALUES (?,?)').run(target, 'now');
+  sqlite.prepare("INSERT INTO memberships VALUES (?,?,'member',?)").run(owner.householdId, target, 'now');
+  const promoted = await promoteHouseholdMember(db, principal, owner, target, { operationId }, 'request-promotion');
+  assert.deepEqual(promoted, { member: { user_id: target, role: 'owner' }, changed: true });
+  assert.equal(sqlite.prepare('SELECT role FROM memberships WHERE household_id=? AND user_id=?').get(owner.householdId, owner.userId).role, 'owner');
+  assert.equal(sqlite.prepare('SELECT event,target_identifier FROM access_audit WHERE event=?').get('member_promoted').target_identifier, `user:${target}`);
+  assert.equal((await promoteHouseholdMember(db, principal, owner, target, { operationId })).changed, false);
+  assert.equal((await promoteHouseholdMember(db, principal, owner, target, { operationId: '33333333-3333-4333-8333-333333333333' })).changed, false);
   sqlite.close();
 });
 

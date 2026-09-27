@@ -243,7 +243,7 @@
             <div class="profile-save-row"><p id="profileSaveStatus" role="status" aria-live="polite"></p><button class="button primary" id="saveProfileSettings" type="submit" disabled>Save changes</button></div>
           </form>
           <section class="household-access" id="householdAccess" aria-labelledby="householdAccessTitle">
-            <div class="section-heading"><div><h2 id="householdAccessTitle">Shop access</h2><p id="householdAccessIntro">Loading Shop access…</p></div></div>
+            <div class="section-heading"><div><h2 id="householdAccessTitle" tabindex="-1">Shop access</h2><p id="householdAccessIntro">Loading Shop access…</p></div></div>
             <p id="householdAccessStatus" class="access-status" role="status" aria-live="polite"></p>
             <div id="householdAccessContent" hidden>
               <form class="invite-form" id="householdInviteForm" novalidate>
@@ -324,6 +324,9 @@
     </dialog>
     <dialog class="modal confirm-modal" id="revokeInvitationModal" aria-labelledby="revokeInvitationTitle">
       <form method="dialog"><div class="modal-header"><div><span class="overline">PENDING INVITATION</span><h2 id="revokeInvitationTitle">Revoke invitation?</h2></div></div><div class="modal-body"><p id="revokeInvitationMessage">This person will no longer be able to accept this invitation.</p></div><div class="modal-actions"><button class="button secondary" value="cancel">Keep invitation</button><button class="button danger-button" id="confirmRevokeInvitation" type="button">Revoke invitation</button></div></form>
+    </dialog>
+    <dialog class="modal confirm-modal" id="promoteMemberModal" aria-labelledby="promoteMemberTitle" aria-describedby="promoteMemberShop promoteMemberHelp">
+      <form id="promoteMemberForm" novalidate><div class="modal-header"><div><span class="overline">SHOP ACCESS</span><h2 id="promoteMemberTitle">Make owner?</h2></div></div><div class="modal-body"><p id="promoteMemberShop"></p><p id="promoteMemberHelp">They’ll be able to manage this Shop’s access, including inviting people and making other members owners. You’ll stay an owner. Only promote someone you trust.</p><p class="access-status" id="promoteMemberStatus" role="status" aria-live="polite"></p></div><div class="modal-footer"><button class="button secondary" id="cancelPromoteMember" type="button">Cancel</button><button class="button primary" id="confirmPromoteMember" type="submit">Make owner</button></div></form>
     </dialog>
 
     <dialog class="modal camera-modal" id="packagingCameraModal" aria-labelledby="packagingCameraTitle">

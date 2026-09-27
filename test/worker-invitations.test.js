@@ -3,13 +3,15 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
-import { handleRequest } from '../worker/index.js';
+import worker, { deliverScheduledPushes, handleRequest } from '../worker/index.js';
+import { createVapidKeys } from '../lib/shared.js';
 import { createHouseholdInvitation } from '../lib/household-access.js';
 import { createAdditionalShop, setupInitialShop } from '../lib/tenants.js';
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const jwk = { ...publicKey.export({ format: 'jwk' }), kid: 'invite-key', alg: 'RS256', use: 'sig' };
 const b64 = value => Buffer.from(JSON.stringify(value)).toString('base64url');
+const uuid = n => `123e4567-e89b-42d3-a456-${String(n).padStart(12, '0')}`;
 function jwt({ subject, email, ...claims }) {
   const header = b64({ alg: 'RS256', kid: 'invite-key', typ: 'JWT' });
   const payload = b64({ iss: 'https://team.cloudflareaccess.com', aud: 'medicine-audience', exp: Math.floor(Date.now() / 1000) + 60, sub: subject, email, ...claims });
@@ -24,7 +26,7 @@ function d1(sqlite) {
 }
 function database() {
   const sqlite = new DatabaseSync(':memory:');
-  for (const migration of ['0001_initial.sql', '0003_profile_settings.sql', '0004_household_tenants.sql', '0005_household_invitations.sql', '0006_household_invitation_expiration.sql', '0007_sync_mutation_foundation.sql', '0008_household_display_name_source.sql', '0009_seed_legacy_household_display_names.sql', '0010_access_audit.sql', '0011_user_shop_preferences.sql', '0012_shop_creation.sql']) sqlite.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), 'utf8'));
+  for (const migration of ['0001_initial.sql', '0003_profile_settings.sql', '0004_household_tenants.sql', '0005_household_invitations.sql', '0006_household_invitation_expiration.sql', '0007_sync_mutation_foundation.sql', '0008_household_display_name_source.sql', '0009_seed_legacy_household_display_names.sql', '0010_access_audit.sql', '0011_user_shop_preferences.sql', '0012_shop_creation.sql', '0013_shop_owner_promotion.sql']) sqlite.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), 'utf8'));
   return { sqlite, db: d1(sqlite) };
 }
 function preCreationDatabase() {
@@ -40,6 +42,129 @@ function shopRequest(path, token, { method = 'GET', shopId, body } = {}) {
     body: body ? JSON.stringify(body) : undefined
   });
 }
+
+test('promotion route authenticates, validates, isolates, replays and never resolves or writes preferences', async () => {
+  const { sqlite, db } = database(), originalFetch = globalThis.fetch;
+  try {
+    const actor = await setupInitialShop(db, { provider: 'cloudflare_access', subject: 'promotion-owner', email: 'owner@example.test' }, { INITIAL_OWNER_EMAILS: 'owner@example.test' }, { displayName: 'Owner', shopName: 'Shop A' });
+    const shopB = uuid(101), member = uuid(102), foreign = uuid(103), missing = uuid(104), operationId = uuid(105);
+    sqlite.prepare('INSERT INTO households VALUES (?,?,?)').run(shopB, 'Shop B', 'before');
+    for (const [id, subject, shop, role] of [[member, 'promotion-member', actor.householdId, 'member'], [foreign, 'promotion-foreign', shopB, 'owner']]) {
+      sqlite.prepare('INSERT INTO users VALUES (?,?)').run(id, 'before');
+      sqlite.prepare('INSERT INTO identities VALUES (?,?,?,?,?)').run('cloudflare_access', subject, id, `${subject}@example.test`, 'before');
+      sqlite.prepare('INSERT INTO memberships VALUES (?,?,?,?)').run(shop, id, role, 'before');
+    }
+    sqlite.prepare('INSERT INTO memberships VALUES (?,?,?,?)').run(shopB, actor.userId, 'member', 'before');
+    sqlite.prepare('INSERT INTO user_shop_preferences VALUES (?,?,?)').run(actor.userId, shopB, 'unchanged actor preference');
+    sqlite.prepare('INSERT INTO user_shop_preferences VALUES (?,?,?)').run(member, actor.householdId, 'unchanged member preference');
+    const preferences = () => Buffer.from(JSON.stringify(sqlite.prepare('SELECT * FROM user_shop_preferences ORDER BY user_id').all()));
+    const before = preferences(), queries = [];
+    const env = { DB: { ...db, prepare(sql) { queries.push(sql); return db.prepare(sql); } }, ACCESS_TEAM_DOMAIN: 'team.cloudflareaccess.com', ACCESS_AUD: 'medicine-audience' };
+    globalThis.fetch = async () => new Response(JSON.stringify({ keys: [jwk] }));
+    const run = async ({ method = 'POST', target = member, headers = {}, body = { operationId }, raw, subject = 'promotion-owner', expected = 400 } = {}) => {
+      const response = await handleRequest(new Request(`https://medicineinventory.craftloop.ca/api/household/members/${target}/promote`, {
+        method, headers: { 'Cf-Access-Jwt-Assertion': jwt({ subject, email: 'owner@example.test' }), Origin: 'https://medicineinventory.craftloop.ca', 'Content-Type': 'application/json', 'X-Shop-Id': actor.householdId, ...headers },
+        ...(method === 'GET' || method === 'HEAD' ? {} : { body: raw ?? JSON.stringify(body) })
+      }), env, { waitUntil() {} });
+      assert.equal(response.status, expected, `${method} ${target}: ${JSON.stringify(headers)}`);
+      assert.equal(response.headers.get('cache-control'), 'no-store');
+      assert.deepEqual(preferences(), before);
+      assert.ok(!queries.some(sql => /user_shop_preferences/.test(sql)), 'route must not call preference-writing resolveTenant, even on errors');
+      return response.json();
+    };
+    for (const method of ['GET', 'HEAD', 'PUT', 'DELETE']) await run({ method, expected: 404 });
+    await run({ headers: { 'Cf-Access-Jwt-Assertion': '', 'Cf-Access-Authenticated-User-Email': 'owner@example.test' }, expected: 401 });
+    await run({ headers: { 'Cf-Access-Jwt-Assertion': jwt({ subject: 'promotion-owner', email: 'owner@example.test', exp: 1 }) }, expected: 401 });
+    for (const Origin of ['', 'https://evil.example']) await run({ headers: { Origin }, expected: 403 });
+    await run({ headers: { 'Sec-Fetch-Site': 'cross-site' }, expected: 403 });
+    await run({ headers: { 'Content-Type': 'text/plain' } });
+    for (const selector of ['', 'a'.repeat(36), '-'.repeat(36), '123e4567-e89b-02d3-a456-426614174000', '123e4567-e89b-42d3-0456-426614174000']) await run({ headers: { 'X-Shop-Id': selector } });
+    await run({ headers: { 'X-Shop-Id': uuid(999) }, expected: 403 });
+    await run({ raw: '{' }); await run({ raw: '[]' }); await run({ raw: 'null' });
+    await run({ raw: JSON.stringify({ operationId, padding: 'x'.repeat(3 * 1024 * 1024) }), expected: 413 });
+    for (const field of ['email', 'role', 'actor', 'householdId', 'userId']) await run({ body: { operationId, [field]: actor.userId } });
+    await run({ body: { operationId: 'a'.repeat(36) } });
+    await run({ target: 'not-a-uuid', expected: 404 });
+    await run({ target: foreign, expected: 404 }); await run({ target: missing, expected: 404 });
+    await run({ subject: 'promotion-member', target: missing, expected: 403 });
+    await run({ headers: { 'X-Shop-Id': shopB }, target: foreign, expected: 403 });
+    // Matching email never substitutes for a verified identity binding.
+    await run({ subject: 'different-subject-same-email', expected: 403 });
+    sqlite.exec("CREATE TABLE migration_runs (singleton INTEGER PRIMARY KEY,state TEXT); INSERT INTO migration_runs VALUES (1,'active');");
+    await run({ expected: 503 }); sqlite.exec('DROP TABLE migration_runs');
+    assert.deepEqual(await run({ expected: 200 }), { member: { user_id: member, role: 'owner' }, changed: true });
+    assert.equal((await run({ expected: 200 })).changed, false);
+    assert.equal((await run({ body: { operationId: uuid(106) }, expected: 200 })).changed, false);
+    assert.equal((await run({ target: actor.userId, body: { operationId: uuid(107) }, expected: 200 })).changed, false);
+    await run({ target: actor.userId, expected: 409 });
+    assert.equal(sqlite.prepare("SELECT count(*) AS n FROM access_audit WHERE event='member_promoted'").get().n, 1);
+    assert.equal(sqlite.prepare('SELECT count(*) AS n FROM shop_owner_promotion_receipts').get().n, 1);
+    assert.equal(sqlite.prepare('SELECT role FROM memberships WHERE household_id=? AND user_id=?').get(shopB, actor.userId).role, 'member');
+    sqlite.prepare("UPDATE memberships SET role='member' WHERE household_id=? AND user_id=?").run(actor.householdId, actor.userId);
+    await run({ expected: 403 });
+    sqlite.prepare("UPDATE memberships SET role='owner' WHERE household_id=? AND user_id=?").run(actor.householdId, actor.userId);
+    sqlite.exec('DROP TABLE access_audit'); await run({ expected: 503 });
+  } finally { globalThis.fetch = originalFetch; sqlite.close(); }
+});
+
+test('promotion route missing receipt schema fails closed with 503 and no-store', async () => {
+  const { sqlite, db } = database(), originalFetch = globalThis.fetch;
+  try {
+    const actor = await setupInitialShop(db, { provider: 'cloudflare_access', subject: 'schema-owner', email: 'schema@example.test' }, { INITIAL_OWNER_EMAILS: 'schema@example.test' }, { displayName: 'Owner', shopName: 'A' });
+    sqlite.exec('DROP TABLE shop_owner_promotion_receipts');
+    globalThis.fetch = async () => new Response(JSON.stringify({ keys: [jwk] }));
+    const response = await handleRequest(new Request(`https://medicineinventory.craftloop.ca/api/household/members/${actor.userId}/promote`, { method: 'POST', headers: { 'Cf-Access-Jwt-Assertion': jwt({ subject: 'schema-owner', email: 'schema@example.test' }), Origin: 'https://medicineinventory.craftloop.ca', 'Content-Type': 'application/json', 'X-Shop-Id': actor.householdId }, body: JSON.stringify({ operationId: uuid(108) }) }), { DB: db, ACCESS_TEAM_DOMAIN: 'team.cloudflareaccess.com', ACCESS_AUD: 'medicine-audience' }, {});
+    assert.equal(response.status, 503); assert.equal(response.headers.get('cache-control'), 'no-store');
+  } finally { globalThis.fetch = originalFetch; sqlite.close(); }
+});
+
+test('real scheduled handler delivers once per Shop endpoint with three owners and deletes only the expired nonselected-owner subscription', async () => {
+  const { sqlite, db } = database(), originalFetch = globalThis.fetch, calls = [], queries = [];
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    for (const shop of ['shop-a', 'shop-b', 'ownerless']) sqlite.prepare('INSERT INTO households VALUES (?,?,?)').run(shop, shop, 'before');
+    for (const [id, shop, role] of [['a-owner-1','shop-a','owner'],['a-owner-2','shop-a','owner'],['a-owner-3','shop-a','owner'],['a-member','shop-a','member'],['b-owner','shop-b','owner'],['b-member','shop-b','member'],['orphan-member','ownerless','member']]) {
+      sqlite.prepare('INSERT INTO users VALUES (?,?)').run(id, 'before');
+      sqlite.prepare('INSERT INTO memberships VALUES (?,?,?,?)').run(shop, id, role, 'before');
+      sqlite.prepare('INSERT INTO push_subscriptions VALUES (?,?,?,?,?,?)').run(`https://push.example.test/${id}`, 'test-key', 'test-auth', 'before', shop, id);
+    }
+    // Two pending notifications per Shop exercise the existing generic push:
+    // one send per endpoint signals all pending rows for that Shop.
+    for (const shop of ['shop-a', 'shop-b', 'ownerless']) for (const n of [1, 2]) {
+      const id = `${shop}-${n}`;
+      sqlite.prepare('INSERT INTO batches (id,name,form,quantity,unit,expiry_date,created_at,updated_at,household_id) VALUES (?,?,?,?,?,?,?,?,?)').run(id, id, 'Tablets', 2, 'tablets', today, 'before', 'before', shop);
+      sqlite.prepare('INSERT INTO notifications (id,batch_id,kind,trigger_date,created_at,household_id) VALUES (?,?,?,?,?,?)').run(`notice-${id}`, id, 'expiry_30', today, 'before', shop);
+    }
+    const subscriptionsBefore = sqlite.prepare('SELECT * FROM push_subscriptions ORDER BY endpoint').all();
+    globalThis.fetch = async (endpoint, options) => {
+      calls.push({ endpoint, options });
+      return new Response(null, { status: endpoint.endsWith('/a-owner-2') ? 410 : 201 });
+    };
+    let pending;
+    await worker.scheduled({}, { DB: { ...db, prepare(sql) { queries.push(sql); return db.prepare(sql); } }, PHOTOS: {}, VAPID_JSON: JSON.stringify(createVapidKeys()), PUSH_CONTACT: 'mailto:test@example.test' }, { waitUntil(promise) { assert.equal(pending, undefined); pending = promise; } });
+    assert.ok(pending); await pending;
+    assert.deepEqual(calls.map(call => call.endpoint).sort(), subscriptionsBefore.filter(sub => sub.household_id !== 'ownerless').map(sub => sub.endpoint).sort());
+    assert.equal(new Set(calls.map(call => call.endpoint)).size, 6);
+    assert.ok(calls.every(call => call.options.method === 'POST' && /^vapid t=/.test(call.options.headers.Authorization)));
+    assert.equal(queries.filter(sql => sql === 'SELECT endpoint,user_id FROM push_subscriptions WHERE household_id=?').length, 2, 'default store delivery runs once per Shop');
+    for (const row of sqlite.prepare('SELECT * FROM notifications').all()) assert.equal(Boolean(row.pushed_at), row.household_id !== 'ownerless');
+    assert.deepEqual(sqlite.prepare('SELECT * FROM push_subscriptions ORDER BY endpoint').all(), subscriptionsBefore.filter(sub => !sub.endpoint.endsWith('/a-owner-2')));
+    assert.equal(sqlite.prepare('SELECT count(*) AS n FROM batches').get().n, 6);
+  } finally { globalThis.fetch = originalFetch; sqlite.close(); }
+});
+
+test('scheduler delivers each distinct Shop once with its stable minimum owner context', async () => {
+  const calls = [];
+  const env = { DB: { prepare(sql) { assert.match(sql, /MIN\(user_id\).*GROUP BY household_id/); return { all: async () => ({ results: [
+    { household_id: 'shop-a', user_id: 'owner-a' }, { household_id: 'shop-b', user_id: 'owner-b' }
+  ] }) }; } }, PHOTOS: {}, KV: {}, PUSH_CONTACT: 'mailto:test@example.test' };
+  await deliverScheduledPushes(env, { loadKeys: async () => ({ publicKey: 'vapid' }), storeFactory: (_db, _photos, vapid, context) => ({
+    async deliverPushes(options) { calls.push({ context, vapid, options }); return { sent: 3, gone: 1 }; }
+  }) });
+  assert.deepEqual(calls.map(call => call.context), [{ householdId: 'shop-a', userId: 'owner-a' }, { householdId: 'shop-b', userId: 'owner-b' }]);
+  assert.equal(calls.length, 2);
+  assert.ok(calls.every(call => call.options.contact === 'mailto:test@example.test'));
+});
 
 test('Shop onboarding status is read-only and explicit setup creates the verified owner', async () => {
   const { sqlite, db } = database();
