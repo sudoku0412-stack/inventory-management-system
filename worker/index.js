@@ -8,12 +8,12 @@ import {
   visionConfig
 } from '../lib/shared.js';
 import { createD1Store, loadVapid } from '../lib/store-d1.js';
-import { listShops, onboardingStatus, resolveTenant, setupInitialShop } from '../lib/tenants.js';
+import { createAdditionalShop, listShops, onboardingStatus, resolveTenant, setupInitialShop, shopContext } from '../lib/tenants.js';
 import { acceptHouseholdInvitation, createHouseholdInvitation, listHouseholdAccess, pendingHouseholdInvitations, revokeHouseholdInvitation } from '../lib/household-access.js';
 
 const jwksCache = { at: 0, keys: null };
 
-const bootstrapAssetPaths = new Set(['/index.html', '/app.js', '/greeting.js', '/shop-client.js', '/styles.css', '/sw.js']);
+const bootstrapAssetPaths = new Set(['/index.html', '/app.js', '/greeting.js', '/shop-client.js', '/shop-creation-client.js', '/styles.css', '/sw.js']);
 
 export function assetCacheControl(path) {
   if (path === '/index.html') return 'no-store';
@@ -31,10 +31,10 @@ async function fetchAsset(request, env, assetPath) {
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
-function json(data, status = 200) {
+function json(data, status = 200, extraHeaders = {}) {
   return new Response(data === undefined ? null : JSON.stringify(data), {
     status,
-    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }
+    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...extraHeaders }
   });
 }
 
@@ -80,6 +80,11 @@ function requestCorrelationId(request) {
   return typeof supplied === 'string' && /^[A-Za-z0-9._:-]{1,200}$/.test(supplied) ? supplied : crypto.randomUUID();
 }
 
+function requireCreationRequest(request, url) {
+  if (!/^application\/json(?:\s*;|$)/i.test(request.headers.get('content-type') || '')) throw Object.assign(new Error('Content-Type must be application/json.'), { status: 400 });
+  if (request.headers.get('origin') !== url.origin || request.headers.get('sec-fetch-site') === 'cross-site') throw Object.assign(new Error('This Shop creation request must come from this site.'), { status: 403 });
+}
+
 export async function handleRequest(request, env, ctx) {
   const url = new URL(request.url);
   if (url.pathname.startsWith('/api/')) {
@@ -91,6 +96,14 @@ export async function handleRequest(request, env, ctx) {
       // membership-gated below.
       const pendingInvitation = url.pathname === '/api/household/invitations/pending';
       const invitationAcceptance = url.pathname.match(/^\/api\/household\/invitations\/([^/]+)\/accept$/);
+      // Creation is intentionally before resolveTenant: it creates a destination
+      // tenant and must ignore every X-Shop-Id without changing preferences.
+      if (request.method === 'POST' && url.pathname === '/api/shops') {
+        if (await migrationIsActive(env.DB)) return json({ error: 'Inventory is temporarily read-only while a migration is in progress.' }, 503);
+        requireCreationRequest(request, url);
+        const created = await createAdditionalShop(env.DB, principal, await readJson(request), { requestId });
+        return json(created, created.created ? 201 : 200);
+      }
       if (request.method === 'GET' && url.pathname === '/api/shop/onboarding-status') return json(await onboardingStatus(env.DB, principal, env));
       if (request.method === 'POST' && url.pathname === '/api/shop/onboarding') {
         const setup = await setupInitialShop(env.DB, principal, env, await readJson(request), { requestId });
@@ -100,7 +113,8 @@ export async function handleRequest(request, env, ctx) {
       if (request.method === 'POST' && invitationAcceptance) return json(await acceptHouseholdInvitation(env.DB, principal, invitationAcceptance[1], undefined, requestId));
       const tenant = await resolveTenant(env.DB, principal, { shopId: request.headers.get('x-shop-id') });
       if (request.method === 'GET' && url.pathname === '/api/shops') {
-        return json({ shops: await listShops(env.DB, principal), activeShopId: tenant.householdId });
+        const context = await shopContext(env.DB, principal);
+        return json({ ...context, activeShopId: tenant.householdId });
       }
       if (request.method !== 'GET' && await migrationIsActive(env.DB)) return json({ error: 'Inventory is temporarily read-only while a migration is in progress.' }, 503);
       const invitation = url.pathname.match(/^\/api\/household\/invitations\/([^/]+)$/);
@@ -171,7 +185,7 @@ export async function handleRequest(request, env, ctx) {
       }
       return json({ error: 'Not found' }, 404);
     } catch (error) {
-      return json({ error: error.message || 'Server error', ...(Object.hasOwn(error, 'current') ? { current: error.current } : {}) }, error.status || 500);
+      return json({ error: error.message || 'Server error', ...(Object.hasOwn(error, 'current') ? { current: error.current } : {}) }, error.status || 500, error.retryAfter ? { 'retry-after': String(error.retryAfter) } : {});
     }
   }
 

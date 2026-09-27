@@ -213,6 +213,11 @@
               <p class="shop-switch-status" id="shopSwitchStatus" role="status" aria-live="polite"></p>
             </div>
           </section>
+          <section class="profile-card create-shop-card" id="createShopCard" aria-labelledby="createShopTitle" hidden>
+            <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">+</span><div><h2 id="createShopTitle">Create another Shop</h2><p>Create a separate, empty Shop. Your current Shop will stay open.</p></div></div>
+            <button class="button secondary" id="createShopButton" type="button">Create another Shop</button>
+            <p class="access-status" id="createShopUnavailable" role="status" hidden></p>
+          </section>
           <form class="profile-layout" id="profileSettingsForm" novalidate>
             <section class="profile-card" aria-labelledby="profileDetailsTitle">
               <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">●</span><div><h2 id="profileDetailsTitle">Profile</h2><p>Your name appears in the dashboard greeting and avatar.</p></div></div>
@@ -304,6 +309,17 @@
           <label class="form-field full"><span>Notes</span><textarea name="notes" rows="3" placeholder="Optional dosage or Shop note" autocomplete="off"></textarea></label>
         </div>
         <div class="modal-footer"><button class="button secondary" type="button" data-close-modal>Cancel</button><button class="button primary" type="submit">Add to inventory</button></div>
+      </form>
+    </dialog>
+    <dialog class="modal" id="createShopModal" aria-labelledby="createShopModalTitle" aria-describedby="createShopModalHelp">
+      <form id="createShopForm" novalidate autocomplete="off">
+        <div class="modal-header"><div><span class="overline">NEW SHOP</span><h2 id="createShopModalTitle">Create another Shop</h2></div><button class="modal-close" type="button" data-close-modal aria-label="Close create Shop dialog">×</button></div>
+        <div class="modal-body"><p id="createShopModalHelp">You’ll be the owner of a new, empty Shop. Your current Shop will stay open.</p>
+          <div class="form-field"><label for="createShopName">Shop name</label><input id="createShopName" name="shopName" type="text" required minlength="1" maxlength="80" autocomplete="organization" /><small>1–80 characters</small></div>
+          <div class="form-field"><label for="createDisplayName">Your display name</label><input id="createDisplayName" name="displayName" type="text" required minlength="1" maxlength="60" autocomplete="name" /><small>1–60 characters</small></div>
+          <p class="access-status" id="createShopStatus" role="status" aria-live="polite"></p>
+        </div>
+        <div class="modal-footer"><button class="button secondary" type="button" data-close-modal>Cancel</button><button class="button primary" id="submitCreateShop" type="submit">Create Shop</button></div>
       </form>
     </dialog>
     <dialog class="modal confirm-modal" id="revokeInvitationModal" aria-labelledby="revokeInvitationTitle">
