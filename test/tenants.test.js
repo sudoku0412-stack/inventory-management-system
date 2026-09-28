@@ -43,6 +43,7 @@ function tenantDatabase(displayName = 'Legacy', { compatibilityMigration = true 
   if (compatibilityMigration) sqlite.exec(readFileSync(new URL('../migrations/0009_seed_legacy_household_display_names.sql', import.meta.url), 'utf8'));
   sqlite.exec(readFileSync(new URL('../migrations/0010_access_audit.sql', import.meta.url), 'utf8'));
   sqlite.exec(readFileSync(new URL('../migrations/0011_user_shop_preferences.sql', import.meta.url), 'utf8'));
+  sqlite.exec(readFileSync(new URL('../migrations/0014_additional_shop_invitation_joins.sql', import.meta.url), 'utf8'));
   sqlite.prepare('INSERT INTO profile_settings VALUES (1,?,?,?,?)').run(displayName, 'Legacy house', 'Medicine cabinet', '2026-01-01T00:00:00.000Z');
   sqlite.prepare("INSERT INTO batches (id,name,strength,form,quantity,unit,expiry_date,location,notes,low_stock_threshold,created_at,updated_at) VALUES ('legacy','Medicine','','Tablets',2,'tablets',NULL,'','',1,'2026-01-01','2026-01-01')").run();
   return { sqlite, db: d1(sqlite) };
@@ -322,7 +323,7 @@ test('a verified unaffiliated identity can explicitly accept its matching unexpi
   const invitation = await createHouseholdInvitation(db, owner, { email: 'invitee@example.test' }, () => '2026-02-01T00:00:00.000Z');
   const principal = { provider: 'cloudflare_access', subject: 'invitee-subject', email: 'INVITEE@example.test' };
   const pending = await pendingHouseholdInvitations(db, principal, () => '2026-02-02T00:00:00.000Z');
-  assert.deepEqual(pending.invitations.map(({ id, household_id, household_name, role, expires_at }) => ({ id, household_id, household_name, role, expires_at })), [{ id: invitation.id, household_id: owner.householdId, household_name: 'Test Shop', role: 'member', expires_at: '2026-02-08T00:00:00.000Z' }]);
+  assert.deepEqual(pending.invitations, [{ id: invitation.id, household_name: 'Test Shop', role: 'member', expires_at: '2026-02-08T00:00:00.000Z' }]);
   const accepted = await acceptHouseholdInvitation(db, principal, invitation.id, () => '2026-02-02T00:00:00.000Z');
   assert.equal(accepted.householdId, owner.householdId);
   const identity = sqlite.prepare("SELECT user_id,email FROM identities WHERE provider='cloudflare_access' AND subject='invitee-subject'").get();
@@ -330,7 +331,7 @@ test('a verified unaffiliated identity can explicitly accept its matching unexpi
   assert.equal(sqlite.prepare('SELECT role FROM memberships WHERE household_id=? AND user_id=?').get(owner.householdId, identity.user_id).role, 'member');
   assert.equal(sqlite.prepare('SELECT id FROM household_invitations WHERE id=?').get(invitation.id), undefined);
   assert.equal(sqlite.prepare("SELECT event FROM access_audit WHERE event='invite_accepted'").get().event, 'invite_accepted');
-  await assert.rejects(() => acceptHouseholdInvitation(db, principal, invitation.id), { status: 409 });
+  assert.equal((await acceptHouseholdInvitation(db, principal, invitation.id)).accepted, false);
   sqlite.close();
 });
 
@@ -351,8 +352,9 @@ test('acceptance rejects wrong email/id, expiry, revocation, and other-household
   sqlite.prepare("INSERT INTO identities VALUES ('cloudflare_access','other-subject','other-user','invitee@example.test','now')").run();
   sqlite.prepare("INSERT INTO memberships VALUES ('other','other-user','member','now')").run();
   const newInvitation = await createHouseholdInvitation(db, owner, { email: 'invitee@example.test' });
-  await assert.rejects(() => acceptHouseholdInvitation(db, { provider: 'cloudflare_access', subject: 'other-subject', email: 'invitee@example.test' }, newInvitation.id), { status: 409 });
-  assert.ok(sqlite.prepare('SELECT id FROM household_invitations WHERE id=?').get(newInvitation.id));
+  const joined = await acceptHouseholdInvitation(db, { provider: 'cloudflare_access', subject: 'other-subject', email: 'invitee@example.test' }, newInvitation.id);
+  assert.equal(joined.role, 'member');
+  assert.equal(sqlite.prepare('SELECT id FROM household_invitations WHERE id=?').get(newInvitation.id), undefined);
   sqlite.close();
 });
 
@@ -402,5 +404,24 @@ test('an expired invitation can be replaced only in its own household while an a
   sqlite.prepare("INSERT INTO memberships VALUES ('other','other-owner','owner','now')").run();
   const otherInvite = await createHouseholdInvitation(db, { householdId: 'other', userId: 'other-owner' }, { email: 'again@example.test' }, () => '2026-01-10T00:00:00.000Z');
   assert.equal(otherInvite.id !== replacement.id, true);
+  sqlite.close();
+});
+
+test('pending discovery is allowlisted, keyset-bounded, and cursor-bound to the verified email', async () => {
+  const { sqlite, db } = tenantDatabase();
+  const principal = { provider: 'cloudflare_access', subject: 'page-owner', email: 'page-owner@example.test' };
+  const owner = await resolveTenant(db, principal, { INITIAL_OWNER_EMAILS: principal.email });
+  for (let n = 1; n <= 21; n++) {
+    const householdId = `123e4567-e89b-42d3-a456-${String(700 + n).padStart(12, '0')}`;
+    sqlite.prepare('INSERT INTO households VALUES (?,?,?)').run(householdId, `Shop ${n}`, 'now');
+    sqlite.prepare('INSERT INTO household_invitations VALUES (?,?,?,?,?,?,?)').run(`123e4567-e89b-42d3-a456-${String(800 + n).padStart(12, '0')}`, householdId, 'page@example.test', 'member', owner.userId, 'now', `2099-01-${String((n % 28) + 1).padStart(2, '0')}T00:00:00.000Z`);
+  }
+  const page = await pendingHouseholdInvitations(db, { provider: 'cloudflare_access', subject: 'page', email: 'page@example.test' });
+  assert.equal(page.invitations.length, 20); assert.ok(page.nextCursor);
+  assert.deepEqual(Object.keys(page.invitations[0]).sort(), ['expires_at', 'household_name', 'id', 'role']);
+  assert.deepEqual(Object.keys(page).sort(), ['invitations', 'member', 'nextCursor']);
+  assert.equal((await pendingHouseholdInvitations(db, { provider: 'cloudflare_access', subject: 'page', email: 'page@example.test' }, page.nextCursor)).invitations.length, 1);
+  await assert.rejects(() => pendingHouseholdInvitations(db, { provider: 'cloudflare_access', subject: 'other', email: 'other@example.test' }, page.nextCursor), { status: 400 });
+  await assert.rejects(() => pendingHouseholdInvitations(db, { provider: 'cloudflare_access', subject: 'page', email: 'page@example.test' }, `${page.nextCursor}x`), { status: 400 });
   sqlite.close();
 });

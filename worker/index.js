@@ -9,7 +9,7 @@ import {
 } from '../lib/shared.js';
 import { createD1Store, loadVapid } from '../lib/store-d1.js';
 import { createAdditionalShop, listShops, onboardingStatus, pinnedTenant, resolveTenant, setupInitialShop, shopContext } from '../lib/tenants.js';
-import { acceptHouseholdInvitation, createHouseholdInvitation, listHouseholdAccess, pendingHouseholdInvitations, promoteHouseholdMember, revokeHouseholdInvitation, validateOwnerPromotion } from '../lib/household-access.js';
+import { acceptHouseholdInvitation, createHouseholdInvitation, listHouseholdAccess, pendingHouseholdInvitations, promoteHouseholdMember, revokeHouseholdInvitation, validateOwnerPromotion, throttleInvitationRoute } from '../lib/household-access.js';
 
 const jwksCache = { at: 0, keys: null };
 
@@ -40,10 +40,11 @@ function json(data, status = 200, extraHeaders = {}) {
 
 function noContent() { return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } }); }
 
-async function readJson(request) {
+async function readJson(request, requireBody = false) {
   const raw = await request.text();
   if (Buffer.byteLength(raw) > MAX_JSON_BYTES) throw Object.assign(new Error('Request body too large.'), { status: 413 });
   try {
+    if (requireBody && !raw) throw new Error();
     const value = raw ? JSON.parse(raw) : {};
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error();
     return value;
@@ -90,6 +91,11 @@ function requirePromotionRequest(request, url) {
   if (request.headers.get('origin') !== url.origin || request.headers.get('sec-fetch-site') === 'cross-site') throw Object.assign(new Error('This owner promotion request must come from this site.'), { status: 403 });
 }
 
+function requireInvitationAcceptanceRequest(request, url) {
+  if (!/^application\/json(?:\s*;|$)/i.test(request.headers.get('content-type') || '')) throw Object.assign(new Error('Content-Type must be application/json.'), { status: 400 });
+  if (request.headers.get('origin') !== url.origin || request.headers.get('sec-fetch-site') === 'cross-site') throw Object.assign(new Error('This invitation request must come from this site.'), { status: 403 });
+}
+
 export async function handleRequest(request, env, ctx) {
   const url = new URL(request.url);
   if (url.pathname.startsWith('/api/')) {
@@ -101,6 +107,7 @@ export async function handleRequest(request, env, ctx) {
       // membership-gated below.
       const pendingInvitation = url.pathname === '/api/household/invitations/pending';
       const invitationAcceptance = url.pathname.match(/^\/api\/household\/invitations\/([^/]+)\/accept$/);
+      if ((pendingInvitation && request.method !== 'GET') || (invitationAcceptance && request.method !== 'POST')) return json({ error: 'Not found' }, 404);
       // Creation is intentionally before resolveTenant: it creates a destination
       // tenant and must ignore every X-Shop-Id without changing preferences.
       if (request.method === 'POST' && url.pathname === '/api/shops') {
@@ -126,8 +133,18 @@ export async function handleRequest(request, env, ctx) {
         const setup = await setupInitialShop(env.DB, principal, env, await readJson(request), { requestId });
         return json(setup, setup.created ? 201 : 200);
       }
-      if (request.method === 'GET' && pendingInvitation) return json(await pendingHouseholdInvitations(env.DB, principal));
-      if (request.method === 'POST' && invitationAcceptance) return json(await acceptHouseholdInvitation(env.DB, principal, invitationAcceptance[1], undefined, requestId));
+      if (request.method === 'GET' && pendingInvitation) {
+        await throttleInvitationRoute(env.DB, principal, request, 'pending');
+        return json(await pendingHouseholdInvitations(env.DB, principal, url.searchParams.get('cursor')));
+      }
+      if (request.method === 'POST' && invitationAcceptance) {
+        if (await migrationIsActive(env.DB)) return json({ error: 'Inventory is temporarily read-only while a migration is in progress.' }, 503);
+        requireInvitationAcceptanceRequest(request, url);
+        const body = await readJson(request, true);
+        if (Object.keys(body).length) throw Object.assign(new Error('Unexpected invitation acceptance field.'), { status: 400 });
+        await throttleInvitationRoute(env.DB, principal, request, 'accept');
+        return json(await acceptHouseholdInvitation(env.DB, principal, invitationAcceptance[1], undefined, requestId));
+      }
       const tenant = await resolveTenant(env.DB, principal, { shopId: request.headers.get('x-shop-id') });
       if (request.method === 'GET' && url.pathname === '/api/shops') {
         const context = await shopContext(env.DB, principal);
