@@ -212,6 +212,10 @@
               <p class="shop-role" id="shopSelectorRole"></p>
               <p class="shop-switch-status" id="shopSwitchStatus" role="status" aria-live="polite"></p>
             </div>
+            <div id="leaveShopSection" class="shop-leave" hidden>
+              <button class="button secondary" id="leaveShopButton" type="button">Leave this Shop</button>
+              <p class="access-status" id="leaveShopStatus" role="status" aria-live="polite"></p>
+            </div>
           </section>
           <section class="profile-card shop-invitations-card" id="shopInvitationsCard" aria-labelledby="shopInvitationsTitle" hidden>
             <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">✉</span><div><h2 id="shopInvitationsTitle">Shop invitations</h2><p>Invitations sent to your signed-in account. Joining adds Member access and keeps your current Shop open.</p></div></div>
@@ -339,6 +343,12 @@
     </dialog>
     <dialog class="modal confirm-modal" id="revokeInvitationModal" aria-labelledby="revokeInvitationTitle">
       <form method="dialog"><div class="modal-header"><div><span class="overline">PENDING INVITATION</span><h2 id="revokeInvitationTitle">Revoke invitation?</h2></div></div><div class="modal-body"><p id="revokeInvitationMessage">This person will no longer be able to accept this invitation.</p></div><div class="modal-actions"><button class="button secondary" value="cancel">Keep invitation</button><button class="button danger-button" id="confirmRevokeInvitation" type="button">Revoke invitation</button></div></form>
+    </dialog>
+    <dialog class="modal confirm-modal" id="demoteMemberModal" aria-labelledby="demoteMemberTitle" aria-describedby="demoteMemberShop demoteMemberHelp">
+      <form id="demoteMemberForm" novalidate><div class="modal-header"><div><span class="overline">SHOP ACCESS</span><h2 id="demoteMemberTitle">Make member?</h2></div></div><div class="modal-body"><p id="demoteMemberShop"></p><p id="demoteMemberHelp">They lose owner access but stay in the Shop as a member. You can make them an owner again later.</p><p class="access-status" id="demoteMemberStatus" role="status" aria-live="polite"></p></div><div class="modal-footer"><button class="button secondary" id="cancelDemoteMember" type="button">Cancel</button><button class="button primary" id="confirmDemoteMember" type="submit">Make member</button></div></form>
+    </dialog>
+    <dialog class="modal confirm-modal" id="leaveShopModal" aria-labelledby="leaveShopTitle" aria-describedby="leaveShopShop leaveShopHelp">
+      <form id="leaveShopForm" novalidate><div class="modal-header"><div><span class="overline">YOUR SHOP</span><h2 id="leaveShopTitle">Leave Shop?</h2></div></div><div class="modal-body"><p id="leaveShopShop"></p><p id="leaveShopHelp">You lose access to this Shop immediately. You can be invited again later.</p><p class="access-status" id="leaveShopModalStatus" role="status" aria-live="polite"></p></div><div class="modal-footer"><button class="button secondary" id="cancelLeaveShop" type="button">Cancel</button><button class="button primary" id="confirmLeaveShop" type="submit">Leave Shop</button></div></form>
     </dialog>
     <dialog class="modal confirm-modal" id="removeMemberModal" aria-labelledby="removeMemberTitle" aria-describedby="removeMemberShop removeMemberHelp">
       <form id="removeMemberForm" novalidate><div class="modal-header"><div><span class="overline">SHOP ACCESS</span><h2 id="removeMemberTitle">Remove member?</h2></div></div><div class="modal-body"><p id="removeMemberShop"></p><p id="removeMemberHelp">They lose access to this Shop immediately. You can invite them again later.</p><p class="access-status" id="removeMemberStatus" role="status" aria-live="polite"></p></div><div class="modal-footer"><button class="button secondary" id="cancelRemoveMember" type="button">Cancel</button><button class="button primary" id="confirmRemoveMember" type="submit">Remove</button></div></form>

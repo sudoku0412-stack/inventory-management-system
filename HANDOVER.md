@@ -288,3 +288,14 @@ Do not launch Cursor cloud agents for this project. Read this file at the start 
 ## Member removal released
 - PR #61 merged as `d51173a`. Remote migration `0016_shop_member_removal.sql` applied (receipt table and guard trigger present, audit history preserved), then Worker deployed: version `9095cb11-1917-452f-957f-ec9c6f163574`.
 - Still to check signed in: Remove button layout on a phone-width Profile and the confirmation flow (browser not checked).
+
+## Demotion/leave designed; platform admin needs decisions (2026-09-29)
+- Owner promotion and member removal were both verified by the user with real accounts (Remove button/dialog on phone width; second-account promotion).
+- `ARCHITECTURE.md` has "Design: owner demotion and leaving a Shop (not implemented)" awaiting review.
+- Requested but undesigned: a company-only platform admin (local login or `/admin`) that can see and change backend data. Open decisions: how it authenticates (separate Cloudflare Access application and policy for `/admin*` is the recommended default, never the customer Access app), read-only first versus writes, which data it may see (medicine/photos are customer data), audit logging of every admin action, and whether changes go through existing store functions or raw SQL.
+
+## Demotion and leave implemented (branch cursor/demotion-leave)
+- Migration `0017_shop_demotion_leave.sql`; `demoteHouseholdOwner` / `leaveHousehold` in `lib/household-access.js`; routes `POST /api/household/members/:userId/demote` and `POST /api/household/leave`; `public/owner-demotion-client.js`, `public/shop-leave-client.js` (both in the two asset allowlists); "Make member" on other Owner rows and "Leave this Shop" in the Current Shop card (disabled with a reason for the last Owner). Leave reloads into another Shop or the invitation gate.
+- Tests: `test/demotion-leave.test.js` (14 incl. last-owner races), `test/demotion-leave-ui.test.js` (7), route test in `worker-invitations.test.js`. Full suite 241 passing.
+- Not browser-verified. Deploy order: apply 0017 to remote D1, then deploy the Worker.
+- The platform-admin questions above are still open for the morning.
