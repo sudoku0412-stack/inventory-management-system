@@ -274,3 +274,7 @@ Do not launch Cursor cloud agents for this project. Read this file at the start 
 ## Change feed released
 - PR #58 merged as `736928a`. Remote migration `0015_batch_change_feed.sql` applied (verified: `batch_changes` empty, floor 0, throttle table accepts route `changes`), then Worker deployed: version `eaf1e219-54bc-40a5-a4ca-81cf34efc171`.
 - Unauthenticated curl only shows the Access 302, so it does not prove assets are served (allowlist covered by `test/worker-assets.test.js`). Authenticated check pending: open the app signed in, confirm it loads, and that a change made on another device appears on Inventory within about a minute.
+
+## Member removal designed; change feed follow-ups (2026-09-29)
+- `ARCHITECTURE.md` now has "Design: remove a member (not implemented)": Owner removes a Member only, migration 0016 (receipt table + `member_removed` audit), route `POST /api/household/members/:userId/remove`, same-batch cleanup of the target's push subscriptions and preference, client handling of 403 from the change feed. Awaiting review before implementation.
+- Added a change-feed test for a medicine deleted from another device; ARCHITECTURE change-feed section and deferred list no longer say "not implemented".
