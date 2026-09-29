@@ -1,6 +1,8 @@
 # Medicine Inventory Tracker
 
-A responsive, single-user household medicine inventory application. It keeps medicine batches in a local SQLite database, calculates expiry and low-stock status, and shows persistent 30-day in-app expiry reminders.
+A responsive household medicine inventory application. It tracks medicine batches, calculates expiry and low-stock status, and shows persistent 30-day expiry reminders. It runs two ways: a single-household local app on SQLite (`npm start`), and the production cloud app on Cloudflare Workers with D1, R2 and KV, where people share one or more Shops under Cloudflare Access.
+
+Project documents: `ARCHITECTURE.md` (designs and as-built decisions), `HANDOVER.md` (current status, release log, open work), `deploy/cloudflare-workers.md` (deployment steps).
 
 ## Run
 
@@ -65,8 +67,32 @@ Deploy with **Cloudflare Workers + D1 + R2** (always on). No tunnel and no `npm 
 
 Requires **Cloudflare Access** on that hostname and `GEMINI_API_KEY` as a Worker secret. The production Worker validates the signed Access JWT (issuer, audience, expiry, and signature) itself; it never treats an incoming email header as proof of identity. Local dev remains a loopback-only, single-household SQLite workflow at `npm start` → http://127.0.0.1:3000.
 
-## Cloud households
+## Cloud Shops, roles and access
 
-Cloud data is isolated by server-side Shop membership. After applying migration `0004_household_tenants.sql` and `0010_access_audit.sql`, set `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`, and an `INITIAL_OWNER_EMAILS` Worker secret before deploying. The final value is a comma-separated one-time bootstrap allowlist, kept only in Cloudflare secrets. The verified allowed account explicitly completes Shop setup to claim the initial Shop and existing unassigned D1 records; page loads never create membership, and unknown or later allowlisted accounts do not receive a Shop automatically.
+Cloud data is isolated by server-side **Shop** membership; the browser pins a Shop with the `X-Shop-Id` header and every request rechecks membership. A person can belong to several Shops.
 
-Cloudflare Access can use Google and Apple as identity providers. Apple requires the usual Apple Developer Service ID, return URL, domain association, and private key setup in Cloudflare Access; none of those values belong in this repository. After applying migration `0005_household_invitations.sql`, household owners can create and revoke pending member invitations in Profile. Invitations are records only in this release: they do not send email or grant access until a future, explicit acceptance flow verifies the signed-in identity.
+- **Roles:** Owners manage a Shop's access; Members use its inventory. A Shop always keeps at least one Owner.
+- **Invitations:** Owners invite people by email in Profile. The invitee accepts after signing in through Access, either on first visit or from the **Shop invitations** card in Profile if they already belong to another Shop.
+- **Owner actions:** make a Member an Owner, make another Owner a Member, or remove a Member. Anyone can leave a Shop (the last Owner cannot). Each change is atomic and recorded in an audit table.
+- **Another Shop:** users can create additional empty Shops (capped at five owned Shops).
+- **Live updates:** while a tab is open on Dashboard or Inventory, the app polls a per-Shop change feed about once a minute and applies changes made on other devices.
+
+Initial setup: set `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` and `INITIAL_OWNER_EMAILS` (comma-separated one-time bootstrap allowlist, kept only in Cloudflare secrets), then the verified allowed account completes Shop setup to claim the initial Shop. Page loads never create membership. Cloudflare Access can use Google and Apple as identity providers; Apple's Service ID, keys and domain association live in Cloudflare and never in this repository.
+
+## Admin console (company use only)
+
+`/admin` is a separate, read-only console for company staff. It shows totals, Shops with members and roles, audit events and an admin activity log. It never shows medicine names, notes, photos or push details, and it cannot change data.
+
+- It sits behind its own Cloudflare Access application for `/admin*`, separate from the customer application.
+- The Worker also checks that token's audience (`ADMIN_ACCESS_AUD`) and that the email is in `ADMIN_EMAILS` (comma-separated Worker secret). If either is missing the console returns 503.
+- Every authorized request writes to `admin_audit` before any data is returned.
+
+## Deploying to Cloudflare
+
+Required Worker secrets: `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`, `INITIAL_OWNER_EMAILS`, `ADMIN_ACCESS_AUD`, `ADMIN_EMAILS`, plus optional `GEMINI_API_KEY`.
+
+1. Run the tests: `npm test`.
+2. Apply new D1 migrations first: `npm run cf:migrate` (migrations `0001` to `0018` live in `migrations/`; list pending ones with `npx wrangler d1 migrations list medicine-inventory --remote`).
+3. Deploy the Worker and UI: `npm run deploy`.
+
+Always migrate before deploying. Any new browser module under `public/` must be added to both `publicAssetPaths` (`lib/shared.js`) and `bootstrapAssetPaths` (`worker/index.js`), or it returns 404 in production; a test enforces this. Admin files under `public/admin/` are deliberately not in the public list.
