@@ -6,4 +6,4 @@ const sql = readFileSync(new URL('../migrations/0020_shop_deletion.sql', import.
 export const deletionReadSchema = sql.slice(0, sql.indexOf('CREATE TABLE shop_deletion_receipts'));
 
 // The outbox table (0024) for fixtures that create invitations but apply only older migrations.
-export const outboxSchema = readFileSync(new URL('../migrations/0024_notification_outbox.sql', import.meta.url), 'utf8');
+export const outboxSchema = ['0024_notification_outbox.sql', '0025_notification_outbox_kinds.sql'].map(name => readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8')).join('\n');
