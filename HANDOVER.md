@@ -1,5 +1,13 @@
 # Medicine Inventory Tracker — handover
 
+## Expiry icon, local import tool, three approved designs (2026-09-29)
+
+- Expiry field shows a decorative calendar icon (CSS background; input height/behavior unchanged). Not browser-verified: check the 44px height and icon on the original iPhone.
+- `tools/export-local-to-d1.js` (offline; never touches remote) turns a local `data/inventory.sqlite` into a D1 SQL file plus an R2 upload script. The target Shop must already exist. Steps in `deploy/cloudflare-workers.md` ("One-time import"). Not run against production.
+- `ARCHITECTURE.md` has three designs approved by the user, NOT implemented: ownership transfer (0019), Shop deletion (0020, soft delete + 14-day grace, ships behind a flag), admin write actions (0021, kill switch off by default, restore only after deletion exists). Build in that order, one at a time.
+- User rule: use only one agent at a time; no multiple background agents.
+- No migration in this release.
+
 ## Profile Shop invitations card (implemented and deployed 2026-09-29)
 
 - Implements the cloud-only Profile **Shop invitations** card and join dialog from `ARCHITECTURE.md` in `public/shop-invitations-client.js`, bound from `app.js`; no server, migration, or secret change. Deploy is Worker/UI only (the file is in the Worker bootstrap-asset allowlist).
