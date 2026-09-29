@@ -1,6 +1,7 @@
 # Medicine Inventory Tracker — handover
 
 ## Creation limit message fix (2026-09-29)
+- Manual production data change (2026-09-29, run by the user): deleted one `shop_creation_receipts` row (the "test delete" Shop, created 16:54 UTC) from the remote D1 so the account could create a Shop before the 24-hour window ended. Only the rate-limit record was removed; the Shop itself stays soft-deleted and restorable from `/admin` until its purge date. Not a code change and not repeatable through the app.
 - Reported "We couldn’t confirm creation" was the server's rolling limit (one created Shop per user per 24 hours, 429), not a failure; deleted Shops keep their creation receipt so the limit still counts them. `creationFailure` in `public/shop-creation-client.js` now shows the server's "You can create one Shop every 24 hours" text and drops the saved intent; other 429s and 5xx still say retry. No server or migration change.
 
 ## Per-Shop feature flags (2026-09-29)
