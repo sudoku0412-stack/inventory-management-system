@@ -1,7 +1,7 @@
 # Medicine Inventory Tracker — handover
 
 ## Inventory CSV export (2026-09-30)
-- `lib/export.js`, `GET /api/household/export` (before tenant resolution, pinned Shop), `public/inventory-export-client.js` (both allowlists), Owner-only button in Current Shop, and a nudge to export in the delete dialog. No migration, no flag, no audit row. Owner-only by decision (loosen in `exportInventoryCsv` if Members should export). Tests: `test/inventory-export.test.js`.
+- `lib/export.js`, `GET /api/household/export` (before tenant resolution, pinned Shop), `public/inventory-export-client.js` (both allowlists), button in Current Shop, and a nudge to export in the delete dialog. No migration, no flag, no audit row. Opened to Members as well as Owners at the user's request (2026-09-30). Tests: `test/inventory-export.test.js`.
 - The user's 3-item queue (Recently deleted, receipt retention, export) is complete.
 
 ## Receipt retention cleanup (2026-09-30)
