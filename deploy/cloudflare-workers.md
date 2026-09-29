@@ -78,7 +78,19 @@ Open **https://medicineinventory.craftloop.ca** on your phone, sign in with Acce
 ## Local dev vs cloud
 
 - **Local:** `npm start` → http://127.0.0.1:3000 (unchanged workflow).
-- **Cloud:** `npm run deploy` → D1/R2/KV; does not copy your local `data/inventory.sqlite`. Export/import is manual if you need to migrate an existing cabinet later.
+- **Cloud:** `npm run deploy` → D1/R2/KV; does not copy your local `data/inventory.sqlite`. Use the one-time import below to migrate an existing cabinet.
+
+## One-time import of a local cabinet
+
+`tools/export-local-to-d1.js` works offline and never contacts Cloudflare. It reads `data/inventory.sqlite` read-only and writes a SQL file and an R2 upload script. Push subscriptions, settings and secrets are not exported. Discarded and zero-quantity batches are skipped, and rows are validated with the same rules as the API.
+
+1. Sign in once so the target Shop exists, then find its id (`households.id`): `npx wrangler d1 execute medicine-inventory --remote --command "SELECT id,name FROM households"`.
+2. Dry run (prints the summary, writes nothing): `node tools/export-local-to-d1.js --shop-id <uuid> --dry-run`
+3. Generate the files: `node tools/export-local-to-d1.js --shop-id <uuid>` (options: `--db`, `--out`, `--photos-out`; defaults `data/inventory.sqlite`, `data/d1-import.sql`, `data/d1-import-photos.sh`).
+4. Import rows: `npx wrangler d1 execute medicine-inventory --remote --file data/d1-import.sql`
+5. Upload photos: `sh data/d1-import-photos.sh` (runs `wrangler r2 object put ... --remote`).
+
+Re-running is safe: batches use their local ids with `INSERT OR IGNORE`, and photo keys are `photos/<batch id>.<ext>`. Import rows before uploading photos or in either order; a row whose photo is missing simply shows no photo.
 
 ## Troubleshooting
 

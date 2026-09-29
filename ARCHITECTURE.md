@@ -393,6 +393,131 @@ JWT matrix (customer AUD rejected on admin routes and admin AUD rejected on cust
 3. Set `ADMIN_ACCESS_AUD` and `ADMIN_EMAILS` with `wrangler secret put`.
 4. Deploy the Worker; verify signed in as the admin email, and that a customer-only login gets 403 or the Access denial.
 
+## Design (not implemented): ownership transfer between Owners and Members
+
+### Problem and smallest slice
+
+Today transfer is the composition promote, then demote or leave (0017). That works but is three owner-count states and three receipts for one intent, and it cannot express "hand this Shop to Sam and step down" as one auditable fact. The smallest slice is one atomic action, **Transfer ownership**: the acting Owner makes a Member an Owner and becomes a Member in the same batch. It never removes anyone, deletes a Shop, or touches other memberships. Migration numbers below are the next free numbers when built; this is planned as `0019_shop_ownership_transfer.sql`.
+
+### API and authorization
+
+`POST /api/household/members/:userId/transfer` with exact body `{ operationId }`, returning 200 `{ transferred: <boolean> }`. Every rule of the promotion/removal routes applies unchanged: dispatched before `resolveTenant`, mandatory pinned `X-Shop-Id`, verified Access JWT, same-origin JSON, cross-site Fetch Metadata rejected, unknown fields rejected, no-store, Members and non-members 403 before any target lookup, missing or foreign target the same 404, fresh owner check inside the batch, 503 when the schema is missing. Target eligibility: currently a plain Member of this exact Shop who owns fewer than five Shops (same cap, same 409 **This member already owns 5 Shops.**). Targeting an existing Owner or yourself is 409 **Use Make member to step down.**; the transfer never has a no-op-on-success shape except replay.
+
+### Last-owner safety, receipts and replay
+
+The owner count is unchanged (+1 target, -1 actor), so the invariant holds by construction, but do not rely on that alone: the demote statement keeps the 0017 guard `count(owners) >= 2` evaluated after the target's promotion in the same batch, and the receipt trigger repeats actor-is-Owner and target-is-Member. Sequence: guarded receipt INSERT, then Member-to-Owner UPDATE for the target (dependent on the receipt), then Owner-to-Member UPDATE for the actor (dependent on the target now being Owner), then audit INSERT dependent on both (zero rows gives a NULL target and aborts the batch, as in 0013/0017). Races: a concurrent demotion of the actor, removal of the target, or another transfer loses cleanly with 409 and no partial state. Table `shop_ownership_transfer_receipts (household_id, actor_user_id, operation_id, target_user_id, created_at, PRIMARY KEY (household_id, actor_user_id, operation_id))`. Replay of the same key and target after fresh authorization returns `transferred:false` if the target is still Owner (the actor may now be a Member, so fresh authorization for replay is "was the receipt actor, is still a member"); the same key for another target is 409; replay after the target was demoted is 409, never a second grant.
+
+### Audit and effects
+
+One `ownership_transferred` event per success (`actor_user_id` = former owner, `target_identifier = 'user:' + <target id>`), added by an `access_audit` rebuild using the 0016/0017 copy/count/FK guard pattern. Push subscriptions, preferences, data and the five-owned-Shops slot of the actor (freed) follow demotion semantics. Scheduled push already dedupes by Shop, so no change. The former Owner's next owner-only request gets 403 and the client refreshes roster and Shop context, reusing the demotion path.
+
+### UI
+
+In the Owner roster each Member row gets a secondary **Transfer ownership** action next to **Make owner** and **Remove**. Confirmation dialog: **Transfer ownership of <Shop> to <email>?** with "<email> becomes an owner and you become a member. Only they can make you an owner again." Default focus Cancel; the primary requires typing nothing (the trust is in the copy), busy, ambiguous-retry and focus behavior follow the promotion dialog. Success message **<email> is now an owner. You are now a member.**, then refresh roster and Shop context in place (owner-only cards disappear).
+
+### Tests
+
+Authorization and target matrix (Member, Owner, self, missing, foreign, cap at five); last-owner guard with concurrent mutual transfer, transfer-versus-demote/leave/remove races on real serialized SQLite-backed D1 batches; receipt, transition and audit atomicity via a blocking audit trigger; replay/key-mismatch/replay-after-change; preference and push neutrality; migration preserving audit rows; owner-only routes 403 for the ex-owner; UI dialog, retry and focus tests.
+
+### Rollout order
+
+Apply 0019, deploy Worker plus UI together (the UI checks a server capability flag in the roster response so an older Worker hides the action). Old Workers tolerate the widened CHECK and unused table; roll back the Worker only.
+
+### Open decisions
+
+1. **Atomic transfer (recommended)** versus keeping promote-then-demote as the only path (no new code, but no single audit fact and the actor must act twice).
+2. Actor becomes **Member (recommended)** versus **leaves the Shop** in the same batch (more final, closer to selling a Shop, but strands the actor if it was their only Shop).
+3. Target may be an existing Member only **(recommended)** versus also accepting a pending invitee (needs invitation redemption design; deferred).
+4. Require the target to **accept** the transfer (two-step, needs a pending-state table and expiry) versus immediate (recommended; targets are already trusted Members and they can leave).
+5. Keep the five-owned-Shops cap for the target (recommended) versus exempting transfers.
+
+## Design (not implemented): Shop deletion by an Owner
+
+### Problem and boundary
+
+There is no way to end a Shop's data lifecycle; 0016/0017 deliberately left the sole Owner unable to leave. Deletion is destructive across D1 rows, R2 photos and other people's access, so it is designed as **soft delete with a grace period, then an automated purge**, never an immediate hard delete. Out of scope: export before delete, account deletion, per-medicine bulk delete, email notice (no email channel exists).
+
+### Data and states
+
+Planned migration `0020_shop_deletion.sql` (renumber if 0019 ships later): `ALTER TABLE households ADD COLUMN deleted_at TEXT`, `ADD COLUMN purge_after TEXT`, `ADD COLUMN deleted_by_user_id TEXT REFERENCES users(id)`; receipt table `shop_deletion_receipts (household_id, actor_user_id, operation_id, created_at, PRIMARY KEY (household_id, actor_user_id, operation_id))`; audit events `shop_deleted`, `shop_restored`, `shop_purged` (0016/0017 rebuild pattern). States: **active** (deleted_at NULL), **pending deletion** (deleted_at set, within grace), **purged** (tombstone row). Every Shop-resolving query treats a non-NULL `deleted_at` as "no such Shop": tenant resolution, `GET /api/shops`, preference fallback, invitation acceptance, the change-feed route, owner-cap and creation-limit counts (deleted Shops free the cap slot; creation receipts stay so create-delete cycling cannot bypass the rolling limit), and the scheduled push enumeration. This filter is the main risk: enumerate every `memberships`/`households` reader and cover each with a test.
+
+### API and authorization
+
+`POST /api/household/delete` with exact body `{ operationId, confirmName }`; `confirmName` must equal the Shop's current name (case-sensitive, trimmed) or 400. Same pinned-Shop, same-origin, owner-in-batch, receipt-plus-audit pattern as removal. Any Owner may delete (equal owners). Guarded batch: receipt INSERT (actor is Owner, Shop active), `UPDATE households SET deleted_at, purge_after, deleted_by_user_id WHERE deleted_at IS NULL`, then immediate same-batch cleanup of **pending invitations** (deleted, so nobody can join a doomed Shop) and **all push subscriptions** for the Shop (deleted, so alerts stop at once; not restorable), then the audit INSERT dependent on the UPDATE. Replay returns `deleted:false` if still deleted by the same receipt; a new operation on an already-deleted Shop is 404.
+
+### Effects on people, data and feed
+
+- **Other members:** memberships and roles are kept during grace so a restore recovers exact access; their next request gets 403, the change feed 403 path (from 0016) refreshes Shop context and falls back to another Shop or the invitation gate. `user_shop_preferences` pointing here are ignored by the fallback rule and deleted at purge.
+- **Change feed and receipts:** `batch_changes` and `mutation_receipts` are kept during grace and deleted at purge. Creation receipts and audit rows are kept forever.
+- **Audit that survives:** the `households` row is never deleted; purge replaces `name` with a fixed placeholder and keeps id, created_at, deleted_at, purged_at, so `access_audit` and creation receipts keep valid FKs with no rebuild. Audit rows keep `user:<id>` identifiers and contain no medicine data.
+
+### Purge
+
+The existing 15-minute cron processes at most N Shops with `purge_after < now`, in bounded pages: (1) list `photo_path` for the Shop's batches and delete the R2 objects (idempotent; missing object is success), (2) delete `batch_changes`, receipts, batches, notifications, settings, memberships, preferences, in FK order in D1 batches, (3) set `purged_at` and write `shop_purged`. R2 is not transactional with D1, so photos go first: a crash after step 1 leaves rows without photos (retryable and harmless), never photos without rows. A purge is irreversible; there is no undelete after `purged_at`.
+
+### UI
+
+Profile, owner-only **Danger zone** card on the current Shop: **Delete this Shop**. Native dialog: **Delete <Shop>?** listing consequences ("Everyone loses access now. Medicines and photos are permanently deleted after 14 days. Invitations and notifications stop immediately."), a text field to type the Shop name, a disabled destructive primary until it matches, default focus Cancel, and busy/retry per the removal dialog. Success switches to another Shop or the invitation gate. If it is the actor's only Shop, see decision 4.
+
+### Tests
+
+Authorization and name-confirm matrix; batch atomicity with blocking audit trigger; every Shop reader hidden after deletion; cap and creation-limit accounting; invitation acceptance refused; no push sends after deletion (subscriptions gone); other members' 403 and fallback; purge idempotence and crash points (R2 before rows, R2 failure keeps rows, rerun completes); tombstone keeps audit and receipts valid under `pragma_foreign_key_check`; restore before purge; migration preservation.
+
+### Rollout order
+
+Apply 0020, deploy the Worker with all readers filtering `deleted_at` **before** the delete route is enabled (route behind a flag `SHOP_DELETION_ENABLED`, default off), then enable the UI. Deploy the purge cron last, initially in dry-run logging mode for one week.
+
+### Open decisions
+
+1. **Soft delete with 14-day grace then purge (recommended)** versus immediate hard delete (simplest, no filter risk, no recovery) versus 30 days (longer safety, longer retention of data the owner wanted gone).
+2. **Tombstone the `households` row (recommended)** versus deleting it and rebuilding `access_audit` and receipts without FK (loses referential integrity, needs a heavier migration).
+3. **Any Owner may delete (recommended, equal owners)** versus requiring all Owners or a sole Owner.
+4. Deleting a user's **only** Shop: **block with 409 until they have another Shop (recommended, they otherwise land on an unrecoverable invitation gate)** versus allow.
+5. Restore: **platform admin only in v1 (recommended, see admin write actions)** versus owner self-service "Recently deleted" list in Profile.
+6. Push subscriptions and invitations deleted at soft-delete time (recommended, fail safe, not restored) versus kept and filtered.
+
+## Design (not implemented): admin write actions v1 for the /admin console
+
+### Scope and principles
+
+The console is read-only (0018). Version 1 writes add the smallest audited set where staff intervention is otherwise impossible without SQL: **revoke a pending invitation** and **restore a soft-deleted Shop** (the latter ships only after Shop deletion exists). Explicitly not in v1: role changes, removing members, transfer, purge-now, user or identity edits, medicine data, bulk actions. Each action calls a shared store function, never raw SQL from the admin layer, so validation and customer audit stay identical.
+
+### Authorization, CSRF and dispatch
+
+Unchanged admin check: verified Access JWT against `ADMIN_ACCESS_AUD` plus lower-cased email in `ADMIN_EMAILS`, fail closed 503. Dispatch stays before customer routes. The admin router moves from "everything but GET is 405" to a per-route method allowlist; unlisted routes stay 405. Write routes are `POST /admin/api/invitations/:id/revoke` and `POST /admin/api/shops/:id/restore`, each with exact body `{ operationId, reason }`, JSON content type, exact same-origin Origin, cross-site Fetch Metadata rejected, no CORS, no-store, and a required custom header `X-Admin-Action: 1` (cookie-authenticated, so CSRF defence is layered). A durable throttle limits writes per admin (30/minute). A kill switch `ADMIN_WRITES_ENABLED` (default off) returns 403 for every write route so the console stays read-only until enabled.
+
+### Store integration
+
+`revokeHouseholdInvitation` currently authorizes via an Owner tenant. Refactor its body into an actor-neutral core taking `{ householdId, invitationId, actor }`, called by the customer wrapper (after `ownerHousehold`) and by the admin wrapper (after the admin check and Shop/invitation lookup). Restore is a new store function that only clears `deleted_at`/`purge_after` where `purged_at IS NULL` and `purge_after > now`. No admin path may bypass the core function's guards or write the customer tables directly.
+
+### Audit, receipts and reason
+
+Migration (`0021_admin_writes.sql`, renumber when built): `ALTER TABLE admin_audit ADD COLUMN reason TEXT` and `ADD COLUMN operation_id TEXT`, unique partial index on `(admin_email, operation_id) WHERE operation_id IS NOT NULL`, and audit CHECK-free `action` values `invitation.revoke`, `shop.restore`. `reason` is required for writes, trimmed, 10 to 500 characters, plain text, never rendered as HTML. **The admin_audit write is in the same D1 batch as the mutation**, dependent on it (`WHERE changes()=1` or a NULL-forcing guard), so a mutation without its admin row, or a row without its mutation, cannot commit. The customer-side audit event (`invite_revoked` with `actor_user_id` NULL, or `shop_restored`) is written in that same batch with `target_identifier` naming the admin action, so the Shop's own history shows staff involvement without the admin email. The existing read-request audit row is not written twice for writes.
+
+### Replay safety
+
+The unique `(admin_email, operation_id)` index is the receipt: the same key and target replays to `changed:false` with no writes; the same key for another target or action is 409; an already-revoked invitation or already-active Shop with a new operation is 404/409 with no audit row (nothing changed). Ambiguous failures keep the same operation id for retry, as in the customer dialogs.
+
+### UI
+
+Actions live on the Shop detail view only: **Revoke** beside each pending invitation, **Restore Shop** on a pending-deletion Shop. A native dialog states the target and effect, requires the reason field (visible label, character counter) and for restore also typing the Shop name; primary is disabled until valid, default focus Cancel. The banner changes from "Read-only" to "Changes are audited" only when writes are enabled (server-provided flag). Results append to the Admin log tab.
+
+### Tests
+
+Authorization matrix (customer AUD, unlisted email, missing config, writes disabled); CSRF matrix (missing header, foreign Origin, cross-site); reason validation; audit-in-batch atomicity via blocking trigger both ways; replay and key mismatch; throttle; revoke by admin leaves the Shop's other invitations untouched and shows in that Shop's audit; restore only inside grace; no medicine or push data ever in responses; GET routes unaffected.
+
+### Rollout
+
+Apply migration; deploy Worker with `ADMIN_WRITES_ENABLED` unset; verify GET behavior unchanged; set the flag, exercise revoke on a test invitation, confirm both audit rows; enable restore after Shop deletion ships.
+
+### Open decisions
+
+1. **Revoke invitation plus restore Shop (recommended)** versus revoke only until deletion exists, versus adding "force remove member" (higher risk).
+2. Reason: **free text 10 to 500 characters (recommended)** versus a fixed category list plus optional note.
+3. Second-person approval for restore: **no, single admin with audit (recommended for a one-admin company)** versus two-person control.
+4. Customer visibility: **history row without admin identity (recommended)** versus naming the admin or no customer-side row.
+5. Kill switch as a **var default-off (recommended)** versus always on once deployed.
+
 ## Deferred architecture work
 
 - Offline synchronization reconciliation (offline mutation queue, conflict UI, background reconciliation). The online pull/change feed is implemented and deployed; see its section above.
