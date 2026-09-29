@@ -6,3 +6,4 @@ data/gemini.key
 .env
 .wrangler/
 node_modules/
+build.log

@@ -8,7 +8,7 @@ import {
   visionConfig
 } from '../lib/shared.js';
 import { createD1Store, loadVapid } from '../lib/store-d1.js';
-import { adminActivity, adminAudit, adminOverview, adminShopDetail, adminShops, adminExtendShop, adminRestoreShop, adminRevokeInvitation, adminSetShopFlag, authorizeAdmin, writeAdminAudit } from '../lib/admin.js';
+import { adminActivity, adminAudit, adminEmailOutbox, adminOverview, adminShopDetail, adminShops, adminExtendShop, adminRestoreShop, adminRevokeInvitation, adminSetShopFlag, authorizeAdmin, writeAdminAudit } from '../lib/admin.js';
 import { listBatchChanges, parseChangeQuery, pruneBatchChanges } from '../lib/batch-changes.js';
 import { purgeDeletedShops } from '../lib/shop-purge.js';
 import { effectiveFlag } from '../lib/feature-flags.js';
@@ -119,6 +119,7 @@ async function handleAdmin(request, env, url) {
       const detail = url.pathname.match(/^\/admin\/api\/shops\/([^/]+)$/);
       if (detail) return await audited('shop.view', detail[1], async () => ({ ...await adminShopDetail(db, detail[1], undefined, env), writesEnabled }));
       if (url.pathname === '/admin/api/audit') return await audited('audit.view', params.get('shop'), () => adminAudit(db, params));
+      if (url.pathname === '/admin/api/email-outbox') return await audited('email-outbox.view', null, () => adminEmailOutbox(db, params));
       if (url.pathname === '/admin/api/admin-audit') return await audited('admin-audit.view', null, () => adminActivity(db, params));
       return json({ error: 'Not found' }, 404, adminHeaders);
     }

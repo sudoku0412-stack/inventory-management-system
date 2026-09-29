@@ -101,7 +101,7 @@ const views = {
     const data = await get('/admin/api/overview');
     $('who').textContent = `Signed in as ${data.admin}`;
     setWrites(data.writesEnabled);
-    const labels = [['shops', 'Shops'], ['users', 'Users'], ['memberships', 'Memberships'], ['owners', 'Owner seats'], ['pendingInvitations', 'Pending invitations'], ['medicines', 'Medicines (count only)'], ['changeFeedRows', 'Change-feed rows'], ['auditEventsLast24h', 'Audit events, 24h'], ['appliedMigrations', 'Applied migrations'], ['migrationState', 'Migration state']];
+    const labels = [['shops', 'Shops'], ['users', 'Users'], ['memberships', 'Memberships'], ['owners', 'Owner seats'], ['pendingInvitations', 'Pending invitations'], ['emailsNeedingAttention', 'Emails needing attention'], ['emailsQueued', 'Emails queued'], ['medicines', 'Medicines (count only)'], ['changeFeedRows', 'Change-feed rows'], ['auditEventsLast24h', 'Audit events, 24h'], ['appliedMigrations', 'Applied migrations'], ['migrationState', 'Migration state']];
     content.replaceChildren(el('dl', { class: 'grid' }, ...labels.map(([key, label]) => el('div', {}, el('dt', {}, label), el('dd', {}, text(data[key]))))));
     return null;
   },
@@ -164,6 +164,12 @@ const views = {
   async audit(after) {
     const data = await get(`/admin/api/audit${after ? `?cursor=${encodeURIComponent(after)}` : ''}`);
     const view = table('Audit events', auditColumns, data.events);
+    after ? content.append(view) : content.replaceChildren(view);
+    return data.nextCursor;
+  },
+  async email(after) {
+    const data = await get(`/admin/api/email-outbox${after ? `?cursor=${encodeURIComponent(after)}` : ''}`);
+    const view = table('Emails not yet sent', [{ label: 'Queued', render: row => when(row.created_at) }, { label: 'Type', key: 'kind' }, { label: 'To', key: 'recipient_email' }, { label: 'Status', key: 'status' }, { label: 'Attempts', key: 'attempts' }, { label: 'Last error', render: row => row.last_error || '' }], data.emails);
     after ? content.append(view) : content.replaceChildren(view);
     return data.nextCursor;
   },
