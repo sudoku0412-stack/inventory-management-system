@@ -322,6 +322,7 @@ test('admin extend moves the purge deadline later only, inside the grace period,
   assert.equal(after, body.purgeAfter);
   assert.ok(after > soon);
   assert.deepEqual(w.rows("SELECT action,target,reason FROM admin_audit WHERE action='shop.extend'"), [{ action: 'shop.extend', target: `shop:${uuid(11)}:30d`, reason: REASON }]);
+  assert.deepEqual(w.rows("SELECT household_id,actor_user_id,target_identifier FROM access_audit WHERE event='shop_extended'"), [{ household_id: uuid(11), actor_user_id: null, target_identifier: 'staff action' }], "the Shop's own history shows it, without the admin identity");
   assert.deepEqual(await (await extend()).json(), { changed: false }, 'replay');
   assert.equal(w.rows("SELECT * FROM admin_audit WHERE action='shop.extend'").length, 1);
   assert.equal((await extend(opId(20), 14)).status, 409, 'same key, different days');
@@ -336,3 +337,17 @@ test('the console offers Extend deadline with a days input', () => {
   assert.match(js, /keepDays: Number/);
   assert.match(html, /id="actionDays"/);
 });
+
+test('admin extend is atomic with both audit rows', () => withFetch(async () => {
+  for (const [table, when] of [['admin_audit', "NEW.action='shop.extend'"], ['access_audit', "NEW.event='shop_extended'"]]) {
+    const f = fixture(), w = writable(f);
+    const soon = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString();
+    w.softDelete(uuid(11), soon);
+    f.sqlite.exec(`CREATE TRIGGER block_${table} BEFORE INSERT ON ${table} WHEN ${when} BEGIN SELECT RAISE(ABORT, 'blocked'); END;`);
+    const response = await w.post(`/admin/api/shops/${uuid(11)}/extend`, { operationId: opId(30), reason: REASON, keepDays: 30 });
+    assert.notEqual(response.status, 200, table);
+    assert.equal(w.rows('SELECT purge_after FROM household_deletions')[0].purge_after, soon, `${table}: the deadline is unchanged`);
+    assert.equal(w.rows("SELECT * FROM admin_audit WHERE action='shop.extend'").length, 0);
+    assert.equal(w.rows("SELECT * FROM access_audit WHERE event='shop_extended'").length, 0);
+  }
+}));

@@ -3,8 +3,11 @@
 ## Shop deletion released, flag off (2026-09-29)
 - PR #73 merged as `f2a30c8`. Remote migration `0020_shop_deletion.sql` applied, then Worker deployed: version `f27c3e78-6559-4f14-b8ae-79de4af18b50`. `SHOP_DELETION_ENABLED` and `SHOP_PURGE_ENABLED` are NOT set: the delete route returns 404, the card is hidden, and the cron purge only logs a dry run. User decision: turn deletion on only after admin restore is live.
 
+## Extension in Shop history (2026-09-29)
+- Migration `0022_shop_extension_audit.sql` allows `shop_extended`; an admin **Extend deadline** now also writes it to the Shop's own history (no admin identity), atomically with the `admin_audit` row. Apply 0022 BEFORE deploying (the new code inserts the event). Stray agent worktrees and their branches were deleted (their work is in main).
+
 ## Purge days option (2026-09-29)
-- Owners choose how long a deleted Shop is kept when deleting: `keepDays` 7 to 30 (default 14) in `POST /api/household/delete`, number field in the delete dialog. Admin can extend a pending Shop's deadline (later only, counted from now, 7 to 30 days) with `POST /admin/api/shops/:id/extend` `{ operationId, reason, keepDays }`, audited as `shop.extend` in `admin_audit` only (no customer history row: the access_audit CHECK has no event for it). No migration.
+- Owners choose how long a deleted Shop is kept when deleting: `keepDays` 7 to 30 (default 14) in `POST /api/household/delete`, number field in the delete dialog. Admin can extend a pending Shop's deadline (later only, counted from now, 7 to 30 days) with `POST /admin/api/shops/:id/extend` `{ operationId, reason, keepDays }`, audited as `shop.extend` in `admin_audit` (and, from 0022, `shop_extended` in the Shop history). No migration for this step.
 - Purge is enabled (`SHOP_PURGE_ENABLED`), so a Shop is permanently removed at its own `purge_after`.
 
 ## Flags enabled (2026-09-29)
