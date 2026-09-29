@@ -55,6 +55,18 @@ Use your Access team URL (for example `https://<team>.cloudflareaccess.com`) and
 
 For the tenant migration, apply migrations first, set these three Access/bootstrap secrets, then deploy. A verified allowlisted account must explicitly submit the Shop setup screen to atomically create the first Shop and backfill existing unassigned batches, notifications, settings, and push subscriptions. Page loads never create access. Unknown users are denied; a second allowlisted account is not auto-added. Confirm that first setup before enabling Access policies for additional people.
 
+### Feature flags
+
+These are optional Worker secrets; a feature is off unless the value is exactly `true`:
+
+```sh
+echo true | npx wrangler secret put ADMIN_WRITES_ENABLED   # /admin: revoke invitation, restore Shop, extend deadline
+echo true | npx wrangler secret put SHOP_DELETION_ENABLED  # owners can delete a Shop (7 to 30 day keep period)
+echo true | npx wrangler secret put SHOP_PURGE_ENABLED     # cron permanently purges Shops after their keep period
+```
+
+Enable admin changes first so a deleted Shop can be restored. Without `SHOP_PURGE_ENABLED` the 15-minute cron only logs what it would purge. Turn a flag off with `npx wrangler secret delete NAME`; the change takes effect immediately.
+
 7. Attach the custom domain in the Cloudflare dashboard if Wrangler has not already linked `medicineinventory.craftloop.ca`.
 
 ## Deploy
