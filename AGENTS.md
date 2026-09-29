@@ -23,3 +23,12 @@ Read HANDOVER.md at the start of a new chat. These files are the project's persi
 Use one implementer and one consolidated Senior review per meaningful change. Give Luna small, explicit tasks; give Terra medium substantial features. Escalate after one unsuccessful fix round rather than repeating the same weak handoff. Use the UI Designer for initial designs and substantial UI changes. Verify important browser flows and responsive visual states before claiming completion.
 
 Monitor the account's five-hour usage during active work and before costly phases. If remaining usage is strictly below 15%, notify the user once, stop active agents, and pause work until the user directs otherwise. Do not automatically resume when limits reset. Keep communication short and avoid repetitive status polling.
+
+## Cursor Cloud specific instructions
+
+- Node.js 26.10.0 is installed at `/opt/node-v26`. Shells may resolve an older `/exec-daemon/node` first. Prepend `/opt/node-v26/bin` to `PATH` before `npm start` or `npm test`.
+- `npm ci` installs the Wrangler devDependency and is safe to repeat. The local server has no runtime npm packages and no external database: the first `npm start` creates SQLite under `data/`.
+- `npm start` serves http://127.0.0.1:3000. Leave `HOST` unset. Do not set `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` locally; those turn on Cloudflare Access JWT checks.
+- Local `GET /api/shop/onboarding-status` and `GET /api/household/access` return 404. That is the single-Shop SQLite fallback, and the inventory UI still loads.
+- Every browser module under `public/` must be listed in `publicAssetPaths` in `lib/shared.js`. A missing entry returns 404 and leaves the page blank.
+- Gemini suggestions are optional. Without `GEMINI_API_KEY` or `data/gemini.key`, photos still save and name/expiry stay manual.
