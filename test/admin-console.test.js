@@ -300,3 +300,8 @@ test('the console UI exposes changes only when the server says they are enabled'
   assert.match(html, /id="actionDialog"/);
   assert.doesNotMatch(js, /innerHTML/);
 });
+
+test('the admin header has a same-origin Cloudflare Access sign-out link', () => {
+  const html = readFileSync(new URL('../public/admin/index.html', import.meta.url), 'utf8');
+  assert.match(html, /<a class="signout" href="\/cdn-cgi\/access\/logout">Sign out<\/a>/);
+});
