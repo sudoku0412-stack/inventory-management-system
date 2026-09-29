@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Admin · Medicine Inventory Tracker</title>
+  <link rel="stylesheet" href="/admin/admin.css">
+</head>
+<body>
+  <header class="bar">
+    <h1>Admin console</h1>
+    <p class="banner" role="note">Read-only. Metadata only; medicine contents are never shown.</p>
+    <p class="who" id="who"></p>
+  </header>
+  <nav aria-label="Admin sections" class="tabs" id="tabs">
+    <a href="#overview" data-tab="overview">Overview</a>
+    <a href="#shops" data-tab="shops">Shops</a>
+    <a href="#audit" data-tab="audit">Audit</a>
+    <a href="#activity" data-tab="activity">Admin log</a>
+  </nav>
+  <main id="main" tabindex="-1">
+    <p id="status" role="status" aria-live="polite"></p>
+    <section id="content"></section>
+    <button type="button" id="more" hidden>Load more</button>
+  </main>
+  <script src="/admin/admin.js" type="module"></script>
+</body>
+</html>

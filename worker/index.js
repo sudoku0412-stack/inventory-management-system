@@ -8,6 +8,7 @@ import {
   visionConfig
 } from '../lib/shared.js';
 import { createD1Store, loadVapid } from '../lib/store-d1.js';
+import { adminActivity, adminAudit, adminOverview, adminShopDetail, adminShops, authorizeAdmin, writeAdminAudit } from '../lib/admin.js';
 import { listBatchChanges, parseChangeQuery, pruneBatchChanges } from '../lib/batch-changes.js';
 import { createAdditionalShop, listShops, onboardingStatus, pinnedTenant, resolveTenant, setupInitialShop, shopContext } from '../lib/tenants.js';
 import { acceptHouseholdInvitation, createHouseholdInvitation, listHouseholdAccess, pendingHouseholdInvitations, demoteHouseholdOwner, leaveHousehold, promoteHouseholdMember, removeHouseholdMember, revokeHouseholdInvitation, validateMemberRemoval, validateOwnerDemotion, validateOwnerPromotion, validateShopLeave, throttleInvitationRoute } from '../lib/household-access.js';
@@ -54,9 +55,7 @@ async function readJson(request, requireBody = false) {
   }
 }
 
-async function ensureAccess(request, env) {
-  const access = accessConfig(env);
-  if (!access) throw Object.assign(new Error('Cloudflare Access JWT validation is not configured.'), { status: 503 });
+async function accessKeys(access) {
   let keys = jwksCache.keys;
   if (!keys || Date.now() - jwksCache.at > 60 * 60 * 1000) {
     const certs = await fetch(access.certs);
@@ -65,7 +64,50 @@ async function ensureAccess(request, env) {
     jwksCache.keys = keys;
     jwksCache.at = Date.now();
   }
-  return requireCloudflareAccess(request, { env, now: Date.now, keys });
+  return keys;
+}
+
+async function ensureAccess(request, env) {
+  const access = accessConfig(env);
+  if (!access) throw Object.assign(new Error('Cloudflare Access JWT validation is not configured.'), { status: 503 });
+  return requireCloudflareAccess(request, { env, now: Date.now, keys: await accessKeys(access) });
+}
+
+const adminAssets = new Map([['/admin', '/admin/index.html'], ['/admin/', '/admin/index.html'], ['/admin/admin.js', '/admin/admin.js'], ['/admin/admin.css', '/admin/admin.css']]);
+const adminHeaders = {
+  'cache-control': 'no-store',
+  'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+  'x-content-type-options': 'nosniff',
+  'x-frame-options': 'DENY',
+  'referrer-policy': 'no-referrer'
+};
+
+async function handleAdmin(request, env, url) {
+  const requestId = requestCorrelationId(request);
+  const api = url.pathname.startsWith('/admin/api/');
+  try {
+    const access = accessConfig({ ...env, ACCESS_AUD: env.ADMIN_ACCESS_AUD });
+    const admin = await authorizeAdmin(request, env, access ? await accessKeys(access) : undefined);
+    if (request.method !== 'GET' && request.method !== 'HEAD') return json({ error: 'Not found' }, 405, { ...adminHeaders, allow: 'GET, HEAD' });
+    const params = url.searchParams, db = env.DB;
+    const audited = async (action, target, load) => { await writeAdminAudit(db, { email: admin.email, action, target, requestId }); return json(await load(), 200, adminHeaders); };
+    if (api) {
+      if (url.pathname === '/admin/api/overview') return await audited('overview.view', null, async () => ({ ...await adminOverview(db), admin: admin.email }));
+      if (url.pathname === '/admin/api/shops') return await audited('shops.list', null, () => adminShops(db, params));
+      const detail = url.pathname.match(/^\/admin\/api\/shops\/([^/]+)$/);
+      if (detail) return await audited('shop.view', detail[1], () => adminShopDetail(db, detail[1]));
+      if (url.pathname === '/admin/api/audit') return await audited('audit.view', params.get('shop'), () => adminAudit(db, params));
+      if (url.pathname === '/admin/api/admin-audit') return await audited('admin-audit.view', null, () => adminActivity(db, params));
+      return json({ error: 'Not found' }, 404, adminHeaders);
+    }
+    const assetPath = adminAssets.get(url.pathname);
+    if (!assetPath) return new Response('Not found', { status: 404, headers: adminHeaders });
+    if (assetPath === '/admin/index.html') await writeAdminAudit(db, { email: admin.email, action: 'console.open', requestId });
+    const asset = await env.ASSETS.fetch(new URL(assetPath, request.url));
+    return new Response(asset.body, { status: asset.status, headers: { ...adminHeaders, 'content-type': asset.headers.get('content-type') || 'application/octet-stream' } });
+  } catch (error) {
+    return json({ error: error.message || 'Server error' }, error.status || 500, adminHeaders);
+  }
 }
 
 async function getStore(env, tenant, principal) {
@@ -99,6 +141,7 @@ function requireInvitationAcceptanceRequest(request, url) {
 
 export async function handleRequest(request, env, ctx) {
   const url = new URL(request.url);
+  if (url.pathname === '/admin' || url.pathname.startsWith('/admin/')) return handleAdmin(request, env, url);
   if (url.pathname.startsWith('/api/')) {
     try {
       const principal = await ensureAccess(request, env);

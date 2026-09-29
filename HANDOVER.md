@@ -307,3 +307,8 @@ Do not launch Cursor cloud agents for this project. Read this file at the start 
 ## Platform admin: design and setup (2026-09-29)
 - Decisions (user): use the recommended defaults; admin email `kaushik.majumder@craftloop.ca`. Design is in `ARCHITECTURE.md` ("company-only platform admin console, read-only v1"): separate Access app for `/admin*`, Worker checks AUD plus email allowlist, metadata only, every request audited, no writes.
 - Tooling finding: the agent cannot create the Access application. Wrangler's OAuth token only has account/zone read plus Workers/D1-type scopes, and the Cloudflare MCP servers (bindings, builds, docs, observability) do not manage Zero Trust Access. Owner steps: Zero Trust, Access, Applications, Add, Self-hosted; domain `medicineinventory.craftloop.ca`, path `admin`; policy Allow, email equals `kaushik.majumder@craftloop.ca`; copy the Application Audience (AUD) tag.
+
+## Platform admin implemented (branch cursor/admin-console-design)
+- `lib/admin.js`, `handleAdmin` in `worker/index.js`, `public/admin/{index.html,admin.js,admin.css}` (served only after admin authorization; not in `publicAssetPaths`), migration `0018_admin_audit.sql`, `test/admin-console.test.js` (11). Full suite passes.
+- The Access application for `/admin*` exists (owner-created); its AUD tag was given in chat and is deliberately not committed. Rollout: apply 0018, `wrangler secret put ADMIN_ACCESS_AUD` and `ADMIN_EMAILS` (`kaushik.majumder@craftloop.ca`), deploy, then verify signed in at `/admin`. Until both secrets exist the console returns 503.
+- If the path-scoped Access app causes sign-in loops, move to a dedicated admin hostname; code is unchanged.

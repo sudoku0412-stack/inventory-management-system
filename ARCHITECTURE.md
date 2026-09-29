@@ -351,7 +351,7 @@ Replay: same key and target returns the no-op result (`changed:false` / `left:fa
 
 Real SQLite-backed D1 batches: authorization matrix; last-owner guard including mutual demotion and demote-versus-leave races; leaver cleanup scoped to this Shop; replay and conflict; atomicity via a blocking audit trigger; removed-role effects on the next request; migration preserving audit rows; change-feed 403 path reused; UI states. Roll out with 0017 before the Worker.
 
-## Design: company-only platform admin console, read-only v1 (not implemented)
+## Implemented: company-only platform admin console, read-only v1 (migration 0018)
 
 ### Scope and principles
 
