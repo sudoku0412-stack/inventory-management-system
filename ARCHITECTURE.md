@@ -57,6 +57,26 @@ Local development
 - Secrets remain in Cloudflare/Wrangler or ignored local files. Never commit Access, Apple, Google, Gemini, VAPID, database, or photo credentials.
 - `HANDOVER.md` records delivery and deployment checkpoints; `BUGFIX_PLAN.md` records the evidence-first triage process.
 
+## Planned: transactional email notices
+
+Email notices will be delivered as transactional messages through Resend's HTTP API. Resend is preferred for the first release because its free tier supports arbitrary invitee addresses and its API accepts a stable idempotency key. Cloudflare Email Service currently requires Workers Paid for arbitrary recipients. Email sending is disabled until a dedicated sending domain is authenticated and a send-only `RESEND_API_KEY` is stored as a Worker secret.
+
+Migration `0024_notification_outbox.sql` will add a D1 transactional outbox with one row per recipient. Invitation creation, Shop deletion scheduling, and ownership transfer will insert their email rows in the same D1 batch as the successful business mutation. Provider calls never run inside those request transactions, so an email outage cannot undo or delay the user action. Replays and rejected mutations must not create duplicate outbox rows.
+
+The existing 15-minute cron will lease a bounded number of due rows, render fixed plain-text and accessible escaped-HTML templates, and send them with a deterministic provider idempotency key. Transient failures retry with bounded backoff inside Resend's 24-hour idempotency window; permanent validation/authentication failures become terminal, and an ambiguous send older than that window becomes `uncertain` for manual review instead of risking a duplicate. Invitation notices are cancelled before dispatch when the invitation has been accepted, revoked, expired, or its Shop deleted. A restored Shop cancels a still-pending deletion notice. Transfer notices describe the committed event even if roles later change.
+
+Messages contain only the action, role or deletion deadline, and the canonical app URL. They never contain medicine, inventory, patient, member-list, JWT, or secret data; links contain no invitation bearer token. Invitation recipients must sign in with the invited address. Open and click tracking stay disabled. Sent/cancelled rows are pruned after a short operational retention period; failed/uncertain rows remain until reviewed.
+
+Implementation is deliberately split into small deployable chunks:
+
+1. Outbox schema, sender/lease/retry foundation, fixed templates, and Member invitation-created notices, shipped disabled until provider configuration is complete.
+2. Shop deletion and ownership-transfer notices using the same outbox.
+3. Direct Owner-role invitations, with role-specific email wording.
+
+### Planned: direct Owner-role invitations
+
+The invitation record remains the source of truth for the requested role. The owner-only invitation API and UI will accept an explicit allowlisted role of `member` or `owner`; the default remains `member`. Acceptance grants exactly the persisted role after the same verified-email, expiry, revocation, membership-limit, replay, and cross-Shop isolation checks used today. Client-supplied identity, user ID, or role outside this allowlist is never authority. The email outbox snapshots the persisted invitation role, so Owner invitations receive accurate wording without a second email system. This slice will include explicit confirmation copy because accepting an Owner invitation grants Shop-administration authority.
+
 ## Additional Shop invitation joins — server/data deployed
 
 ### Boundary and prerequisites

@@ -1,5 +1,13 @@
 # Medicine Inventory Tracker — handover
 
+## Transactional email and Owner invitations — design checkpoint (2026-09-29)
+- Architecture is finalized in `ARCHITECTURE.md`; no application code, migration, provider account, secret, DNS record, deployment, or production data changed in this checkpoint.
+- Provider choice: Resend HTTP API, initially on the free tier, with a D1 transactional outbox and the existing 15-minute cron. Business mutations commit independently of email delivery; stable event keys prevent duplicate sends on retry.
+- Small implementation order: (1) migration 0024 + sender foundation + Member invitation notices, (2) deletion and ownership-transfer notices, (3) direct Owner-role invitations. Update this handover after every completed chunk.
+- Required external setup before enabling delivery: create/verify a Resend sending domain, publish its SPF/DKIM/DMARC records, create a send-only API key, store it as the Wrangler secret `RESEND_API_KEY`, configure the From address, and enable the sender only after a controlled test. Keep delivery disabled when configuration is absent.
+- Privacy boundary: transactional only; no medicine, inventory, patient, member-list, token, or secret content. Invitation email links to the app and requires sign-in with the invited address; it is not a bearer link.
+- Usage checkpoint: weekly Codex capacity was at 3%, so implementation was intentionally not started without enough room for implementation, tests, review, and a safe checkpoint.
+
 ## Inventory CSV export (2026-09-30)
 - `lib/export.js`, `GET /api/household/export` (before tenant resolution, pinned Shop), `public/inventory-export-client.js` (both allowlists), button in Current Shop, and a nudge to export in the delete dialog. No migration, no flag, no audit row. Opened to Members as well as Owners at the user's request (2026-09-30). Tests: `test/inventory-export.test.js`.
 - The user's 3-item queue (Recently deleted, receipt retention, export) is complete.
