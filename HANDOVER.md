@@ -284,3 +284,7 @@ Do not launch Cursor cloud agents for this project. Read this file at the start 
 - Tests: `test/member-removal.test.js` (13), `test/member-removal-ui.test.js` (6), route test in `worker-invitations.test.js`, 403 test in `change-feed-client.test.js`. Full suite passes.
 - Verified against real Worker code with curl (member 403 after removal, replay no-op, roster updated). NOT verified in a real browser (no browser tool in that session): check the Remove button layout on a phone-width Profile and the dialog flow.
 - Deploy order: apply 0016 to remote D1, then deploy Worker/UI. New module is in both asset allowlists.
+
+## Member removal released
+- PR #61 merged as `d51173a`. Remote migration `0016_shop_member_removal.sql` applied (receipt table and guard trigger present, audit history preserved), then Worker deployed: version `9095cb11-1917-452f-957f-ec9c6f163574`.
+- Still to check signed in: Remove button layout on a phone-width Profile and the confirmation flow (browser not checked).
