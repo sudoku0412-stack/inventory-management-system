@@ -1,5 +1,8 @@
 # Medicine Inventory Tracker — handover
 
+## Receipt retention cleanup (2026-09-30)
+- `lib/retention.js` + cron call in `worker/index.js`: prunes creation, promotion, demotion, removal, leave, transfer, deletion and invitation-acceptance receipts older than 90 days (optional `RECEIPT_RETENTION_DAYS`, minimum 30), 500 rows per table per run, logs counts only when something was deleted. No migration, no flag. Audit tables and tombstones are never pruned. Tests: `test/receipt-retention.test.js`.
+
 ## Recently deleted Shops, owner restore (2026-09-30)
 - `lib/deleted-shops.js`, routes `GET /api/shops/deleted` and `POST /api/shops/:id/restore` (before tenant resolution), Profile card `public/deleted-shops-client.js` (both allowlists). No migration. Not gated by the deletion flag. Tests: `test/deleted-shops.test.js`.
 - Queue from the user (do in order, one agent, separate PRs): 1 this feature, 2 receipt retention cleanup (cron prune of old receipt tables), 3 inventory CSV export for owners.

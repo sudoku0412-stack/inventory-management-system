@@ -88,6 +88,10 @@ Initial setup: set `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` and `INITIAL_OWNER_EMAILS`
 - The Worker also checks that token's audience (`ADMIN_ACCESS_AUD`) and that the email is in `ADMIN_EMAILS` (comma-separated Worker secret). If either is missing the console returns 503.
 - Every authorized request writes to `admin_audit` before any data is returned. Every change writes its `admin_audit` row in the same transaction as the change.
 
+## Data retention
+
+Idempotency receipts (used only to make retries safe) are pruned automatically after 90 days by the 15-minute cron; set `RECEIPT_RETENTION_DAYS` (30 or more) to change that. The change feed and mutation receipts are kept 30 days. Audit history is never pruned.
+
 ## Deploying to Cloudflare
 
 Required Worker secrets: `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`, `INITIAL_OWNER_EMAILS`, `ADMIN_ACCESS_AUD`, `ADMIN_EMAILS`, plus optional `GEMINI_API_KEY`.
