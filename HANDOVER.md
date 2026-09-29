@@ -53,6 +53,13 @@
 - `ARCHITECTURE.md` has three designs approved by the user, NOT implemented: ownership transfer (0019), Shop deletion (0020, soft delete + 14-day grace, ships behind a flag), admin write actions (0021, kill switch off by default, restore only after deletion exists). Build in that order, one at a time.
 - User rule: use only one agent at a time; no multiple background agents.
 - No migration in this release.
+- Deployed Worker `6c105f14-344e-416d-a9cd-fff869b2c233` for the icon and import tool.
+
+## Ownership transfer released (2026-09-29)
+- PR #70 merged as `87d0dda`. Remote migration `0019_shop_ownership_transfer.sql` applied, then Worker deployed: version `fdc19e22-ebc2-4840-9c44-3d4d2f2e214b`.
+- `transferHouseholdOwnership`, route `POST /api/household/members/:userId/transfer`, `public/ownership-transfer-client.js` (in both asset allowlists), **Transfer ownership** roster button and dialog. The page reloads after success. `test/ownership-transfer.test.js` (10). Full suite 265.
+- Signed-in check pending: transfer to a Member with two accounts, confirm the roster and owner-only cards on both sides, and the dialog on a phone width. Not browser-verified.
+- Next in order: Shop deletion (0020), then admin writes (0021), both approved designs in `ARCHITECTURE.md`.
 
 ## Profile Shop invitations card (implemented and deployed 2026-09-29)
 
