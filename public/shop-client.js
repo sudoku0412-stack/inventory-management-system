@@ -1,4 +1,5 @@
-export function isShopScoped(path) {
+export function isShopScoped(requestPath) {
+  const path = requestPath.split('?')[0];
   return path.startsWith('/api/') && ![
     '/api/shops',
     '/api/shop/onboarding-status',
@@ -17,6 +18,8 @@ export async function requestShopApi(fetchImpl, path, options = {}, activeShopId
     const error = Error(data.error || 'Request failed.');
     error.status = result.status;
     error.current = data.current;
+    const retryAfter = result.headers?.get?.('retry-after');
+    if (typeof retryAfter === 'string' && /^\d{1,5}$/.test(retryAfter)) error.retryAfter = Number(retryAfter);
     throw error;
   }
   if (result.status === 204) return null;

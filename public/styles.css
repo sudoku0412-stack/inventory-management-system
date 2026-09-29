@@ -146,6 +146,20 @@ tbody tr:hover { background: #f9fbfa; }
 #promoteMemberModal .button, #householdAccessStatus .button { min-height: 44px; }
 .profile-card { padding: 23px; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; box-shadow: 0 4px 16px rgba(18,62,61,.03); }
 .shop-selector-card { max-width: 900px; margin: 0 0 18px; }.shop-selector-card .form-field { max-width: 560px; }.shop-selector-card select { min-height: 44px; }.shop-switch-status { min-height: 1.5em; margin: 10px 0 0; color: var(--ink-soft); }.shop-role { margin: 8px 0 16px; color: var(--ink-soft); font-size: .88rem; font-weight: 600; }
+.shop-invitations-card { max-width: 900px; margin: 0 0 18px; overflow-wrap: anywhere; }
+.shop-invitations-card .button, #joinShopModal .button { min-height: 44px; }
+.shop-invitations-card .access-status:focus { outline: 3px solid var(--teal); outline-offset: 3px; }
+.shop-invitation-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.shop-invitation-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 16px; align-items: center; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: #f9fbfa; }
+.shop-invitation-row > strong, .shop-invitation-row > span, .shop-invitation-row > time { grid-column: 1; min-width: 0; }
+.shop-invitation-row > span, .shop-invitation-row > time { color: var(--ink-soft); font-size: .9rem; }
+.shop-invitation-row > .button, .shop-invitation-row > .status-pill { grid-column: 2; grid-row: 1 / span 3; align-self: center; }
+.shop-invitation-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.shop-invitation-actions .button[hidden] { display: none; }
+#joinShopModal { overflow-wrap: anywhere; }
+#joinShopForm { display: flex; flex-direction: column; max-height: inherit; min-height: 0; }
+#joinShopModal .modal-body { overflow-y: auto; min-height: 0; }
+#joinShopModal .modal-header, #joinShopModal .modal-footer { flex-shrink: 0; }
 .create-shop-card { max-width: 900px; margin: 0 0 18px; }.create-shop-card .button { min-height: 44px; }
 .profile-card-heading { display: flex; gap: 13px; margin-bottom: 20px; }.profile-card-heading h2 { margin: 0; font-size: 1.1rem; }.profile-card-heading p { margin: 3px 0 0; color: var(--ink-soft); font-size: .86rem; }
 .profile-icon { display: grid; place-items: center; width: 39px; height: 39px; flex: none; border-radius: 12px; background: #e2f2f0; color: var(--teal-dark); font-weight: 800; }
@@ -225,6 +239,7 @@ tbody tr:hover { background: #f9fbfa; }
   .notification-item { grid-template-columns: auto 1fr; padding: 16px; }.notification-item time { grid-column: 2; margin-top: -12px; }.reminder-card { display: block; }.reminder-card div, .reminder-card .button { width: 100%; }
   .profile-layout { grid-template-columns: 1fr; gap: 13px; }.profile-card { padding: 19px; }.shop-selector-card { width: 100%; margin-bottom: 13px; }.shop-selector-card select { min-height: 44px; }.profile-save-row { align-items: stretch; flex-direction: column; }.profile-save-row .button { width: 100%; }
   .invite-form,.access-lists { grid-template-columns: 1fr; }.invite-role { padding-bottom: 0; }.invite-form .button { width: 100%; }.household-access { margin-top: 24px; padding-top: 24px; }
+  .shop-invitation-row { grid-template-columns: 1fr; }.shop-invitation-row > .button, .shop-invitation-row > .status-pill { grid-column: 1; grid-row: auto; width: 100%; margin-top: 10px; }.shop-invitation-actions { flex-direction: column; }.shop-invitation-actions .button { width: 100%; }
   .access-list li { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; }.access-list li > .button { grid-column:1 / -1; width:100%; margin-left:0; }.confirm-modal .modal-footer { display:grid; grid-template-columns:1fr; }.confirm-modal .modal-footer .button { width:100%; }
   .mobile-nav { position: fixed; inset: auto 0 0; z-index: 20; display: grid; grid-template-columns: repeat(5, 1fr); height: 69px; padding: 7px 8px 5px; border-top: 1px solid var(--line); background: rgba(255,255,255,.96); backdrop-filter: blur(12px); }.mobile-nav button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border: 0; background: transparent; color: #6e817d; font-size: .67rem; cursor: pointer; }.mobile-nav button.active { color: var(--teal-dark); font-weight: 700; }.mobile-nav svg { width: 20px; height: 20px; }.mobile-nav .mobile-add { transform: translateY(-18px); }.mobile-nav .mobile-add span { display: grid; place-items: center; width: 48px; height: 48px; border: 5px solid var(--canvas); border-radius: 50%; background: var(--teal); color: #fff; font-size: 1.55rem; box-shadow: 0 8px 20px rgba(40,125,118,.25); }.mobile-icon-wrap { position: relative; display: grid; place-items: center; }.mobile-icon-wrap i { position: absolute; top: -5px; right: -7px; display: grid; place-items: center; width: 16px; height: 16px; border: 2px solid white; border-radius: 50%; background: #d99928; color: #fff; font-size: .55rem; font-style: normal; }
   .modal { position: fixed; inset: auto 0 0; width: 100%; max-width: none; max-height: 92vh; max-height: calc(100dvh - env(safe-area-inset-top, 0px)); min-height: 0; margin: 0; overflow-anchor: none; overscroll-behavior: contain; border-radius: 22px 22px 0 0; }.modal-header, .modal-body { padding-left: 20px; padding-right: 20px; }.modal-footer { padding: 15px 20px 21px; }.form-row { grid-template-columns: 1fr; gap: 0; }.toast { left: 16px; right: 16px; bottom: 86px; }

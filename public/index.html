@@ -213,6 +213,18 @@
               <p class="shop-switch-status" id="shopSwitchStatus" role="status" aria-live="polite"></p>
             </div>
           </section>
+          <section class="profile-card shop-invitations-card" id="shopInvitationsCard" aria-labelledby="shopInvitationsTitle" hidden>
+            <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">✉</span><div><h2 id="shopInvitationsTitle">Shop invitations</h2><p>Invitations sent to your signed-in account. Joining adds Member access and keeps your current Shop open.</p></div></div>
+            <p class="access-status" id="shopInvitationsStatus" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></p>
+            <ul class="shop-invitation-list" id="shopInvitationsList" aria-busy="false"></ul>
+            <div class="shop-invitation-actions">
+              <button class="button secondary" id="shopInvitationsMore" type="button" hidden>Show more invitations</button>
+              <button class="button secondary" id="shopInvitationsRefresh" type="button" hidden>Refresh invitations</button>
+              <button class="button secondary" id="shopInvitationsCheckPrevious" type="button" hidden>Check previous join request</button>
+              <button class="button primary" id="shopInvitationsSwitch" type="button" hidden>Switch Shop</button>
+              <button class="button secondary" id="shopInvitationsReload" type="button" hidden>Reload Shops</button>
+            </div>
+          </section>
           <section class="profile-card create-shop-card" id="createShopCard" aria-labelledby="createShopTitle" hidden>
             <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">+</span><div><h2 id="createShopTitle">Create another Shop</h2><p>Create a separate, empty Shop. Your current Shop will stay open.</p></div></div>
             <button class="button secondary" id="createShopButton" type="button">Create another Shop</button>
@@ -321,6 +333,9 @@
         </div>
         <div class="modal-footer"><button class="button secondary" type="button" data-close-modal>Cancel</button><button class="button primary" id="submitCreateShop" type="submit">Create Shop</button></div>
       </form>
+    </dialog>
+    <dialog class="modal confirm-modal" id="joinShopModal" aria-labelledby="joinShopTitle" aria-describedby="joinShopAccess joinShopHelp">
+      <form id="joinShopForm" novalidate><div class="modal-header"><div><span class="overline">SHOP INVITATION</span><h2 id="joinShopTitle">Join Shop?</h2></div></div><div class="modal-body"><p id="joinShopAccess">Access: Member</p><p id="joinShopHelp"></p><p class="access-status" id="joinShopStatus" role="status" aria-live="polite"></p></div><div class="modal-footer"><button class="button secondary" id="cancelJoinShop" type="button">Cancel</button><button class="button primary" id="confirmJoinShop" type="submit">Join Shop</button></div></form>
     </dialog>
     <dialog class="modal confirm-modal" id="revokeInvitationModal" aria-labelledby="revokeInvitationTitle">
       <form method="dialog"><div class="modal-header"><div><span class="overline">PENDING INVITATION</span><h2 id="revokeInvitationTitle">Revoke invitation?</h2></div></div><div class="modal-body"><p id="revokeInvitationMessage">This person will no longer be able to accept this invitation.</p></div><div class="modal-actions"><button class="button secondary" value="cancel">Keep invitation</button><button class="button danger-button" id="confirmRevokeInvitation" type="button">Revoke invitation</button></div></form>
