@@ -13,13 +13,14 @@ import { listBatchChanges, parseChangeQuery, pruneBatchChanges } from '../lib/ba
 import { purgeDeletedShops } from '../lib/shop-purge.js';
 import { effectiveFlag } from '../lib/feature-flags.js';
 import { pruneReceipts, retentionDays } from '../lib/retention.js';
+import { exportInventoryCsv } from '../lib/export.js';
 import { listDeletedShops, restoreOwnDeletedShop, validateOwnRestore } from '../lib/deleted-shops.js';
 import { createAdditionalShop, listShops, onboardingStatus, pinnedTenant, resolveTenant, setupInitialShop, shopContext } from '../lib/tenants.js';
 import { acceptHouseholdInvitation, createHouseholdInvitation, listHouseholdAccess, pendingHouseholdInvitations, demoteHouseholdOwner, leaveHousehold, promoteHouseholdMember, removeHouseholdMember, revokeHouseholdInvitation, transferHouseholdOwnership, validateOwnershipTransfer, deleteHousehold, validateShopDeletion, validateMemberRemoval, validateOwnerDemotion, validateOwnerPromotion, validateShopLeave, throttleInvitationRoute } from '../lib/household-access.js';
 
 const jwksCache = { at: 0, keys: null };
 
-const bootstrapAssetPaths = new Set(['/index.html', '/app.js', '/greeting.js', '/shop-client.js', '/shop-creation-client.js', '/owner-promotion-client.js', '/member-removal-client.js', '/owner-demotion-client.js', '/ownership-transfer-client.js', '/shop-leave-client.js', '/shop-deletion-client.js', '/deleted-shops-client.js', '/shop-invitations-client.js', '/change-feed-client.js', '/styles.css', '/sw.js']);
+const bootstrapAssetPaths = new Set(['/index.html', '/app.js', '/greeting.js', '/shop-client.js', '/shop-creation-client.js', '/owner-promotion-client.js', '/member-removal-client.js', '/owner-demotion-client.js', '/ownership-transfer-client.js', '/shop-leave-client.js', '/shop-deletion-client.js', '/deleted-shops-client.js', '/inventory-export-client.js', '/shop-invitations-client.js', '/change-feed-client.js', '/styles.css', '/sw.js']);
 
 export function assetCacheControl(path) {
   if (path === '/index.html') return 'no-store';
@@ -205,6 +206,13 @@ export async function handleRequest(request, env, ctx) {
         validateOwnerPromotion(promotion[1], body);
         const tenant = await pinnedTenant(env.DB, principal, request.headers.get('x-shop-id'));
         return json(await promoteHouseholdMember(env.DB, principal, tenant, promotion[1], body, requestId));
+      }
+      if (url.pathname === '/api/household/export') {
+        if (request.method !== 'GET') return json({ error: 'Not found' }, 404);
+        if (request.headers.get('sec-fetch-site') === 'cross-site') return json({ error: 'This export must be requested from this site.' }, 403);
+        const tenant = await pinnedTenant(env.DB, principal, request.headers.get('x-shop-id'));
+        const file = await exportInventoryCsv(env.DB, tenant);
+        return new Response(file.csv, { status: 200, headers: { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="${file.filename}"`, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } });
       }
       const removal = url.pathname.match(/^\/api\/household\/members\/([^/]+)\/remove$/);
       if (removal) {
