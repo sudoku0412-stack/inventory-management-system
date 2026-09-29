@@ -1,6 +1,6 @@
 # Medicine Inventory Tracker — handover
 
-## Profile Shop invitations card (implemented, PR #55 pending review/deploy, 2026-09-29)
+## Profile Shop invitations card (implemented; PR #55 commits on `main` at `c412de3`, NOT yet deployed, 2026-09-29)
 
 - Implements the cloud-only Profile **Shop invitations** card and join dialog from `ARCHITECTURE.md` in `public/shop-invitations-client.js`, bound from `app.js`; no server, migration, or secret change. Deploy is Worker/UI only (the file is in the Worker bootstrap-asset allowlist).
 - Exact decoders for pending `{ invitations, nextCursor, member }` (also used by the unaffiliated gate; `member` is validated then dropped) and acceptance `{ householdId, role, accepted }`. `requestShopApi` now exposes a validated `retryAfter`, and `isShopScoped` ignores query strings so paginated discovery never sends `X-Shop-Id`.
