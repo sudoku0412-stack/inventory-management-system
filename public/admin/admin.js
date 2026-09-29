@@ -18,6 +18,58 @@ async function get(path) {
   return body;
 }
 
+let writesEnabled = false;
+
+async function post(path, body) {
+  const response = await fetch(path, { method: 'POST', credentials: 'same-origin', headers: { accept: 'application/json', 'content-type': 'application/json', 'x-admin-action': '1' }, body: JSON.stringify(body) });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw Object.assign(new Error(result.error || `Request failed (${response.status}).`), { status: response.status });
+  return result;
+}
+
+const uuid = () => crypto.randomUUID();
+const dialog = $('actionDialog'), form = $('actionForm'), reasonBox = $('actionReason'), nameBox = $('actionName'), submit = $('actionSubmit');
+let pending = null, dialogTrigger = null;
+
+// One intent (and operation id) per target, kept across dismissal so a retry replays the same request.
+function openAction({ key, title, effect, verb, path, confirmName = null, trigger, done }) {
+  if (!pending || pending.key !== key) pending = { key, operationId: uuid(), path, done };
+  dialogTrigger = trigger;
+  $('actionTitle').textContent = title; $('actionEffect').textContent = effect; submit.textContent = verb;
+  $('actionNameLabel').hidden = nameBox.hidden = !confirmName;
+  if (confirmName) { $('actionNameLabel').textContent = `Type ${confirmName} to confirm`; pending.confirmName = confirmName; }
+  else pending.confirmName = null;
+  reasonBox.value = ''; nameBox.value = ''; $('actionStatus').textContent = ''; syncAction();
+  dialog.showModal(); $('actionCancel').focus();
+}
+
+function syncAction() {
+  const reason = reasonBox.value.trim();
+  $('actionCounter').textContent = `${reason.length} / 500`;
+  submit.disabled = reason.length < 10 || reason.length > 500 || (pending?.confirmName && nameBox.value.trim() !== pending.confirmName);
+}
+
+reasonBox.addEventListener('input', syncAction);
+nameBox.addEventListener('input', syncAction);
+$('actionCancel').addEventListener('click', () => dialog.close());
+dialog.addEventListener('close', () => dialogTrigger?.isConnected && dialogTrigger.focus());
+form.addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!pending || submit.disabled) return;
+  const value = pending;
+  submit.disabled = true; $('actionStatus').textContent = 'Working…';
+  try {
+    const result = await post(value.path, { operationId: value.operationId, reason: reasonBox.value.trim() });
+    pending = null; dialog.close();
+    status.textContent = result.changed === false ? 'Already done; nothing changed.' : 'Done. The change is recorded in the audit log.'; status.classList.remove('error');
+    await value.done();
+  } catch (error) {
+    // Definitive failures drop the intent; ambiguous ones keep it so Retry replays the same operation.
+    if (error.status && error.status < 500 && error.status !== 408 && error.status !== 429) pending = null;
+    $('actionStatus').textContent = error.message; submit.disabled = !pending;
+  }
+});
+
 function table(caption, columns, rows) {
   const head = el('tr', {}, ...columns.map(column => el('th', { scope: 'col' }, column.label)));
   const body = rows.map(row => el('tr', {}, ...columns.map(column => {
@@ -34,10 +86,17 @@ const auditColumns = [
   { label: 'Shop', key: 'household_id' }, { label: 'Actor', key: 'actor_user_id' }, { label: 'Target', key: 'target_identifier' }
 ];
 
+function setWrites(enabled) {
+  writesEnabled = enabled === true;
+  $('banner').textContent = writesEnabled ? 'Changes are audited. Metadata only; medicine contents are never shown.' : 'Read-only. Metadata only; medicine contents are never shown.';
+  $('banner').classList.toggle('audited', writesEnabled);
+}
+
 const views = {
   async overview() {
     const data = await get('/admin/api/overview');
     $('who').textContent = `Signed in as ${data.admin}`;
+    setWrites(data.writesEnabled);
     const labels = [['shops', 'Shops'], ['users', 'Users'], ['memberships', 'Memberships'], ['owners', 'Owner seats'], ['pendingInvitations', 'Pending invitations'], ['medicines', 'Medicines (count only)'], ['changeFeedRows', 'Change-feed rows'], ['auditEventsLast24h', 'Audit events, 24h'], ['appliedMigrations', 'Applied migrations'], ['migrationState', 'Migration state']];
     content.replaceChildren(el('dl', { class: 'grid' }, ...labels.map(([key, label]) => el('div', {}, el('dt', {}, label), el('dd', {}, text(data[key]))))));
     return null;
@@ -47,20 +106,33 @@ const views = {
     const view = table('Shops', [
       { label: 'Name', render: row => { const link = el('a', { href: `#shop/${row.id}` }, text(row.name)); return link; } },
       { label: 'Owners', key: 'owner_count' }, { label: 'Members', key: 'member_count' }, { label: 'Medicines', key: 'medicine_count' },
-      { label: 'Created', render: row => when(row.created_at) }, { label: 'Last audit', render: row => when(row.last_audit_at) }
+      { label: 'Created', render: row => when(row.created_at) }, { label: 'Last audit', render: row => when(row.last_audit_at) }, { label: 'State', render: row => row.deleted_at ? 'Pending deletion' : 'Active' }
     ], data.shops);
     after ? content.append(view) : content.replaceChildren(view);
     return data.nextCursor;
   },
   async shop(_after, id) {
     const data = await get(`/admin/api/shops/${encodeURIComponent(id)}`);
+    setWrites(data.writesEnabled);
+    const reload = () => run('shop', null, id);
+    const restorable = writesEnabled && data.deletion && !data.deletion.purged_at && data.deletion.purge_after > new Date().toISOString();
+    const restoreButton = restorable ? el('button', { type: 'button', class: 'primary' }, 'Restore Shop') : null;
+    restoreButton?.addEventListener('click', () => openAction({ key: `restore:${id}`, title: `Restore ${data.shop.name}?`, effect: 'Members regain their access. Invitations and push subscriptions removed at deletion are not restored.', verb: 'Restore Shop', path: `/admin/api/shops/${encodeURIComponent(id)}/restore`, confirmName: data.shop.name, trigger: restoreButton, done: reload }));
+    const revokeCell = row => {
+      if (!writesEnabled || !row.pending) return '';
+      const button = el('button', { type: 'button', class: 'danger', 'aria-label': `Revoke invitation for ${row.email}` }, 'Revoke');
+      button.addEventListener('click', () => openAction({ key: `revoke:${row.id}`, title: `Revoke the invitation for ${row.email}?`, effect: 'They will no longer be able to join this Shop with this invitation.', verb: 'Revoke invitation', path: `/admin/api/shops/${encodeURIComponent(id)}/invitations/${encodeURIComponent(row.id)}/revoke`, trigger: button, done: reload }));
+      return button;
+    };
     content.replaceChildren(
       el('h2', {}, text(data.shop.name)),
       el('p', {}, `ID ${data.shop.id} · created ${when(data.shop.created_at)} · ${data.shop.medicine_count} medicines (count only)`),
+      ...(data.deletion ? [el('p', { class: 'note' }, data.deletion.purged_at ? `Purged ${when(data.deletion.purged_at)}.` : `Pending deletion since ${when(data.deletion.deleted_at)}; permanently purged after ${when(data.deletion.purge_after)}.`)] : []),
+      ...(restoreButton ? [restoreButton] : []),
       el('h2', {}, 'Members'),
       table('Members', [{ label: 'Email', key: 'email' }, { label: 'Role', key: 'role' }, { label: 'Joined', render: row => when(row.joined_at) }, { label: 'User ID', key: 'user_id' }], data.members),
       el('h2', {}, 'Invitations'),
-      table('Invitations', [{ label: 'Email', key: 'email' }, { label: 'Created', render: row => when(row.created_at) }, { label: 'Expires', render: row => when(row.expires_at) }, { label: 'Pending', render: row => row.pending ? 'Yes' : 'No' }], data.invitations),
+      table('Invitations', [{ label: 'Email', key: 'email' }, { label: 'Created', render: row => when(row.created_at) }, { label: 'Expires', render: row => when(row.expires_at) }, { label: 'Pending', render: row => row.pending ? 'Yes' : 'No' }, { label: 'Action', render: revokeCell }], data.invitations),
       el('h2', {}, 'Recent audit events'),
       table('Recent audit events', auditColumns, data.audit)
     );

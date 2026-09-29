@@ -23,5 +23,17 @@ th { color: var(--soft); font-size: .8125rem; font-weight: 600; }
 td a { color: var(--teal); }
 button { min-height: 44px; padding: 0 16px; border: 1px solid var(--teal); border-radius: 8px; background: #fff; color: var(--teal); font: inherit; cursor: pointer; }
 h2 { margin: 24px 0 8px; font-size: 1.05rem; }
+dialog { width: min(520px, calc(100vw - 24px)); border: 1px solid var(--line); border-radius: 12px; padding: 20px; color: var(--ink); }
+dialog::backdrop { background: rgba(24, 49, 47, .45); }
+dialog h2 { margin-top: 0; }
+dialog label { display: block; margin-top: 12px; font-size: .875rem; color: var(--soft); }
+dialog input, dialog textarea { width: 100%; margin-top: 4px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
+.counter { margin: 4px 0 0; color: var(--soft); font-size: .8125rem; }
+.actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+button.primary { background: var(--teal); color: #fff; }
+button.danger { border-color: #af403d; color: #af403d; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+.banner.audited { background: #e2f3ec; color: #1e665f; }
+.note { color: var(--soft); }
 @media (max-width: 640px) { .bar, .tabs, main { padding-left: 12px; padding-right: 12px; } .who { margin-left: 0; } }
 @media all { .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } }

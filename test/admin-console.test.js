@@ -94,7 +94,7 @@ test('overview, shops, detail and audit return only allow-listed metadata, never
   assert.equal(overview.shops, 3); assert.equal(overview.users, 3); assert.equal(overview.medicines, 1); assert.equal(overview.owners, 3); assert.equal(overview.pendingInvitations, 1); assert.equal(overview.admin, EMAIL);
   const shops = await read('/admin/api/shops');
   assert.deepEqual(shops.shops.map(s => [s.name, s.owner_count, s.member_count, s.medicine_count]), [['Shop 1', 1, 1, 1], ['Shop 2', 1, 1, 0], ['Shop 3', 1, 1, 0]]);
-  assert.deepEqual(Object.keys(shops.shops[0]), ['id', 'name', 'created_at', 'owner_count', 'member_count', 'medicine_count', 'last_audit_at']);
+  assert.deepEqual(Object.keys(shops.shops[0]), ['id', 'name', 'created_at', 'owner_count', 'member_count', 'medicine_count', 'last_audit_at', 'deleted_at']);
   const detail = await read(`/admin/api/shops/${uuid(11)}`);
   assert.deepEqual(detail.members.map(m => [m.email, m.role]), [['owner1@example.test', 'owner']]);
   assert.deepEqual(detail.invitations.map(i => [i.email, i.pending]), [['invitee@example.test', true]]);
@@ -161,4 +161,142 @@ test('the admin page renders with textContent only and loads no third-party scri
 test('migration 0018 creates the audit table and index', () => {
   const f = fixture();
   assert.ok(f.sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND name='admin_audit_created_at'").get());
+});
+
+// ---- Audited admin writes ----
+const ORIGIN = 'https://medicineinventory.craftloop.ca';
+const opId = n => `223e4567-e89b-42d3-a456-${String(n).padStart(12, '0')}`;
+const REASON = 'Customer asked support to fix this';
+const INV1 = uuid(60), INV2 = uuid(61), INV_OTHER = uuid(62);
+function writable(f) {
+  f.env.ADMIN_WRITES_ENABLED = 'true';
+  f.sqlite.prepare("UPDATE household_invitations SET id=? WHERE id='inv-1'").run(INV1);
+  // A real transaction, so rollback assertions are meaningful.
+  const sqlite = f.sqlite;
+  f.env.DB.batch = async items => {
+    sqlite.exec('BEGIN');
+    try { const out = []; for (const item of items) out.push(await item.run()); sqlite.exec('COMMIT'); return out; } catch (error) { sqlite.exec('ROLLBACK'); throw error; }
+  };
+  const post = (path, body, { headers = {}, token } = {}) => f.call(path, { method: 'POST', token, body: typeof body === 'string' ? body : JSON.stringify(body), headers: { 'content-type': 'application/json', origin: ORIGIN, 'x-admin-action': '1', ...headers } });
+  const revoke = (op = opId(1), invitation = INV1, shop = uuid(11), extra = {}) => post(`/admin/api/shops/${shop}/invitations/${invitation}/revoke`, { operationId: op, reason: REASON, ...extra });
+  const restore = (op = opId(2), shop = uuid(11)) => post(`/admin/api/shops/${shop}/restore`, { operationId: op, reason: REASON });
+  const rows = sql => sqlite.prepare(sql).all().map(row => ({ ...row }));
+  const softDelete = (shop = uuid(11), purgeAfter = '2999-01-01T00:00:00.000Z', purgedAt = null) => sqlite.prepare('INSERT INTO household_deletions VALUES (?,?,?,?,?)').run(shop, '2026-09-29T00:00:00.000Z', purgeAfter, uuid(21), purgedAt);
+  return { post, revoke, restore, rows, softDelete };
+}
+
+test('admin writes stay off until ADMIN_WRITES_ENABLED, and the console reports the flag', () => withFetch(async () => {
+  const f = fixture(), w = writable(f);
+  f.env.ADMIN_WRITES_ENABLED = undefined;
+  assert.equal((await w.revoke()).status, 403);
+  assert.equal((await w.restore()).status, 403);
+  assert.equal(w.rows('SELECT * FROM household_invitations').length, 1);
+  assert.deepEqual(f.audit(), []);
+  assert.equal((await (await f.call('/admin/api/overview')).json()).writesEnabled, false);
+  f.env.ADMIN_WRITES_ENABLED = 'true';
+  assert.equal((await (await f.call('/admin/api/overview')).json()).writesEnabled, true);
+}));
+
+test('admin write authorization and CSRF defences', () => withFetch(async () => {
+  const f = fixture(), w = writable(f);
+  const path = `/admin/api/shops/${uuid(11)}/invitations/${INV1}/revoke`, body = { operationId: opId(1), reason: REASON };
+  assert.equal((await w.post(path, body, { token: null })).status, 401);
+  assert.equal((await w.post(path, body, { token: jwt({ aud: CUSTOMER }) })).status, 401);
+  assert.equal((await w.post(path, body, { token: jwt({ email: 'stranger@example.test' }) })).status, 403);
+  assert.equal((await w.post(path, body, { headers: { 'x-admin-action': '' } })).status, 403, 'custom header required');
+  assert.equal((await w.post(path, body, { headers: { origin: 'https://evil.example' } })).status, 403);
+  assert.equal((await w.post(path, body, { headers: { 'sec-fetch-site': 'cross-site' } })).status, 403);
+  assert.equal((await w.post(path, body, { headers: { 'content-type': 'text/plain' } })).status, 400);
+  assert.equal((await f.call(path)).status, 404, 'GET on a write route is not a route');
+  assert.equal((await f.call(`/admin/api/shops/${uuid(11)}`, { method: 'DELETE' })).status, 405);
+  assert.equal(w.rows('SELECT * FROM household_invitations').length, 1);
+  assert.deepEqual(f.audit(), []);
+}));
+
+test('admin write bodies are exact and the reason is 10 to 500 characters', () => withFetch(async () => {
+  const f = fixture(), w = writable(f);
+  const path = `/admin/api/shops/${uuid(11)}/invitations/inv-1/revoke`;
+  for (const body of [{}, { operationId: opId(1) }, { operationId: opId(1), reason: 'too short' }, { operationId: opId(1), reason: 'x'.repeat(501) }, { operationId: 'nope', reason: REASON }, { operationId: opId(1), reason: REASON, shop: 'x' }, { operationId: opId(1), reason: 12345678901 }]) {
+    assert.equal((await w.post(path, body)).status, 400, JSON.stringify(body).slice(0, 60));
+  }
+  assert.equal((await w.post(path, '{bad json')).status, 400);
+  assert.equal(w.rows('SELECT * FROM household_invitations').length, 1);
+  assert.deepEqual(f.audit(), []);
+}));
+
+test('admin revoke: one invitation removed, both audit rows written, others untouched, response holds no data', () => withFetch(async () => {
+  const f = fixture(), w = writable(f);
+  f.sqlite.prepare('INSERT INTO household_invitations (id,household_id,email,role,created_by_user_id,created_at,expires_at) VALUES (?,?,?,?,?,?,?)').run(INV2, uuid(11), 'other@example.test', 'member', uuid(21), 'now', '2999-01-01T00:00:00.000Z');
+  const response = await w.revoke();
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { changed: true });
+  assert.deepEqual(w.rows('SELECT id FROM household_invitations'), [{ id: INV2 }]);
+  assert.deepEqual(w.rows('SELECT admin_email,action,target,reason,operation_id FROM admin_audit'), [{ admin_email: EMAIL, action: 'invitation.revoke', target: `invitation:${INV1}`, reason: REASON, operation_id: opId(1) }]);
+  assert.deepEqual(w.rows("SELECT household_id,actor_user_id,target_identifier FROM access_audit WHERE event='invite_revoked'"), [{ household_id: uuid(11), actor_user_id: null, target_identifier: 'staff action' }], 'the Shop history shows staff involvement without the admin identity');
+  assert.doesNotMatch(JSON.stringify(w.rows('SELECT target_identifier FROM access_audit')), /craftloop/);
+}));
+
+test('admin revoke replay, key mismatch, unknown or foreign invitations write nothing', () => withFetch(async () => {
+  const f = fixture(), w = writable(f);
+  assert.equal((await w.revoke()).status, 200);
+  const replay = await w.revoke();
+  assert.equal(replay.status, 200);
+  assert.deepEqual(await replay.json(), { changed: false });
+  assert.equal(w.rows('SELECT * FROM admin_audit').length, 1);
+  assert.equal(w.rows("SELECT * FROM access_audit WHERE event='invite_revoked'").length, 1);
+  assert.equal((await w.revoke(opId(1), INV_OTHER)).status, 409, 'same key, different target');
+  assert.equal((await w.revoke(opId(9))).status, 404, 'already revoked');
+  assert.equal((await w.revoke(opId(9), INV1, uuid(12))).status, 404, 'wrong Shop');
+  assert.equal((await w.revoke(opId(9), INV1, uuid(99))).status, 404, 'unknown Shop');
+  assert.equal(w.rows('SELECT * FROM admin_audit').length, 1, 'nothing changed, so no audit row');
+}));
+
+test('admin writes are atomic with both audit rows', () => withFetch(async () => {
+  for (const table of ['admin_audit', 'access_audit']) {
+    const f = fixture(), w = writable(f);
+    f.sqlite.exec(`CREATE TRIGGER block_${table} BEFORE INSERT ON ${table} WHEN NEW.${table === 'admin_audit' ? "action='invitation.revoke'" : "event='invite_revoked'"} BEGIN SELECT RAISE(ABORT, 'blocked'); END;`);
+    assert.notEqual((await w.revoke()).status, 200, table);
+    assert.equal(w.rows('SELECT * FROM household_invitations').length, 1, `${table}: the invitation survives`);
+    assert.equal(w.rows('SELECT * FROM admin_audit').length, 0);
+    assert.equal(w.rows("SELECT * FROM access_audit WHERE event='invite_revoked'").length, 0);
+  }
+}));
+
+test('admin restore works only inside the grace period and never after a purge', () => withFetch(async () => {
+  const f = fixture(), w = writable(f);
+  assert.equal((await w.restore()).status, 409, 'not deleted');
+  w.softDelete();
+  const detail = await (await f.call(`/admin/api/shops/${uuid(11)}`)).json();
+  assert.equal(detail.deletion.purge_after, '2999-01-01T00:00:00.000Z');
+  assert.equal(detail.writesEnabled, true);
+  const restored = await w.restore();
+  assert.deepEqual(await restored.json(), { changed: true });
+  assert.equal(w.rows('SELECT * FROM household_deletions').length, 0);
+  assert.equal(w.rows("SELECT actor_user_id,target_identifier FROM access_audit WHERE event='shop_restored'").length, 1);
+  assert.deepEqual(w.rows("SELECT action,target,reason FROM admin_audit WHERE action='shop.restore'"), [{ action: 'shop.restore', target: `shop:${uuid(11)}`, reason: REASON }]);
+  assert.deepEqual(await (await w.restore()).json(), { changed: false }, 'replay');
+  assert.equal(w.rows("SELECT * FROM admin_audit WHERE action='shop.restore'").length, 1);
+  assert.equal(f.sqlite.prepare('SELECT count(*) AS n FROM active_memberships WHERE household_id=?').get(uuid(11)).n, 1, 'members regain access');
+  w.softDelete(uuid(12), '2000-01-01T00:00:00.000Z');
+  assert.equal((await w.restore(opId(5), uuid(12))).status, 409, 'grace period over');
+  assert.equal((await w.restore(opId(6), uuid(99))).status, 404, 'unknown Shop id');
+  w.softDelete(uuid(13), '2999-01-01T00:00:00.000Z', '2026-09-30T00:00:00.000Z');
+  assert.equal((await w.restore(opId(7), uuid(13))).status, 409, 'purged');
+}));
+
+test('admin writes are throttled per admin', () => withFetch(async () => {
+  const f = fixture(), w = writable(f);
+  const now = new Date().toISOString();
+  for (let i = 0; i < 30; i += 1) f.sqlite.prepare('INSERT INTO admin_audit (id,admin_email,action,target,request_id,created_at,reason,operation_id) VALUES (?,?,?,?,?,?,?,?)').run(`t${i}`, EMAIL, 'invitation.revoke', `invitation:x${i}`, 'r', now, REASON, opId(500 + i));
+  const response = await w.revoke(opId(9));
+  assert.equal(response.status, 429);
+  assert.equal(w.rows('SELECT * FROM household_invitations').length, 1);
+}));
+
+test('the console UI exposes changes only when the server says they are enabled', () => {
+  const js = readFileSync(new URL('../public/admin/admin.js', import.meta.url), 'utf8'), html = readFileSync(new URL('../public/admin/index.html', import.meta.url), 'utf8');
+  assert.match(js, /writesEnabled/);
+  assert.match(js, /x-admin-action/i);
+  assert.match(html, /id="actionDialog"/);
+  assert.doesNotMatch(js, /innerHTML/);
 });
