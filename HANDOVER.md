@@ -1,5 +1,13 @@
 # Medicine Inventory Tracker — handover
 
+## Shop deletion implemented, flag off (branch cursor/shop-deletion)
+- Migration `0020_shop_deletion.sql`: `household_deletions` side table (not columns on `households`, so positional inserts and readers stay valid), `active_memberships` view, `shop_deletion_receipts` with guard trigger, audit events `shop_deleted`/`shop_restored`/`shop_purged`.
+- Every Shop reader in `lib/tenants.js`, `lib/household-access.js` and the scheduled push enumeration now reads `active_memberships`; writes still use `memberships`. Pending-invitation discovery also hides deleted Shops. New code REQUIRES 0020: apply it before deploying the Worker. Test fixtures that apply only older migrations add `test/deletion-stub.js`.
+- `deleteHousehold` (`lib/household-access.js`), route `POST /api/household/delete` (404 unless `SHOP_DELETION_ENABLED=true`), 14-day grace, sole-Shop 409, name confirmation, invitations and push removed at once. `GET /api/household/access` returns `shop_deletion` so the UI shows the owner-only **Delete this Shop** card only when enabled (`public/shop-deletion-client.js`, both allowlists).
+- `lib/shop-purge.js` runs in the 15-minute cron in DRY-RUN unless `SHOP_PURGE_ENABLED=true`: photos first, a photo failure keeps rows for retry, tombstone `households` row renamed `(deleted Shop)`.
+- Not built: restore (admin write action 0021 comes next), owner self-service "Recently deleted". Not browser-verified. Tests: `test/shop-deletion.test.js` (10). Full suite 276.
+- Rollout: apply 0020, deploy (flag off), verify existing flows, then `wrangler secret put SHOP_DELETION_ENABLED` = `true`; enable `SHOP_PURGE_ENABLED` only after a week of dry-run logs.
+
 ## Expiry icon, local import tool, three approved designs (2026-09-29)
 
 - Expiry field shows a decorative calendar icon (CSS background; input height/behavior unchanged). Not browser-verified: check the 44px height and icon on the original iPhone.

@@ -264,6 +264,13 @@ tbody tr:hover { background: #f9fbfa; }
 #demoteMemberModal .modal-body, #leaveShopModal .modal-body { overflow-y: auto; min-height: 0; }
 #demoteMemberModal .modal-header, #demoteMemberModal .modal-footer, #leaveShopModal .modal-header, #leaveShopModal .modal-footer { flex-shrink: 0; }
 #demoteMemberModal .button, #leaveShopModal .button, .shop-leave .button { min-height: 44px; }
+#deleteShopModal { overflow-wrap: anywhere; }
+#deleteShopForm { display: flex; flex-direction: column; max-height: inherit; min-height: 0; }
+#deleteShopModal .modal-body { overflow-y: auto; min-height: 0; }
+#deleteShopModal .modal-header, #deleteShopModal .modal-footer { flex-shrink: 0; }
+#deleteShopModal .button, #deleteShopModal input, .shop-delete .button { min-height: 44px; }
+#deleteShopModal input { width: 100%; margin-top: 6px; }
+#deleteShopModal .danger-button, .shop-delete .danger-button { color: var(--rose); }
 #transferOwnershipModal { overflow-wrap: anywhere; }
 #transferOwnershipForm { display: flex; flex-direction: column; max-height: inherit; min-height: 0; }
 #transferOwnershipModal .modal-body { overflow-y: auto; min-height: 0; }

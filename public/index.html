@@ -216,6 +216,10 @@
               <button class="button secondary" id="leaveShopButton" type="button">Leave this Shop</button>
               <p class="access-status" id="leaveShopStatus" role="status" aria-live="polite"></p>
             </div>
+            <div id="deleteShopSection" class="shop-leave shop-delete" hidden>
+              <button class="button secondary danger-button" id="deleteShopButton" type="button">Delete this Shop</button>
+              <p class="access-status" id="deleteShopStatus" role="status" aria-live="polite"></p>
+            </div>
           </section>
           <section class="profile-card shop-invitations-card" id="shopInvitationsCard" aria-labelledby="shopInvitationsTitle" hidden>
             <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">✉</span><div><h2 id="shopInvitationsTitle">Shop invitations</h2><p>Invitations sent to your signed-in account. Joining adds Member access and keeps your current Shop open.</p></div></div>
@@ -352,6 +356,9 @@
     </dialog>
     <dialog class="modal confirm-modal" id="leaveShopModal" aria-labelledby="leaveShopTitle" aria-describedby="leaveShopShop leaveShopHelp">
       <form id="leaveShopForm" novalidate><div class="modal-header"><div><span class="overline">YOUR SHOP</span><h2 id="leaveShopTitle">Leave Shop?</h2></div></div><div class="modal-body"><p id="leaveShopShop"></p><p id="leaveShopHelp">You lose access to this Shop immediately. You can be invited again later.</p><p class="access-status" id="leaveShopModalStatus" role="status" aria-live="polite"></p></div><div class="modal-footer"><button class="button secondary" id="cancelLeaveShop" type="button">Cancel</button><button class="button primary" id="confirmLeaveShop" type="submit">Leave Shop</button></div></form>
+    </dialog>
+    <dialog class="modal confirm-modal" id="deleteShopModal" aria-labelledby="deleteShopTitle" aria-describedby="deleteShopShop deleteShopHelp">
+      <form id="deleteShopForm" novalidate><div class="modal-header"><div><span class="overline">DANGER ZONE</span><h2 id="deleteShopTitle">Delete Shop?</h2></div></div><div class="modal-body"><p id="deleteShopShop"></p><p id="deleteShopHelp">Everyone loses access now. Medicines and photos are permanently deleted after 14 days. Invitations and notifications stop immediately.</p><label for="deleteShopConfirm" id="deleteShopConfirmLabel">Type the Shop name to confirm</label><input id="deleteShopConfirm" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"><p class="access-status" id="deleteShopModalStatus" role="status" aria-live="polite"></p></div><div class="modal-footer"><button class="button secondary" id="cancelDeleteShop" type="button">Cancel</button><button class="button primary danger-button" id="confirmDeleteShop" type="submit" disabled>Delete Shop</button></div></form>
     </dialog>
     <dialog class="modal confirm-modal" id="removeMemberModal" aria-labelledby="removeMemberTitle" aria-describedby="removeMemberShop removeMemberHelp">
       <form id="removeMemberForm" novalidate><div class="modal-header"><div><span class="overline">SHOP ACCESS</span><h2 id="removeMemberTitle">Remove member?</h2></div></div><div class="modal-body"><p id="removeMemberShop"></p><p id="removeMemberHelp">They lose access to this Shop immediately. You can invite them again later.</p><p class="access-status" id="removeMemberStatus" role="status" aria-live="polite"></p></div><div class="modal-footer"><button class="button secondary" id="cancelRemoveMember" type="button">Cancel</button><button class="button primary" id="confirmRemoveMember" type="submit">Remove</button></div></form>

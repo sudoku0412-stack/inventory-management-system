@@ -1,3 +1,4 @@
+import { deletionReadSchema } from './deletion-stub.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
@@ -25,6 +26,7 @@ function fixture({ migrate = true } = {}) {
   sqlite.prepare('INSERT INTO user_shop_preferences VALUES (?,?,?)').run(actor, otherShop, 'unchanged actor');
   sqlite.prepare('INSERT INTO user_shop_preferences VALUES (?,?,?)').run(target, shop, 'unchanged target');
   sqlite.prepare('INSERT INTO access_audit VALUES (?,?,?,?,?,?,?)').run('old-audit', 'shop_created', shop, actor, `cloudflare_access:${actor}`, 'before', 'old-request');
+  sqlite.exec(deletionReadSchema);
   if (migrate) sqlite.exec(migration('0013_shop_owner_promotion.sql'));
   const statement = (sql, values = []) => ({ bind: (...bound) => statement(sql, bound), first: async () => sqlite.prepare(sql).get(...values), all: async () => ({ results: sqlite.prepare(sql).all(...values) }), run: () => ({ meta: { changes: sqlite.prepare(sql).run(...values).changes } }) });
   // No awaits inside a batch: real D1 serializes each atomic SQLite transaction.
