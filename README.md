@@ -74,6 +74,7 @@ Cloud data is isolated by server-side **Shop** membership; the browser pins a Sh
 - **Roles:** Owners manage a Shop's access; Members use its inventory. A Shop always keeps at least one Owner.
 - **Invitations:** Owners invite people by email in Profile. The invitee accepts after signing in through Access, either on first visit or from the **Shop invitations** card in Profile if they already belong to another Shop.
 - **Owner actions:** make a Member an Owner, make another Owner a Member, transfer ownership to a Member (you become a Member), or remove a Member. Anyone can leave a Shop (the last Owner cannot). Each change is atomic and recorded in an audit table.
+- **Export:** Owners can download the current Shop's inventory as a CSV from **Current Shop** in Profile (every medicine including discarded ones; photos are not included; spreadsheet formulas in cells are neutralized).
 - **Deleting a Shop:** an Owner can delete a Shop (never their only one) by typing its name and choosing how many days to keep it (7 to 30, default 14). Everyone loses access at once; medicines and photos are permanently purged after that period. Owners see it under **Recently deleted Shops** in Profile and can restore it themselves until then; company staff can also restore or extend it from `/admin`.
 - **Another Shop:** users can create additional empty Shops (capped at five owned Shops).
 - **Live updates:** while a tab is open on Dashboard or Inventory, the app polls a per-Shop change feed about once a minute and applies changes made on other devices.

@@ -264,6 +264,7 @@ tbody tr:hover { background: #f9fbfa; }
 #demoteMemberModal .modal-body, #leaveShopModal .modal-body { overflow-y: auto; min-height: 0; }
 #demoteMemberModal .modal-header, #demoteMemberModal .modal-footer, #leaveShopModal .modal-header, #leaveShopModal .modal-footer { flex-shrink: 0; }
 #demoteMemberModal .button, #leaveShopModal .button, .shop-leave .button { min-height: 44px; }
+#exportInventorySection .button { min-height: 44px; }
 #restoreShopModal { overflow-wrap: anywhere; }
 #restoreShopForm { display: flex; flex-direction: column; max-height: inherit; min-height: 0; }
 #restoreShopModal .modal-body { overflow-y: auto; min-height: 0; }

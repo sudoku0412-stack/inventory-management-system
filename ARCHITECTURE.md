@@ -538,11 +538,15 @@ Deleted Shops are hidden from every ordinary Shop lookup, so recovery is account
 
 `lib/retention.js` prunes idempotency receipts in the 15-minute cron: Shop creation, owner promotion, demotion, removal, leave, ownership transfer and Shop deletion receipts, plus invitation acceptance receipts, once they are older than 90 days (`RECEIPT_RETENTION_DAYS` may raise this; values under 30 or invalid fall back to 90). A run deletes at most 500 rows per table, oldest first, and a missing or failing table never stops the others. Mutation receipts and the change feed keep their own 30-day prune (`pruneBatchChanges`). Never pruned: `access_audit`, `admin_audit`, `household_deletions` tombstones and `shop_feature_flags`. The rolling one-Shop-per-24-hours limit only looks 24 hours back, so 90-day pruning cannot bypass it. `test/receipt-retention.test.js`.
 
+## Implemented and deployed: inventory CSV export
+
+`GET /api/household/export` (pinned Shop via `X-Shop-Id`, no preference write, cross-site Fetch Metadata rejected) returns an Owner-only CSV built by `lib/export.js`: every batch of the Shop including discarded ones, columns name, strength, form, quantity, unit, expiry_date, location, notes, low_stock_threshold, status (`active`/`discarded`), has_photo (`yes`/`no`), created_at, updated_at, discarded_at, ordered by case-insensitive name then expiry (unknown last). RFC 4180 quoting, CRLF line ends, a UTF-8 BOM for Excel, and any cell starting with `=`, `+`, `-`, `@`, tab or CR gets a leading apostrophe against formula injection. The role is read from the live `active_memberships` row (a Member, outsider or a deleted Shop is 403); more than 50,000 rows is 413. Response headers: `text/csv`, `attachment`, `no-store`, `nosniff`. Photos and photo paths are not exported. There is no audit row for exports (the audit CHECK has no event and none was added). UI: an Owner-only **Export inventory (CSV)** button in Current Shop (`public/inventory-export-client.js`) fetches the blob with the active Shop header and saves `<shop>-inventory-<date>.csv`. `test/inventory-export.test.js`.
+
 ## Deferred architecture work
 
 - Offline synchronization reconciliation (offline mutation queue, conflict UI, background reconciliation). The online pull/change feed is implemented and deployed; see its section above.
 - Native mobile clients.
-- Export, account deletion, configurable reminder windows, a separate in-Shop admin role, a company-only platform admin beyond the read-only console designed below, and non-owner roster or pending-invitation visibility. Owner promotion is the finalized slice below.
+- Photo export, account deletion, configurable reminder windows, a separate in-Shop admin role, a company-only platform admin beyond the read-only console designed below, and non-owner roster or pending-invitation visibility. Owner promotion is the finalized slice below.
 
 ## Implemented and deployed: make an existing member an owner
 

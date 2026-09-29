@@ -1,5 +1,9 @@
 # Medicine Inventory Tracker — handover
 
+## Inventory CSV export (2026-09-30)
+- `lib/export.js`, `GET /api/household/export` (before tenant resolution, pinned Shop), `public/inventory-export-client.js` (both allowlists), Owner-only button in Current Shop, and a nudge to export in the delete dialog. No migration, no flag, no audit row. Owner-only by decision (loosen in `exportInventoryCsv` if Members should export). Tests: `test/inventory-export.test.js`.
+- The user's 3-item queue (Recently deleted, receipt retention, export) is complete.
+
 ## Receipt retention cleanup (2026-09-30)
 - `lib/retention.js` + cron call in `worker/index.js`: prunes creation, promotion, demotion, removal, leave, transfer, deletion and invitation-acceptance receipts older than 90 days (optional `RECEIPT_RETENTION_DAYS`, minimum 30), 500 rows per table per run, logs counts only when something was deleted. No migration, no flag. Audit tables and tombstones are never pruned. Tests: `test/receipt-retention.test.js`.
 
