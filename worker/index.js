@@ -10,12 +10,13 @@ import {
 import { createD1Store, loadVapid } from '../lib/store-d1.js';
 import { adminActivity, adminAudit, adminOverview, adminShopDetail, adminShops, authorizeAdmin, writeAdminAudit } from '../lib/admin.js';
 import { listBatchChanges, parseChangeQuery, pruneBatchChanges } from '../lib/batch-changes.js';
+import { purgeDeletedShops } from '../lib/shop-purge.js';
 import { createAdditionalShop, listShops, onboardingStatus, pinnedTenant, resolveTenant, setupInitialShop, shopContext } from '../lib/tenants.js';
-import { acceptHouseholdInvitation, createHouseholdInvitation, listHouseholdAccess, pendingHouseholdInvitations, demoteHouseholdOwner, leaveHousehold, promoteHouseholdMember, removeHouseholdMember, revokeHouseholdInvitation, transferHouseholdOwnership, validateOwnershipTransfer, validateMemberRemoval, validateOwnerDemotion, validateOwnerPromotion, validateShopLeave, throttleInvitationRoute } from '../lib/household-access.js';
+import { acceptHouseholdInvitation, createHouseholdInvitation, listHouseholdAccess, pendingHouseholdInvitations, demoteHouseholdOwner, leaveHousehold, promoteHouseholdMember, removeHouseholdMember, revokeHouseholdInvitation, transferHouseholdOwnership, validateOwnershipTransfer, deleteHousehold, validateShopDeletion, validateMemberRemoval, validateOwnerDemotion, validateOwnerPromotion, validateShopLeave, throttleInvitationRoute } from '../lib/household-access.js';
 
 const jwksCache = { at: 0, keys: null };
 
-const bootstrapAssetPaths = new Set(['/index.html', '/app.js', '/greeting.js', '/shop-client.js', '/shop-creation-client.js', '/owner-promotion-client.js', '/member-removal-client.js', '/owner-demotion-client.js', '/ownership-transfer-client.js', '/shop-leave-client.js', '/shop-invitations-client.js', '/change-feed-client.js', '/styles.css', '/sw.js']);
+const bootstrapAssetPaths = new Set(['/index.html', '/app.js', '/greeting.js', '/shop-client.js', '/shop-creation-client.js', '/owner-promotion-client.js', '/member-removal-client.js', '/owner-demotion-client.js', '/ownership-transfer-client.js', '/shop-leave-client.js', '/shop-deletion-client.js', '/shop-invitations-client.js', '/change-feed-client.js', '/styles.css', '/sw.js']);
 
 export function assetCacheControl(path) {
   if (path === '/index.html') return 'no-store';
@@ -202,6 +203,15 @@ export async function handleRequest(request, env, ctx) {
         const tenant = await pinnedTenant(env.DB, principal, request.headers.get('x-shop-id'));
         return json(await transferHouseholdOwnership(env.DB, principal, tenant, transfer[1], body, requestId));
       }
+      if (url.pathname === '/api/household/delete') {
+        if (request.method !== 'POST' || env.SHOP_DELETION_ENABLED !== 'true') return json({ error: 'Not found' }, 404);
+        if (await migrationIsActive(env.DB)) return json({ error: 'Inventory is temporarily read-only while a migration is in progress.' }, 503);
+        requirePromotionRequest(request, url);
+        const body = await readJson(request);
+        validateShopDeletion(body);
+        const tenant = await pinnedTenant(env.DB, principal, request.headers.get('x-shop-id'));
+        return json(await deleteHousehold(env.DB, principal, tenant, body, requestId));
+      }
       if (url.pathname === '/api/household/leave') {
         if (request.method !== 'POST') return json({ error: 'Not found' }, 404);
         if (await migrationIsActive(env.DB)) return json({ error: 'Inventory is temporarily read-only while a migration is in progress.' }, 503);
@@ -235,7 +245,7 @@ export async function handleRequest(request, env, ctx) {
       }
       if (request.method !== 'GET' && await migrationIsActive(env.DB)) return json({ error: 'Inventory is temporarily read-only while a migration is in progress.' }, 503);
       const invitation = url.pathname.match(/^\/api\/household\/invitations\/([^/]+)$/);
-      if (request.method === 'GET' && url.pathname === '/api/household/access') return json(await listHouseholdAccess(env.DB, tenant));
+      if (request.method === 'GET' && url.pathname === '/api/household/access') return json(await listHouseholdAccess(env.DB, tenant, { shopDeletion: env.SHOP_DELETION_ENABLED === 'true' }));
       if (request.method === 'POST' && url.pathname === '/api/household/invitations') return json(await createHouseholdInvitation(env.DB, tenant, await readJson(request), undefined, requestId), 201);
       if (invitation && request.method === 'DELETE') {
         await revokeHouseholdInvitation(env.DB, tenant, invitation[1], requestId);
@@ -317,7 +327,7 @@ export async function handleRequest(request, env, ctx) {
 }
 
 export async function deliverScheduledPushes(env, { storeFactory = createD1Store, loadKeys = loadVapid } = {}) {
-  const memberships = await env.DB.prepare("SELECT household_id,MIN(user_id) AS user_id FROM memberships WHERE role='owner' GROUP BY household_id").all();
+  const memberships = await env.DB.prepare("SELECT household_id,MIN(user_id) AS user_id FROM active_memberships WHERE role='owner' GROUP BY household_id").all();
   const vapid = await loadKeys(env.KV, env);
   await Promise.all((memberships.results || []).map(({ household_id, user_id }) =>
     storeFactory(env.DB, env.PHOTOS, vapid, { householdId: household_id, userId: user_id }).deliverPushes({ contact: env.PUSH_CONTACT })));
@@ -328,6 +338,6 @@ export default {
     return handleRequest(request, env, ctx);
   },
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(Promise.all([deliverScheduledPushes(env), pruneBatchChanges(env.DB).catch(() => {})]));
+    ctx.waitUntil(Promise.all([deliverScheduledPushes(env), pruneBatchChanges(env.DB).catch(() => {}), purgeDeletedShops(env.DB, env.PHOTOS, { dryRun: env.SHOP_PURGE_ENABLED !== 'true', log: message => console.log(message) }).catch(() => {})]));
   }
 };
