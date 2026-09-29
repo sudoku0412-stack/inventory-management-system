@@ -12,12 +12,13 @@ import { adminActivity, adminAudit, adminOverview, adminShopDetail, adminShops, 
 import { listBatchChanges, parseChangeQuery, pruneBatchChanges } from '../lib/batch-changes.js';
 import { purgeDeletedShops } from '../lib/shop-purge.js';
 import { effectiveFlag } from '../lib/feature-flags.js';
+import { listDeletedShops, restoreOwnDeletedShop, validateOwnRestore } from '../lib/deleted-shops.js';
 import { createAdditionalShop, listShops, onboardingStatus, pinnedTenant, resolveTenant, setupInitialShop, shopContext } from '../lib/tenants.js';
 import { acceptHouseholdInvitation, createHouseholdInvitation, listHouseholdAccess, pendingHouseholdInvitations, demoteHouseholdOwner, leaveHousehold, promoteHouseholdMember, removeHouseholdMember, revokeHouseholdInvitation, transferHouseholdOwnership, validateOwnershipTransfer, deleteHousehold, validateShopDeletion, validateMemberRemoval, validateOwnerDemotion, validateOwnerPromotion, validateShopLeave, throttleInvitationRoute } from '../lib/household-access.js';
 
 const jwksCache = { at: 0, keys: null };
 
-const bootstrapAssetPaths = new Set(['/index.html', '/app.js', '/greeting.js', '/shop-client.js', '/shop-creation-client.js', '/owner-promotion-client.js', '/member-removal-client.js', '/owner-demotion-client.js', '/ownership-transfer-client.js', '/shop-leave-client.js', '/shop-deletion-client.js', '/shop-invitations-client.js', '/change-feed-client.js', '/styles.css', '/sw.js']);
+const bootstrapAssetPaths = new Set(['/index.html', '/app.js', '/greeting.js', '/shop-client.js', '/shop-creation-client.js', '/owner-promotion-client.js', '/member-removal-client.js', '/owner-demotion-client.js', '/ownership-transfer-client.js', '/shop-leave-client.js', '/shop-deletion-client.js', '/deleted-shops-client.js', '/shop-invitations-client.js', '/change-feed-client.js', '/styles.css', '/sw.js']);
 
 export function assetCacheControl(path) {
   if (path === '/index.html') return 'no-store';
@@ -177,6 +178,20 @@ export async function handleRequest(request, env, ctx) {
         requireCreationRequest(request, url);
         const created = await createAdditionalShop(env.DB, principal, await readJson(request), { requestId });
         return json(created, created.created ? 201 : 200);
+      }
+      // Deleted Shops are invisible to tenant resolution, so recovery is account-scoped and ignores X-Shop-Id.
+      if (url.pathname === '/api/shops/deleted') {
+        if (request.method !== 'GET') return json({ error: 'Not found' }, 404);
+        return json(await listDeletedShops(env.DB, principal));
+      }
+      const ownRestore = url.pathname.match(/^\/api\/shops\/([^/]+)\/restore$/);
+      if (ownRestore) {
+        if (request.method !== 'POST') return json({ error: 'Not found' }, 404);
+        if (await migrationIsActive(env.DB)) return json({ error: 'Inventory is temporarily read-only while a migration is in progress.' }, 503);
+        requirePromotionRequest(request, url);
+        const body = await readJson(request);
+        validateOwnRestore(body);
+        return json(await restoreOwnDeletedShop(env.DB, principal, ownRestore[1], body, requestId));
       }
       const promotion = url.pathname.match(/^\/api\/household\/members\/([^/]+)\/promote$/);
       // Promotion pins the caller's explicit Shop but must never update the

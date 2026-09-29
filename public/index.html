@@ -221,6 +221,11 @@
               <p class="access-status" id="deleteShopStatus" role="status" aria-live="polite"></p>
             </div>
           </section>
+          <section class="profile-card" id="deletedShopsCard" aria-labelledby="deletedShopsTitle" tabindex="-1" hidden>
+            <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">↺</span><div><h2 id="deletedShopsTitle">Recently deleted Shops</h2><p>Shops you own that were deleted. You can restore one until its keep period ends; after that it is permanently removed.</p></div></div>
+            <p class="access-status" id="deletedShopsStatus" role="status" aria-live="polite"></p>
+            <ul class="access-list" id="deletedShopsList"></ul>
+          </section>
           <section class="profile-card shop-invitations-card" id="shopInvitationsCard" aria-labelledby="shopInvitationsTitle" hidden>
             <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">✉</span><div><h2 id="shopInvitationsTitle">Shop invitations</h2><p>Invitations sent to your signed-in account. Joining adds Member access and keeps your current Shop open.</p></div></div>
             <p class="access-status" id="shopInvitationsStatus" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></p>
@@ -356,6 +361,9 @@
     </dialog>
     <dialog class="modal confirm-modal" id="leaveShopModal" aria-labelledby="leaveShopTitle" aria-describedby="leaveShopShop leaveShopHelp">
       <form id="leaveShopForm" novalidate><div class="modal-header"><div><span class="overline">YOUR SHOP</span><h2 id="leaveShopTitle">Leave Shop?</h2></div></div><div class="modal-body"><p id="leaveShopShop"></p><p id="leaveShopHelp">You lose access to this Shop immediately. You can be invited again later.</p><p class="access-status" id="leaveShopModalStatus" role="status" aria-live="polite"></p></div><div class="modal-footer"><button class="button secondary" id="cancelLeaveShop" type="button">Cancel</button><button class="button primary" id="confirmLeaveShop" type="submit">Leave Shop</button></div></form>
+    </dialog>
+    <dialog class="modal confirm-modal" id="restoreShopModal" aria-labelledby="restoreShopTitle" aria-describedby="restoreShopHelp">
+      <form id="restoreShopForm" novalidate><div class="modal-header"><div><span class="overline">RECENTLY DELETED</span><h2 id="restoreShopTitle">Restore Shop?</h2></div></div><div class="modal-body"><p id="restoreShopHelp">Everyone who had access gets it back. Invitations and notification subscriptions removed when the Shop was deleted are not restored.</p><p class="access-status" id="restoreShopStatus" role="status" aria-live="polite"></p></div><div class="modal-footer"><button class="button secondary" id="cancelRestoreShop" type="button">Cancel</button><button class="button primary" id="confirmRestoreShop" type="submit">Restore Shop</button></div></form>
     </dialog>
     <dialog class="modal confirm-modal" id="deleteShopModal" aria-labelledby="deleteShopTitle" aria-describedby="deleteShopShop deleteShopHelp">
       <form id="deleteShopForm" novalidate><div class="modal-header"><div><span class="overline">DANGER ZONE</span><h2 id="deleteShopTitle">Delete Shop?</h2></div></div><div class="modal-body"><p id="deleteShopShop"></p><p id="deleteShopHelp">Everyone loses access now. Medicines and photos are permanently deleted after <span id="deleteShopDaysText">14</span> days. Invitations and notifications stop immediately.</p><label for="deleteShopDays">Keep for how many days? (7 to 30)</label><input id="deleteShopDays" type="number" inputmode="numeric" min="7" max="30" step="1" value="14"><label for="deleteShopConfirm" id="deleteShopConfirmLabel">Type the Shop name to confirm</label><input id="deleteShopConfirm" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"><p class="access-status" id="deleteShopModalStatus" role="status" aria-live="polite"></p></div><div class="modal-footer"><button class="button secondary" id="cancelDeleteShop" type="button">Cancel</button><button class="button primary danger-button" id="confirmDeleteShop" type="submit" disabled>Delete Shop</button></div></form>
