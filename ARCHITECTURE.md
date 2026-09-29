@@ -46,7 +46,7 @@ Local development
 - Local mode is loopback-only and uses SQLite as a single-user Shop.
 - Cloud mode uses D1 as the source of truth. Inventory and push data are tenant-scoped by internal household ID.
 - Each cloud batch has a revision. Browser mutations carry an operation ID and base revision; duplicate operations replay safely and stale changes return a conflict for user review.
-- No offline mutation queue, change feed, background reconciliation, or cross-device conflict UI exists yet. An online pull feed is designed below (not implemented).
+- No offline mutation queue, change feed, background reconciliation, or cross-device conflict UI exists yet. An online pull feed is implemented (see below).
 - Packaging images live in R2. Optional Gemini suggestions are server-side, require a configured secret, and are never saved until the user confirms the medicine form.
 
 ## Deployment and operations
@@ -249,7 +249,7 @@ Required automated coverage: forged JWT/role/user/email, no-member refusal, owne
 
 Explicit deferrals: self-service creation by users with no memberships; existing members accepting additional invitations (today's acceptance intentionally returns 409 for any existing membership); admin role/schema changes; role changes, transfer, removal, Shop deletion, import/copy, shared user profile redesign, email sending, stronger traffic rate limiting, and receipt cleanup. Each new Shop already has its sole owner and existing owner-only invitation management; admin management is a later designed slice. Do not imply those full lifecycle requirements are delivered by this chunk.
 
-## Design: online pull/change feed for inventory (not implemented)
+## Design: online pull/change feed for inventory (implemented; migration 0015)
 
 ### Problem and boundary
 
@@ -353,3 +353,11 @@ Rollout: apply/verify 0013 before Worker; deploy server plus compatible UI; chec
 - `GET /api/shops` additively returns the authenticated internal `users.id` as `accountContextKey`. The Profile dialog persists an account-scoped intent before mutation, exposes an explicit retry/resume path only to that same key, and never switches Shop context after success.
 - `bindShopCreation` owns the actual app dialog bindings, persistence, in-flight guard, retry and success/refetch sequence. A confirmed success clears its intent; failed or mismatched context refresh leaves the current Shop intact, shows a persistent status and restores focus to the creation action. Tests execute that controller with DOM event/service doubles, preserving unsaved Profile fields; native modal/mobile semantics are checked separately against markup and CSS.
 - Concurrency coverage uses a two-caller barrier before SQLite-backed D1-style atomic batches, covering duplicate replay and distinct-operation owner/rolling caps. Missing receipt schema fails closed, eligible audit failure rolls back, and route preference snapshots are byte-for-byte invariant. Full automated suite: 85 passing. PR #44 (`52d12ff`) is deployed as Worker version `9b86f23f-ba08-4d96-8dc6-f7d9b5b72f2c` after successful production migration `0012_shop_creation.sql`; authenticated real-browser responsive/accessibility verification remains outstanding.
+
+### Change feed: as-built deviations from the design above
+
+- No SQL triggers: D1 `meta.changes` counts trigger rows, which breaks the store's exact-change checks. Each mutation batch appends a `batch_changes` row explicitly via `feed()` (`WHERE changes()=1`) in the same D1 batch.
+- Bootstrap is `GET /api/changes` without `after` (returns the current cursor), read before the list load; `/api/batches` is unchanged.
+- Migration 0015 also rebuilds the invitation-route throttle table to allow route `changes` (60/min per account).
+- Rollout order: apply migration 0015 first, then deploy the Worker/UI. Rolling back the Worker leaves the tables harmlessly unused.
+- New browser modules must be added to both `publicAssetPaths` (lib/shared.js) and `bootstrapAssetPaths` (worker/index.js).

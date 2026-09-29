@@ -8,12 +8,13 @@ import {
   visionConfig
 } from '../lib/shared.js';
 import { createD1Store, loadVapid } from '../lib/store-d1.js';
+import { listBatchChanges, parseChangeQuery, pruneBatchChanges } from '../lib/batch-changes.js';
 import { createAdditionalShop, listShops, onboardingStatus, pinnedTenant, resolveTenant, setupInitialShop, shopContext } from '../lib/tenants.js';
 import { acceptHouseholdInvitation, createHouseholdInvitation, listHouseholdAccess, pendingHouseholdInvitations, promoteHouseholdMember, revokeHouseholdInvitation, validateOwnerPromotion, throttleInvitationRoute } from '../lib/household-access.js';
 
 const jwksCache = { at: 0, keys: null };
 
-const bootstrapAssetPaths = new Set(['/index.html', '/app.js', '/greeting.js', '/shop-client.js', '/shop-creation-client.js', '/owner-promotion-client.js', '/shop-invitations-client.js', '/styles.css', '/sw.js']);
+const bootstrapAssetPaths = new Set(['/index.html', '/app.js', '/greeting.js', '/shop-client.js', '/shop-creation-client.js', '/owner-promotion-client.js', '/shop-invitations-client.js', '/change-feed-client.js', '/styles.css', '/sw.js']);
 
 export function assetCacheControl(path) {
   if (path === '/index.html') return 'no-store';
@@ -158,6 +159,11 @@ export async function handleRequest(request, env, ctx) {
         await revokeHouseholdInvitation(env.DB, tenant, invitation[1], requestId);
         return noContent();
       }
+      if (request.method === 'GET' && url.pathname === '/api/changes') {
+        const query = parseChangeQuery(url.searchParams);
+        await throttleInvitationRoute(env.DB, principal, request, 'changes');
+        return json(await listBatchChanges(env.DB, tenant.householdId, query));
+      }
       const store = await getStore(env, tenant, principal);
       const match = url.pathname.match(/^\/api\/batches\/([^/]+)(?:\/(consume|discard|photo))?$/);
       if (request.method === 'GET' && url.pathname === '/api/settings') return json(await store.settings());
@@ -240,6 +246,6 @@ export default {
     return handleRequest(request, env, ctx);
   },
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(deliverScheduledPushes(env));
+    ctx.waitUntil(Promise.all([deliverScheduledPushes(env), pruneBatchChanges(env.DB).catch(() => {})]));
   }
 };
