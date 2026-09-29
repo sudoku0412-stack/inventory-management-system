@@ -269,4 +269,4 @@ Do not launch Cursor cloud agents for this project. Read this file at the start 
 - Migration `0015_batch_change_feed.sql`, `lib/batch-changes.js`, `GET /api/changes`, `public/change-feed-client.js`, 15-minute cron pruning (30-day retention of feed rows and mutation receipts). Full suite 197/197.
 - Deploy: apply 0015 to remote D1 BEFORE deploying the Worker. Not yet applied or deployed unless a later entry says so.
 - Lessons: D1 `meta.changes` counts trigger rows (no triggers); two asset allowlists must both list new modules.
-- Real-browser two-tab verification still pending.
+- Browser-verified against the real Worker code (local harness, real asset allowlist): a medicine added from another client appeared on Inventory within about a minute with the "Inventory updated." toast; an update made while the medicine dialog was open refreshed the list, left the dialog open, and showed the "updated elsewhere" notice.
