@@ -1,5 +1,12 @@
 # Medicine Inventory Tracker — handover
 
+## Offline read, slice 1 (2026-09-29, built, not deployed)
+- Spec `docs/superpowers/specs/2026-09-29-offline-use-design.md`, plan `docs/superpowers/plans/2026-09-29-offline-read.md`. Browser-only, no migration.
+- `public/offline-store.js` (IndexedDB: last Shop context + snapshot per account/Shop, in both allowlists), `public/sw.js` (network-first app shell cache, never `/api` `/admin` `/cdn-cgi`, non-GET or redirected responses), `public/app.js` (registers the worker, saves context/snapshot after loads, opens from them on a network error, offline banner, mutations rejected while offline, `online` re-runs `start()`).
+- New browser modules must ALSO be added to `PRECACHE` in `public/sw.js` (runtime caching covers drift after one online load). Fonts come from Google, so offline uses system fonts.
+- Verified in the in-app browser against a mock API: context and snapshot saved, offline boot shows the banner and saved data, `online` clears it. NOT verified: the service worker (the in-app browser cannot register any worker) and the offline mutation rejection. Check on a real browser: load once online, go offline, reload.
+- Slice 2 (offline edits queue with latest-timestamp-wins) is the next plan.
+
 ## Email notice opt-out (2026-09-29)
 - Migration `0027_user_email_preferences.sql` (apply BEFORE deploying). `GET/PUT /api/email-preferences` `{ noticesEnabled }` (before tenant resolution, account-scoped), Profile card `public/email-preferences-client.js` (both allowlists). Off = no deletion or ownership-transfer emails, applied at queue time and again at send time; invitation emails always send. Default on (no row).
 - Next agreed item: offline use (IndexedDB plus a change queue) — needs a design first.
