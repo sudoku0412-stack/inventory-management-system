@@ -32,8 +32,9 @@ const dialog = $('actionDialog'), form = $('actionForm'), reasonBox = $('actionR
 let pending = null, dialogTrigger = null;
 
 // One intent (and operation id) per target, kept across dismissal so a retry replays the same request.
-function openAction({ key, title, effect, verb, path, confirmName = null, days = false, trigger, done }) {
+function openAction({ key, title, effect, verb, path, confirmName = null, days = false, extra = null, trigger, done }) {
   if (!pending || pending.key !== key) pending = { key, operationId: uuid(), path, done };
+  pending.extra = extra;
   pending.days = days; $('actionDaysLabel').hidden = $('actionDays').hidden = !days; $('actionDays').value = '14';
   dialogTrigger = trigger;
   $('actionTitle').textContent = title; $('actionEffect').textContent = effect; submit.textContent = verb;
@@ -62,7 +63,7 @@ form.addEventListener('submit', async event => {
   const value = pending;
   submit.disabled = true; $('actionStatus').textContent = 'Working…';
   try {
-    const result = await post(value.path, { operationId: value.operationId, reason: reasonBox.value.trim(), ...(value.days ? { keepDays: Number($('actionDays').value) } : {}) });
+    const result = await post(value.path, { operationId: value.operationId, reason: reasonBox.value.trim(), ...(value.days ? { keepDays: Number($('actionDays').value) } : {}), ...(value.extra || {}) });
     pending = null; dialog.close();
     status.textContent = result.changed === false ? 'Already done; nothing changed.' : 'Done. The change is recorded in the audit log.'; status.classList.remove('error');
     await value.done();
@@ -123,6 +124,17 @@ const views = {
     const extendButton = restorable ? el('button', { type: 'button' }, 'Extend deadline') : null;
     extendButton?.addEventListener('click', () => openAction({ key: `extend:${id}`, title: `Extend the deadline for ${data.shop.name}?`, effect: 'Moves the permanent-deletion date later, counted from today. It never shortens it.', verb: 'Extend deadline', path: `/admin/api/shops/${encodeURIComponent(id)}/extend`, days: true, trigger: extendButton, done: reload }));
     restoreButton?.addEventListener('click', () => openAction({ key: `restore:${id}`, title: `Restore ${data.shop.name}?`, effect: 'Members regain their access. Invitations and push subscriptions removed at deletion are not restored.', verb: 'Restore Shop', path: `/admin/api/shops/${encodeURIComponent(id)}/restore`, confirmName: data.shop.name, trigger: restoreButton, done: reload }));
+    const flagCell = row => {
+      if (!writesEnabled) return '';
+      const box = el('span', { class: 'flagbtns' });
+      for (const [label, value, state] of [['Turn on', true, 'on'], ['Turn off', false, 'off'], ['Follow global', null, 'default']]) {
+        if ((row.override === null ? null : row.override) === value) continue;
+        const button = el('button', { type: 'button', class: value === false ? 'danger' : '', 'aria-label': `${label}: ${row.label}` }, label);
+        button.addEventListener('click', () => openAction({ key: `flag:${id}:${row.flag}:${state}`, title: `${label}: ${row.label}?`, effect: `${row.help} This changes only ${data.shop.name}, and applies on its next request.`, verb: label, path: `/admin/api/shops/${encodeURIComponent(id)}/flags`, extra: { flag: row.flag, value }, trigger: button, done: reload }));
+        box.append(button);
+      }
+      return box;
+    };
     const revokeCell = row => {
       if (!writesEnabled || !row.pending) return '';
       const button = el('button', { type: 'button', class: 'danger', 'aria-label': `Revoke invitation for ${row.email}` }, 'Revoke');
@@ -134,6 +146,12 @@ const views = {
       el('p', {}, `ID ${data.shop.id} · created ${when(data.shop.created_at)} · ${data.shop.medicine_count} medicines (count only)`),
       ...(data.deletion ? [el('p', { class: 'note' }, data.deletion.purged_at ? `Purged ${when(data.deletion.purged_at)}.` : `Pending deletion since ${when(data.deletion.deleted_at)}; permanently purged after ${when(data.deletion.purge_after)}.`)] : []),
       ...(restoreButton ? [restoreButton, extendButton] : []),
+      ...(writesEnabled || data.flags?.length ? [el('h2', {}, 'Feature flags for this Shop'), el('p', { class: 'note' }, 'A change applies on the next request. Follow global uses the Worker secret.'), table('Feature flags', [
+        { label: 'Flag', render: row => row.label },
+        { label: 'Now', render: row => row.effective ? 'On' : 'Off' },
+        { label: 'Setting', render: row => row.override === null ? `Follow global (${row.global ? 'on' : 'off'})` : row.override ? 'Forced on' : 'Forced off' },
+        { label: 'Change', render: flagCell }
+      ], data.flags || [])] : []),
       el('h2', {}, 'Members'),
       table('Members', [{ label: 'Email', key: 'email' }, { label: 'Role', key: 'role' }, { label: 'Joined', render: row => when(row.joined_at) }, { label: 'User ID', key: 'user_id' }], data.members),
       el('h2', {}, 'Invitations'),

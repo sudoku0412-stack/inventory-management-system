@@ -8,9 +8,10 @@ import {
   visionConfig
 } from '../lib/shared.js';
 import { createD1Store, loadVapid } from '../lib/store-d1.js';
-import { adminActivity, adminAudit, adminOverview, adminShopDetail, adminShops, adminExtendShop, adminRestoreShop, adminRevokeInvitation, authorizeAdmin, writeAdminAudit } from '../lib/admin.js';
+import { adminActivity, adminAudit, adminOverview, adminShopDetail, adminShops, adminExtendShop, adminRestoreShop, adminRevokeInvitation, adminSetShopFlag, authorizeAdmin, writeAdminAudit } from '../lib/admin.js';
 import { listBatchChanges, parseChangeQuery, pruneBatchChanges } from '../lib/batch-changes.js';
 import { purgeDeletedShops } from '../lib/shop-purge.js';
+import { effectiveFlag } from '../lib/feature-flags.js';
 import { createAdditionalShop, listShops, onboardingStatus, pinnedTenant, resolveTenant, setupInitialShop, shopContext } from '../lib/tenants.js';
 import { acceptHouseholdInvitation, createHouseholdInvitation, listHouseholdAccess, pendingHouseholdInvitations, demoteHouseholdOwner, leaveHousehold, promoteHouseholdMember, removeHouseholdMember, revokeHouseholdInvitation, transferHouseholdOwnership, validateOwnershipTransfer, deleteHousehold, validateShopDeletion, validateMemberRemoval, validateOwnerDemotion, validateOwnerPromotion, validateShopLeave, throttleInvitationRoute } from '../lib/household-access.js';
 
@@ -89,7 +90,7 @@ async function handleAdmin(request, env, url) {
   try {
     const access = accessConfig({ ...env, ACCESS_AUD: env.ADMIN_ACCESS_AUD });
     const admin = await authorizeAdmin(request, env, access ? await accessKeys(access) : undefined);
-    const writeRoute = request.method === 'POST' && api ? url.pathname.match(/^\/admin\/api\/shops\/([^/]+)\/(?:invitations\/([^/]+)\/revoke|restore|extend)$/) : null;
+    const writeRoute = request.method === 'POST' && api ? url.pathname.match(/^\/admin\/api\/shops\/([^/]+)\/(?:invitations\/([^/]+)\/revoke|restore|extend|flags)$/) : null;
     if (request.method !== 'GET' && request.method !== 'HEAD' && !writeRoute) return json({ error: 'Not found' }, 405, { ...adminHeaders, allow: 'GET, HEAD' });
     const writesEnabled = env.ADMIN_WRITES_ENABLED === 'true';
     if (writeRoute) {
@@ -101,7 +102,9 @@ async function handleAdmin(request, env, url) {
         ? await adminRevokeInvitation(env.DB, admin, { shopId: writeRoute[1], invitationId: writeRoute[2] }, body, { requestId })
         : url.pathname.endsWith('/extend')
           ? await adminExtendShop(env.DB, admin, writeRoute[1], body, { requestId })
-          : await adminRestoreShop(env.DB, admin, writeRoute[1], body, { requestId });
+          : url.pathname.endsWith('/flags')
+            ? await adminSetShopFlag(env.DB, admin, writeRoute[1], body, { requestId })
+            : await adminRestoreShop(env.DB, admin, writeRoute[1], body, { requestId });
       return json(done, 200, adminHeaders);
     }
     const params = url.searchParams, db = env.DB;
@@ -110,7 +113,7 @@ async function handleAdmin(request, env, url) {
       if (url.pathname === '/admin/api/overview') return await audited('overview.view', null, async () => ({ ...await adminOverview(db), admin: admin.email, writesEnabled }));
       if (url.pathname === '/admin/api/shops') return await audited('shops.list', null, () => adminShops(db, params));
       const detail = url.pathname.match(/^\/admin\/api\/shops\/([^/]+)$/);
-      if (detail) return await audited('shop.view', detail[1], async () => ({ ...await adminShopDetail(db, detail[1]), writesEnabled }));
+      if (detail) return await audited('shop.view', detail[1], async () => ({ ...await adminShopDetail(db, detail[1], undefined, env), writesEnabled }));
       if (url.pathname === '/admin/api/audit') return await audited('audit.view', params.get('shop'), () => adminAudit(db, params));
       if (url.pathname === '/admin/api/admin-audit') return await audited('admin-audit.view', null, () => adminActivity(db, params));
       return json({ error: 'Not found' }, 404, adminHeaders);
@@ -218,12 +221,14 @@ export async function handleRequest(request, env, ctx) {
         return json(await transferHouseholdOwnership(env.DB, principal, tenant, transfer[1], body, requestId));
       }
       if (url.pathname === '/api/household/delete') {
-        if (request.method !== 'POST' || env.SHOP_DELETION_ENABLED !== 'true') return json({ error: 'Not found' }, 404);
+        if (request.method !== 'POST') return json({ error: 'Not found' }, 404);
         if (await migrationIsActive(env.DB)) return json({ error: 'Inventory is temporarily read-only while a migration is in progress.' }, 503);
         requirePromotionRequest(request, url);
         const body = await readJson(request);
         validateShopDeletion(body);
         const tenant = await pinnedTenant(env.DB, principal, request.headers.get('x-shop-id'));
+        // Read per request, so a staff change to this Shop's flag applies immediately.
+        if (!await effectiveFlag(env.DB, env, tenant.householdId, 'shop_deletion')) return json({ error: 'Not found' }, 404);
         return json(await deleteHousehold(env.DB, principal, tenant, body, requestId));
       }
       if (url.pathname === '/api/household/leave') {
@@ -259,7 +264,7 @@ export async function handleRequest(request, env, ctx) {
       }
       if (request.method !== 'GET' && await migrationIsActive(env.DB)) return json({ error: 'Inventory is temporarily read-only while a migration is in progress.' }, 503);
       const invitation = url.pathname.match(/^\/api\/household\/invitations\/([^/]+)$/);
-      if (request.method === 'GET' && url.pathname === '/api/household/access') return json(await listHouseholdAccess(env.DB, tenant, { shopDeletion: env.SHOP_DELETION_ENABLED === 'true' }));
+      if (request.method === 'GET' && url.pathname === '/api/household/access') return json(await listHouseholdAccess(env.DB, tenant, { shopDeletion: await effectiveFlag(env.DB, env, tenant.householdId, 'shop_deletion') }));
       if (request.method === 'POST' && url.pathname === '/api/household/invitations') return json(await createHouseholdInvitation(env.DB, tenant, await readJson(request), undefined, requestId), 201);
       if (invitation && request.method === 'DELETE') {
         await revokeHouseholdInvitation(env.DB, tenant, invitation[1], requestId);

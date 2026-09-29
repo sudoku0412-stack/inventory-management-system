@@ -158,7 +158,7 @@ test('UI contract: gated card, dialog, binding, allowlists, and the route stays 
   assert.match(html, /id="confirmDeleteShop"[^>]*disabled/);
   assert.match(app, /bindShopDeletion/);
   assert.ok(read('lib/shared.js').includes("'/shop-deletion-client.js'") && worker.includes("'/shop-deletion-client.js'"));
-  assert.match(worker, /SHOP_DELETION_ENABLED !== 'true'\) return json\(\{ error: 'Not found' \}, 404\)/);
+  assert.match(worker, /effectiveFlag\(env\.DB, env, tenant\.householdId, 'shop_deletion'\)\) return json\(\{ error: 'Not found' \}, 404\)/);
   assert.match(worker, /SHOP_PURGE_ENABLED !== 'true'/, 'purge is dry-run unless explicitly enabled');
   assert.match(read('public/shop-deletion-client.js'), /getAccess\(\)\?\.shop_deletion === true/);
 });
@@ -182,4 +182,29 @@ test('UI contract: the delete dialog asks for 7 to 30 days and sends keepDays', 
   const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8'), js = readFileSync(new URL('../public/shop-deletion-client.js', import.meta.url), 'utf8');
   assert.match(html, /id="deleteShopDays" type="number"[^>]*min="7"[^>]*max="30"[^>]*value="14"/);
   assert.match(js, /keepDays: chosenDays/);
+});
+
+test('a per-Shop flag overrides the global secret either way, and is read on every call', async () => {
+  const { effectiveFlag, shopOverrides } = await import('../lib/feature-flags.js');
+  const f = fixture();
+  for (const [global, override, expected] of [[undefined, undefined, false], ['true', undefined, true], ['true', 0, false], [undefined, 1, true], ['false', 1, true], ['true', 1, true]]) {
+    f.sqlite.exec('DELETE FROM shop_feature_flags');
+    if (override !== undefined) f.sqlite.prepare("INSERT INTO shop_feature_flags VALUES (?,?,?,?,?)").run(shop, 'shop_deletion', override, 'now', 'admin@example.test');
+    assert.equal(await effectiveFlag(f.db, { SHOP_DELETION_ENABLED: global }, shop, 'shop_deletion'), expected, `${global}/${override}`);
+  }
+  assert.equal(await effectiveFlag(f.db, { SHOP_DELETION_ENABLED: 'true' }, other, 'shop_deletion'), true, 'other Shops follow the global secret');
+  f.sqlite.exec('DROP TABLE shop_feature_flags');
+  assert.deepEqual(await shopOverrides(f.db, shop), {}, 'a missing table means no overrides');
+});
+
+test('purge honours the per-Shop shop_purge flag: off holds a Shop, on purges it while the global default is a dry run', async () => {
+  const late = () => '2026-10-14T00:00:00.000Z', photos = { delete: async () => {} };
+  const held = fixture(); await held.del();
+  held.sqlite.prepare("INSERT INTO shop_feature_flags VALUES (?,?,?,?,?)").run(shop, 'shop_purge', 0, 'now', 'admin@example.test');
+  assert.equal((await purgeDeletedShops(held.db, photos, { now: late, dryRun: false })).purged, 0, 'held despite the global purge being on');
+  assert.equal(held.rows(`SELECT count(*) AS n FROM batches WHERE household_id='${shop}'`)[0].n, 1);
+  const forced = fixture(); await forced.del();
+  forced.sqlite.prepare("INSERT INTO shop_feature_flags VALUES (?,?,?,?,?)").run(shop, 'shop_purge', 1, 'now', 'admin@example.test');
+  assert.equal((await purgeDeletedShops(forced.db, photos, { now: late, dryRun: true })).purged, 1, 'purged though the global default is a dry run');
+  assert.equal(forced.rows(`SELECT count(*) AS n FROM batches WHERE household_id='${shop}'`)[0].n, 0);
 });

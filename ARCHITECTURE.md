@@ -526,6 +526,10 @@ Apply migration; deploy Worker with `ADMIN_WRITES_ENABLED` unset; verify GET beh
 4. Customer visibility: **history row without admin identity (recommended)** versus naming the admin or no customer-side row.
 5. Kill switch as a **var default-off (recommended)** versus always on once deployed.
 
+## Implemented and deployed: per-Shop feature flags (migration 0023)
+
+Staff can switch a flag for one Shop from `/admin` in real time. `lib/feature-flags.js` holds a registry: `shop_deletion` (owner delete, global default `SHOP_DELETION_ENABLED`) and `shop_purge` (permanent purge, global default `SHOP_PURGE_ENABLED`). Table `shop_feature_flags (household_id, flag, enabled, updated_at, updated_by)`: no row means follow the global secret; a row (on or off) always wins. Overrides are read on every request, so a change applies to the next call with no cache and no deploy. Delete route and `GET /api/household/access` (`shop_deletion`) use `effectiveFlag`; the purge job checks `shop_purge` per Shop (off holds the Shop, on purges it even while the global default is a dry run). Write: `POST /admin/api/shops/:id/flags` with `{ operationId, reason, flag, value }` where `value` is `true`, `false` or `null` (follow global). It is gated by `ADMIN_WRITES_ENABLED`, throttled and replay-safe like the other admin writes, and writes the flag change, a `shop_flag_changed` history event (no admin identity) and the `admin_audit` row in one batch. `ADMIN_WRITES_ENABLED` is deliberately not a per-Shop flag. Adding a flag means adding one registry entry and reading it with `effectiveFlag`. Tests: `test/admin-console.test.js`, `test/shop-deletion.test.js`.
+
 ## Deferred architecture work
 
 - Offline synchronization reconciliation (offline mutation queue, conflict UI, background reconciliation). The online pull/change feed is implemented and deployed; see its section above.

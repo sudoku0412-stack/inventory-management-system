@@ -37,5 +37,6 @@ button.danger { border-color: #af403d; color: #af403d; }
 button:disabled { opacity: .5; cursor: not-allowed; }
 .banner.audited { background: #e2f3ec; color: #1e665f; }
 .note { color: var(--soft); }
+.flagbtns { display: inline-flex; flex-wrap: wrap; gap: 6px; }
 @media (max-width: 640px) { .bar, .tabs, main { padding-left: 12px; padding-right: 12px; } .who { margin-left: 0; } }
 @media all { .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } }
