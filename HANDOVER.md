@@ -1,5 +1,8 @@
 # Medicine Inventory Tracker — handover
 
+## Creation limit message fix (2026-09-29)
+- Reported "We couldn’t confirm creation" was the server's rolling limit (one created Shop per user per 24 hours, 429), not a failure; deleted Shops keep their creation receipt so the limit still counts them. `creationFailure` in `public/shop-creation-client.js` now shows the server's "You can create one Shop every 24 hours" text and drops the saved intent; other 429s and 5xx still say retry. No server or migration change.
+
 ## Per-Shop feature flags (2026-09-29)
 - Migration `0023_shop_feature_flags.sql`, `lib/feature-flags.js` (registry: `shop_deletion`, `shop_purge`), `adminSetShopFlag` (`POST /admin/api/shops/:id/flags`), admin Shop page section **Feature flags for this Shop** (Turn on / Turn off / Follow global, each with a reason). Overrides beat the global secrets and apply on the next request. Apply 0023 BEFORE deploying (the code reads and writes the new table and history event).
 

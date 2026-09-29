@@ -32,6 +32,19 @@ export function isCurrentCreationResponse(intent, confirmedAccountContextKey) {
 }
 
 /** The complete creation dialog flow. Dependencies are the same page services used by app.js. */
+const RETRY_MESSAGE = 'We couldn’t confirm creation. Retry to check the same request.';
+
+/**
+ * A definitive refusal drops the saved intent and shows the server's reason. The rolling one-Shop-per-24-hours
+ * limit is a 429 with an explicit message: it is a refusal, not an unconfirmed request, so say so.
+ */
+export function creationFailure(error) {
+  const status = error?.status, text = String(error?.message || '');
+  if (status === 429 && /every 24 hours/i.test(text)) return { definitive: true, message: text };
+  const definitive = status >= 400 && status < 500 && status !== 408 && status !== 429;
+  return { definitive, message: definitive ? text : RETRY_MESSAGE };
+}
+
 export function bindShopCreation({ document, storage, getContext, getDisplayName, operationId, request, renderContext, schedule = requestAnimationFrame }) {
   const find = id => document.querySelector(`#${id}`);
   const form = find('createShopForm'), modal = find('createShopModal'), button = find('submitCreateShop');
@@ -107,10 +120,10 @@ export function bindShopCreation({ document, storage, getContext, getDisplayName
       find('shopSelector').focus();
     } catch (error) {
       if (!isCurrentCreationResponse(intent, getContext()?.accountContextKey)) return;
-      const definitive = error.status >= 400 && error.status < 500 && error.status !== 408 && error.status !== 429;
-      if (definitive) removeCreationIntent(storage, intent.accountContextKey);
-      message(definitive ? error.message : 'We couldn’t confirm creation. Retry to check the same request.', true);
-      button.textContent = definitive ? 'Create Shop' : 'Retry creation';
+      const failure = creationFailure(error);
+      if (failure.definitive) removeCreationIntent(storage, intent.accountContextKey);
+      message(failure.message, true);
+      button.textContent = failure.definitive ? 'Create Shop' : 'Retry creation';
       contextChanged();
       if (modal.open) button.focus();
     } finally {
