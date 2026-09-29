@@ -288,3 +288,8 @@ Do not launch Cursor cloud agents for this project. Read this file at the start 
 ## Member removal released
 - PR #61 merged as `d51173a`. Remote migration `0016_shop_member_removal.sql` applied (receipt table and guard trigger present, audit history preserved), then Worker deployed: version `9095cb11-1917-452f-957f-ec9c6f163574`.
 - Still to check signed in: Remove button layout on a phone-width Profile and the confirmation flow (browser not checked).
+
+## Demotion/leave designed; platform admin needs decisions (2026-09-29)
+- Owner promotion and member removal were both verified by the user with real accounts (Remove button/dialog on phone width; second-account promotion).
+- `ARCHITECTURE.md` has "Design: owner demotion and leaving a Shop (not implemented)" awaiting review.
+- Requested but undesigned: a company-only platform admin (local login or `/admin`) that can see and change backend data. Open decisions: how it authenticates (separate Cloudflare Access application and policy for `/admin*` is the recommended default, never the customer Access app), read-only first versus writes, which data it may see (medicine/photos are customer data), audit logging of every admin action, and whether changes go through existing store functions or raw SQL.

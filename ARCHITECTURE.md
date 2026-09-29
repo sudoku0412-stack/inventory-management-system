@@ -314,11 +314,48 @@ In the Owner roster, each Member row gets a **Remove** button (no action on Owne
 
 Real SQLite-backed D1 batches: authorization matrix (Owner, Member, foreign Owner, no auth), target matrix (Member, Owner, self, missing, foreign), replay/conflict, atomicity with a blocking audit trigger, promotion-versus-removal race, preference cleanup, removed user's next request 403 across every route, other Shops unaffected, change-feed 403 client handling, migration preserving audit rows. Roll out with 0016 before the Worker.
 
+## Design: owner demotion and leaving a Shop (not implemented)
+
+### Smallest slice
+
+Two actions, both reusing the removal pattern (pinned `X-Shop-Id`, route before `resolveTenant`, same-origin JSON, exact body `{ operationId }`, no-store, fresh authorization inside the batch, receipt plus audit, 503 when schema is missing):
+
+- **Demote** an Owner to Member: `POST /api/household/members/:userId/demote`. Actor is an Owner acting on a *different* Owner. Self-demotion is not offered; a person who wants out uses Leave.
+- **Leave**: `POST /api/household/leave`. The actor deletes their own membership. Members may always leave. An Owner may leave only while another Owner remains.
+
+Ownership transfer is the composition promote-then-leave and needs no separate action. Shop deletion stays out of scope, so a Shop's sole Owner cannot leave until they promote someone.
+
+### Last-owner invariant
+
+Every state change carries the guard `(SELECT count(*) FROM memberships WHERE household_id=? AND role='owner') >= 2` inside its own `UPDATE`/`DELETE` predicate. D1 batches are serialized, so two Owners demoting each other, or an Owner leaving while being demoted, cannot both pass: the loser affects zero rows, the following audit insert receives a NULL target and aborts the batch, and the API answers 409 **A Shop must keep at least one owner.** The receipt guard trigger repeats the actor-is-Owner and target-eligibility checks (target Owner for demote; actor's own membership for leave) so a receipt never exists without its transition.
+
+### Effects
+
+- **Demote:** only the role changes. Push subscriptions, preference and data stay, because the person is still a Member. The five-owned-Shops cap frees a slot.
+- **Leave:** same same-batch cleanup as removal: delete the leaver's membership, their push subscriptions for this Shop, and their preference if it points here. Their user and identity rows, other Shops and the Shop's data are untouched.
+- **Removal route** keeps refusing Owners (409); demote first, then remove.
+- **Sessions:** the next request from a demoted Owner sees Member permissions (403 on owner-only routes); the roster and Shop context refresh on 403. A leaver's tab handles it like removal: the change feed sees 403, shows a toast, and reloads into another Shop or the invitation gate. The leave action itself switches immediately (reload) after a confirmed response.
+
+### Data and audit
+
+Migration `0017_shop_demotion_leave.sql`: `shop_owner_demotion_receipts (household_id, actor_user_id, operation_id, target_user_id, created_at)` and `shop_member_leave_receipts (household_id, user_id, operation_id, created_at)` with primary keys scoped to the acting user, guard triggers as above, and an `access_audit` rebuild (0016 copy/count/FK guard pattern) adding `member_demoted` and `member_left`. Audit target is `user:<id>`; for leave the actor and target are the same user.
+
+Replay: same key and target returns the no-op result (`changed:false` / `left:false`) after fresh authorization and confirming the end state still holds; same key for another target is 409; replay after the person was re-promoted or re-added is 409, never a second write.
+
+### UI
+
+- Owner roster: other Owner rows get **Make member** (confirmation: "<email> will lose owner access but stay in the Shop."). Your own row and members show nothing new.
+- Current Shop card: **Leave this Shop** opens a confirmation ("You lose access immediately. You can be invited again."). For the last Owner the button is disabled with the visible reason "Make another member an owner before leaving." Follow the promotion/removal dialog focus, busy and retry behavior.
+
+### Verification
+
+Real SQLite-backed D1 batches: authorization matrix; last-owner guard including mutual demotion and demote-versus-leave races; leaver cleanup scoped to this Shop; replay and conflict; atomicity via a blocking audit trigger; removed-role effects on the next request; migration preserving audit rows; change-feed 403 path reused; UI states. Roll out with 0017 before the Worker.
+
 ## Deferred architecture work
 
 - Offline synchronization reconciliation (offline mutation queue, conflict UI, background reconciliation). The online pull/change feed is implemented and deployed; see its section above.
 - Native mobile clients.
-- Export, account deletion, configurable reminder windows, ownership transfer, demotion/resignation, a separate admin role, member removal, and non-owner roster or pending-invitation visibility. Owner promotion is the finalized slice below.
+- Export, account deletion, configurable reminder windows, ownership transfer, a separate in-Shop admin role, a company-only platform admin (undesigned; see open questions in HANDOVER.md), and non-owner roster or pending-invitation visibility. Owner promotion is the finalized slice below.
 
 ## Implemented and deployed: make an existing member an owner
 
