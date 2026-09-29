@@ -277,7 +277,7 @@
             <div id="householdAccessContent" hidden>
               <form class="invite-form" id="householdInviteForm" novalidate>
                 <div class="form-field"><label for="householdInviteEmail">Invite by email</label><input id="householdInviteEmail" name="email" type="email" required maxlength="254" autocomplete="email" placeholder="name@example.com" /></div>
-                <div class="invite-role"><strong>Member</strong><span>Can view and update the Shop inventory.</span></div>
+                <div class="form-field"><label for="householdInviteRole">Role</label><select id="householdInviteRole" name="role"><option value="member" selected>Member: can view and update the Shop inventory</option><option value="owner">Owner: can also manage people, transfer ownership and delete the Shop</option></select></div>
                 <button class="button primary" type="submit">Create invitation</button>
               </form>
               <div class="access-lists">
