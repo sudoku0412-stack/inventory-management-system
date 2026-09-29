@@ -1,5 +1,13 @@
 # Medicine Inventory Tracker — handover
 
+## Profile Shop invitations card (implemented, PR #55 pending review/deploy, 2026-09-29)
+
+- Implements the cloud-only Profile **Shop invitations** card and join dialog from `ARCHITECTURE.md` in `public/shop-invitations-client.js`, bound from `app.js`; no server, migration, or secret change. Deploy is Worker/UI only (the file is in the Worker bootstrap-asset allowlist).
+- Exact decoders for pending `{ invitations, nextCursor, member }` (also used by the unaffiliated gate; `member` is validated then dropped) and acceptance `{ householdId, role, accepted }`. `requestShopApi` now exposes a validated `retryAfter`, and `isShopScoped` ignores query strings so paginated discovery never sends `X-Shop-Id`.
+- Join intents persist in session storage keyed by account before dispatch; ambiguous outcomes keep the same intent (**Retry joining**, or **Check previous join request** after reload). Confirmed joins merge only the refreshed membership list; the active Shop, preference and dirty Profile fields are untouched, and **Switch to <Shop>** reuses the existing switch path (`switchToShopId`).
+- Verification: `npm test` 170/170 (24 new tests with real payload fixtures). A Chrome run against a temporary mock API confirmed placement, dialog focus/Escape, 503 -> Retry joining -> success, selector unchanged, and 320px/200% layout without horizontal scroll.
+- Remaining: authenticated multi-Shop production verification (join, replay, switch), a real screen-reader pass, and the owner-promotion checks listed below. Mock-API browser runs are not production evidence.
+
 ## Current Shop role label overlap fix (2026-09-27)
 
 - The Profile Current Shop card's `Your role: Owner` label used a negative top margin, which could overlap the native Shop select on narrow iPhone widths and at 200% zoom.
