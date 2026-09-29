@@ -251,3 +251,10 @@ tbody tr:hover { background: #f9fbfa; }
 }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+.shop-leave { margin-top: 12px; }
+#demoteMemberModal, #leaveShopModal { overflow-wrap: anywhere; }
+#demoteMemberForm, #leaveShopForm { display: flex; flex-direction: column; max-height: inherit; min-height: 0; }
+#demoteMemberModal .modal-body, #leaveShopModal .modal-body { overflow-y: auto; min-height: 0; }
+#demoteMemberModal .modal-header, #demoteMemberModal .modal-footer, #leaveShopModal .modal-header, #leaveShopModal .modal-footer { flex-shrink: 0; }
+#demoteMemberModal .button, #leaveShopModal .button, .shop-leave .button { min-height: 44px; }

@@ -314,7 +314,7 @@ In the Owner roster, each Member row gets a **Remove** button (no action on Owne
 
 Real SQLite-backed D1 batches: authorization matrix (Owner, Member, foreign Owner, no auth), target matrix (Member, Owner, self, missing, foreign), replay/conflict, atomicity with a blocking audit trigger, promotion-versus-removal race, preference cleanup, removed user's next request 403 across every route, other Shops unaffected, change-feed 403 client handling, migration preserving audit rows. Roll out with 0016 before the Worker.
 
-## Design: owner demotion and leaving a Shop (not implemented)
+## Implemented: owner demotion and leaving a Shop (migration 0017)
 
 ### Smallest slice
 

@@ -26,7 +26,7 @@ function d1(sqlite) {
 }
 function database() {
   const sqlite = new DatabaseSync(':memory:');
-  for (const migration of ['0001_initial.sql', '0003_profile_settings.sql', '0004_household_tenants.sql', '0005_household_invitations.sql', '0006_household_invitation_expiration.sql', '0007_sync_mutation_foundation.sql', '0008_household_display_name_source.sql', '0009_seed_legacy_household_display_names.sql', '0010_access_audit.sql', '0011_user_shop_preferences.sql', '0012_shop_creation.sql', '0013_shop_owner_promotion.sql', '0014_additional_shop_invitation_joins.sql', '0015_batch_change_feed.sql', '0016_shop_member_removal.sql']) sqlite.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), 'utf8'));
+  for (const migration of ['0001_initial.sql', '0003_profile_settings.sql', '0004_household_tenants.sql', '0005_household_invitations.sql', '0006_household_invitation_expiration.sql', '0007_sync_mutation_foundation.sql', '0008_household_display_name_source.sql', '0009_seed_legacy_household_display_names.sql', '0010_access_audit.sql', '0011_user_shop_preferences.sql', '0012_shop_creation.sql', '0013_shop_owner_promotion.sql', '0014_additional_shop_invitation_joins.sql', '0015_batch_change_feed.sql', '0016_shop_member_removal.sql', '0017_shop_demotion_leave.sql']) sqlite.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), 'utf8'));
   return { sqlite, db: d1(sqlite) };
 }
 function preCreationDatabase() {
@@ -539,5 +539,49 @@ test('removal route authenticates, validates, isolates, and immediately revokes 
     assert.equal(after.status, 403);
     assert.equal((await call({ path: '/api/changes?after=0', method: 'GET', subject: 'removal-member', email: 'removal-member@example.test' })).status, 403);
     assert.equal((await call()).status, 200, 'replay is a no-op');
+  } finally { globalThis.fetch = originalFetch; sqlite.close(); }
+});
+
+test('demote and leave routes authenticate, validate, guard the last owner, and revoke access on leave', async () => {
+  const { sqlite, db } = database(), originalFetch = globalThis.fetch;
+  try {
+    const owner = await setupInitialShop(db, { provider: 'cloudflare_access', subject: 'dl-owner', email: 'owner@example.test' }, { INITIAL_OWNER_EMAILS: 'owner@example.test' }, { displayName: 'Owner', shopName: 'Shop A' });
+    const second = uuid(301), plain = uuid(302);
+    for (const [id, subject, role] of [[second, 'dl-second', 'owner'], [plain, 'dl-plain', 'member']]) {
+      sqlite.prepare('INSERT INTO users VALUES (?,?)').run(id, 'before');
+      sqlite.prepare('INSERT INTO identities VALUES (?,?,?,?,?)').run('cloudflare_access', subject, id, `${subject}@example.test`, 'before');
+      sqlite.prepare('INSERT INTO memberships VALUES (?,?,?,?)').run(owner.householdId, id, role, 'before');
+    }
+    const env = { DB: db, ACCESS_TEAM_DOMAIN: 'team.cloudflareaccess.com', ACCESS_AUD: 'medicine-audience' };
+    globalThis.fetch = async () => new Response(JSON.stringify({ keys: [jwk] }));
+    const call = async (path, { method = 'POST', subject = 'dl-owner', headers = {}, body = { operationId: uuid(310) } } = {}) => {
+      const response = await handleRequest(new Request(`https://medicineinventory.craftloop.ca${path}`, {
+        method, headers: { 'Cf-Access-Jwt-Assertion': jwt({ subject, email: `${subject}@example.test` }), Origin: 'https://medicineinventory.craftloop.ca', 'Content-Type': 'application/json', 'X-Shop-Id': owner.householdId, ...headers },
+        ...(method === 'GET' ? {} : { body: JSON.stringify(body) })
+      }), env, { waitUntil() {} });
+      assert.equal(response.headers.get('cache-control'), 'no-store');
+      return response;
+    };
+    const demote = `/api/household/members/${second}/demote`;
+    assert.equal((await call(demote, { method: 'GET' })).status, 404);
+    assert.equal((await call('/api/household/leave', { method: 'GET' })).status, 404);
+    assert.equal((await call(demote, { headers: { Origin: 'https://evil.example' } })).status, 403);
+    assert.equal((await call('/api/household/leave', { headers: { 'Sec-Fetch-Site': 'cross-site' } })).status, 403);
+    assert.equal((await call(demote, { body: { operationId: uuid(310), role: 'member' } })).status, 400);
+    assert.equal((await call('/api/household/leave', { body: {} })).status, 400);
+    assert.equal((await call(demote, { headers: { 'X-Shop-Id': '' } })).status, 400);
+    assert.equal((await call(demote, { subject: 'dl-plain' })).status, 403);
+
+    const demoted = await call(demote);
+    assert.equal(demoted.status, 200);
+    assert.deepEqual(await demoted.json(), { member: { user_id: second, role: 'member' }, changed: true });
+    const lastOwner = await call('/api/household/leave');
+    assert.equal(lastOwner.status, 409);
+    assert.match((await lastOwner.json()).error, /at least one owner/);
+
+    const left = await call('/api/household/leave', { subject: 'dl-plain', body: { operationId: uuid(311) } });
+    assert.equal(left.status, 200);
+    assert.deepEqual(await left.json(), { left: true });
+    assert.equal((await call('/api/changes', { method: 'GET', subject: 'dl-plain' })).status, 403);
   } finally { globalThis.fetch = originalFetch; sqlite.close(); }
 });
