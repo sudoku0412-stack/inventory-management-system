@@ -11,11 +11,11 @@ import { createD1Store, loadVapid } from '../lib/store-d1.js';
 import { adminActivity, adminAudit, adminOverview, adminShopDetail, adminShops, authorizeAdmin, writeAdminAudit } from '../lib/admin.js';
 import { listBatchChanges, parseChangeQuery, pruneBatchChanges } from '../lib/batch-changes.js';
 import { createAdditionalShop, listShops, onboardingStatus, pinnedTenant, resolveTenant, setupInitialShop, shopContext } from '../lib/tenants.js';
-import { acceptHouseholdInvitation, createHouseholdInvitation, listHouseholdAccess, pendingHouseholdInvitations, demoteHouseholdOwner, leaveHousehold, promoteHouseholdMember, removeHouseholdMember, revokeHouseholdInvitation, validateMemberRemoval, validateOwnerDemotion, validateOwnerPromotion, validateShopLeave, throttleInvitationRoute } from '../lib/household-access.js';
+import { acceptHouseholdInvitation, createHouseholdInvitation, listHouseholdAccess, pendingHouseholdInvitations, demoteHouseholdOwner, leaveHousehold, promoteHouseholdMember, removeHouseholdMember, revokeHouseholdInvitation, transferHouseholdOwnership, validateOwnershipTransfer, validateMemberRemoval, validateOwnerDemotion, validateOwnerPromotion, validateShopLeave, throttleInvitationRoute } from '../lib/household-access.js';
 
 const jwksCache = { at: 0, keys: null };
 
-const bootstrapAssetPaths = new Set(['/index.html', '/app.js', '/greeting.js', '/shop-client.js', '/shop-creation-client.js', '/owner-promotion-client.js', '/member-removal-client.js', '/owner-demotion-client.js', '/shop-leave-client.js', '/shop-invitations-client.js', '/change-feed-client.js', '/styles.css', '/sw.js']);
+const bootstrapAssetPaths = new Set(['/index.html', '/app.js', '/greeting.js', '/shop-client.js', '/shop-creation-client.js', '/owner-promotion-client.js', '/member-removal-client.js', '/owner-demotion-client.js', '/ownership-transfer-client.js', '/shop-leave-client.js', '/shop-invitations-client.js', '/change-feed-client.js', '/styles.css', '/sw.js']);
 
 export function assetCacheControl(path) {
   if (path === '/index.html') return 'no-store';
@@ -191,6 +191,16 @@ export async function handleRequest(request, env, ctx) {
         validateOwnerDemotion(demotion[1], body);
         const tenant = await pinnedTenant(env.DB, principal, request.headers.get('x-shop-id'));
         return json(await demoteHouseholdOwner(env.DB, principal, tenant, demotion[1], body, requestId));
+      }
+      const transfer = url.pathname.match(/^\/api\/household\/members\/([^/]+)\/transfer$/);
+      if (transfer) {
+        if (request.method !== 'POST') return json({ error: 'Not found' }, 404);
+        if (await migrationIsActive(env.DB)) return json({ error: 'Inventory is temporarily read-only while a migration is in progress.' }, 503);
+        requirePromotionRequest(request, url);
+        const body = await readJson(request);
+        validateOwnershipTransfer(transfer[1], body);
+        const tenant = await pinnedTenant(env.DB, principal, request.headers.get('x-shop-id'));
+        return json(await transferHouseholdOwnership(env.DB, principal, tenant, transfer[1], body, requestId));
       }
       if (url.pathname === '/api/household/leave') {
         if (request.method !== 'POST') return json({ error: 'Not found' }, 404);
