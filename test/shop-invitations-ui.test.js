@@ -105,7 +105,7 @@ test('decoders accept the deployed payloads and reject every deviation', () => {
   const bad = [
     { invitations: ok.invitations, nextCursor: null }, { ...ok, extra: 1 }, { ...ok, member: 'no' }, { ...ok, nextCursor: 'has space' }, { ...ok, nextCursor: 5 },
     pendingPage(Array.from({ length: 21 }, (_, i) => invitation(`i${i}`))), pendingPage([invitation('same'), invitation('same')]),
-    pendingPage([{ ...invitation('x'), email: 'a@b.c' }]), pendingPage([{ ...invitation('x'), role: 'owner' }]), pendingPage([{ id: 'x', household_name: 'n', role: 'member' }]),
+    pendingPage([{ ...invitation('x'), email: 'a@b.c' }]), pendingPage([{ ...invitation('x'), role: 'admin' }]), pendingPage([{ id: 'x', household_name: 'n', role: 'member' }]),
     pendingPage([invitation('x', 'name', 'not a date')]), pendingPage([invitation('x', '')]), pendingPage([{ ...invitation('x'), id: 5 }]), null, []
   ];
   for (const value of bad) assert.throws(() => decodePendingPage(value), /not recognized/);
@@ -114,7 +114,7 @@ test('decoders accept the deployed payloads and reject every deviation', () => {
   for (const accepted of [true, false]) assert.deepEqual(decodeAcceptance({ householdId: JOINED_ID, role: 'member', accepted }), { householdId: JOINED_ID, role: 'member', accepted });
   for (const value of [
     { householdId: JOINED_ID, role: 'member' }, { householdId: JOINED_ID, role: 'member', accepted: true, extra: 1 }, { householdId: JOINED_ID.toUpperCase(), role: 'member', accepted: true },
-    { householdId: 'not-a-uuid', role: 'member', accepted: true }, { householdId: JOINED_ID, role: 'owner', accepted: true }, { householdId: JOINED_ID, role: 'member', accepted: 'true' }, null
+    { householdId: 'not-a-uuid', role: 'member', accepted: true }, { householdId: JOINED_ID, role: 'admin', accepted: true }, { householdId: JOINED_ID, role: 'member', accepted: 'true' }, null
   ]) assert.throws(() => decodeAcceptance(value), /not recognized/);
 });
 
@@ -338,7 +338,7 @@ test('ambiguous outcomes retain the same intent, focus Retry joining, and receip
 });
 
 test('malformed, wrong-type, or extra-key 200 bodies are unsafe non-success: keep intent and selector, no Switch, no refresh', async () => {
-  const bodies = [{}, { householdId: JOINED_ID, role: 'member' }, { householdId: JOINED_ID, role: 'owner', accepted: true }, { householdId: 'nope', role: 'member', accepted: true }, { householdId: JOINED_ID, role: 'member', accepted: true, x: 1 }, null, 'ok'];
+  const bodies = [{}, { householdId: JOINED_ID, role: 'member' }, { householdId: JOINED_ID, role: 'admin', accepted: true }, { householdId: 'nope', role: 'member', accepted: true }, { householdId: JOINED_ID, role: 'member', accepted: true, x: 1 }, null, 'ok'];
   for (const body of bodies) {
     const storage = memoryStorage();
     const ui = page({ storage, route: happyRoute({ '/api/household/invitations/inv-1/accept': async () => body }) });

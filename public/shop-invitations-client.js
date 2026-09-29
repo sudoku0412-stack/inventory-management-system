@@ -31,17 +31,17 @@ export function decodePendingPage(data) {
   const invitations = data.invitations.map(item => {
     if (!hasExactKeys(item, ['id', 'household_name', 'role', 'expires_at']) || typeof item.id !== 'string' || !opaqueId.test(item.id) || seen.has(item.id)
       || typeof item.household_name !== 'string' || !item.household_name.trim() || item.household_name.length > 200
-      || item.role !== 'member' || typeof item.expires_at !== 'string' || item.expires_at.length > 64 || Number.isNaN(Date.parse(item.expires_at))) throw malformed('Invitation list was not recognized.');
+      || !inviteRoles.has(item.role) || typeof item.expires_at !== 'string' || item.expires_at.length > 64 || Number.isNaN(Date.parse(item.expires_at))) throw malformed('Invitation list was not recognized.');
     seen.add(item.id);
-    return { id: item.id, household_name: item.household_name, role: 'member', expires_at: item.expires_at };
+    return { id: item.id, household_name: item.household_name, role: item.role, expires_at: item.expires_at };
   });
   return { invitations, nextCursor: data.nextCursor };
 }
 
 /** HTTP 200 counts as a confirmed join only for exactly this payload. */
 export function decodeAcceptance(data) {
-  if (!hasExactKeys(data, ['householdId', 'role', 'accepted']) || typeof data.householdId !== 'string' || !canonicalUuid.test(data.householdId) || data.role !== 'member' || typeof data.accepted !== 'boolean') throw malformed('Join response was not recognized.');
-  return { householdId: data.householdId, role: 'member', accepted: data.accepted };
+  if (!hasExactKeys(data, ['householdId', 'role', 'accepted']) || typeof data.householdId !== 'string' || !canonicalUuid.test(data.householdId) || !inviteRoles.has(data.role) || typeof data.accepted !== 'boolean') throw malformed('Join response was not recognized.');
+  return { householdId: data.householdId, role: data.role, accepted: data.accepted };
 }
 
 export function retryDuration(seconds) {
@@ -61,10 +61,14 @@ function readIntents(storage) {
   } catch { return {}; }
 }
 
+const inviteRoles = new Set(['member', 'owner']);
+const roleName = role => role === 'owner' ? 'Owner' : 'Member';
+const roleWithArticle = role => role === 'owner' ? 'an Owner' : 'a Member';
+
 function validIntent(value, accountContextKey) {
   return hasExactKeys(value, ['accountContextKey', 'invitationId', 'householdName', 'role', 'expiresAt', 'currentShopId'])
     && value.accountContextKey === accountContextKey && typeof value.invitationId === 'string' && opaqueId.test(value.invitationId)
-    && typeof value.householdName === 'string' && value.householdName.length > 0 && value.role === 'member'
+    && typeof value.householdName === 'string' && value.householdName.length > 0 && inviteRoles.has(value.role)
     && typeof value.expiresAt === 'string' && typeof value.currentShopId === 'string';
 }
 
@@ -160,7 +164,7 @@ export function bindShopInvitations({
       const name = document.createElement('strong');
       name.textContent = invitation.household_name;
       const role = document.createElement('span');
-      role.textContent = 'Member access';
+      role.textContent = `${roleName(invitation.role)} access`;
       const expiry = document.createElement('time');
       expiry.setAttribute('datetime', invitation.expires_at);
       expiry.textContent = expired && !isPending ? `Expired ${formatExpiry(invitation.expires_at)}` : `Expires ${formatExpiry(invitation.expires_at)}`;
@@ -282,12 +286,12 @@ export function bindShopInvitations({
   function showDialog() {
     const pending = pendingIntent(), flying = inFlight?.intent.invitationId === dialogFor.invitationId;
     title.textContent = `Join ${dialogFor.householdName}?`;
-    access.textContent = 'Access: Member';
-    help.textContent = `Your current Shop, ${currentShop()?.name || 'this Shop'}, will stay open. You can switch after joining.`;
+    access.textContent = `Access: ${roleName(dialogFor.role)}`;
+    help.textContent = `Your current Shop, ${currentShop()?.name || 'this Shop'}, will stay open. You can switch after joining.${dialogFor.role === 'owner' ? ' As an Owner you can invite and remove people, transfer ownership and delete this Shop.' : ''}`;
     submit.textContent = flying ? 'Joining…' : pending ? 'Retry joining' : 'Join Shop';
     submit.disabled = flying || (Boolean(pending) && joinBlocked());
     if (flying) form.setAttribute('aria-busy', 'true'); else form.removeAttribute('aria-busy');
-    dialogMessage(flying ? `Joining ${dialogFor.householdName} as a Member…` : pending ? (joinBlocked() ? joinRateText : 'A previous join request needs confirmation. Retry joining to check the same invitation.') : '');
+    dialogMessage(flying ? `Joining ${dialogFor.householdName} as ${roleWithArticle(dialogFor.role)}…` : pending ? (joinBlocked() ? joinRateText : 'A previous join request needs confirmation. Retry joining to check the same invitation.') : '');
     modal.showModal();
     modal.scrollTop = 0;
     schedule(() => { if (modal.open) cancel.focus({ preventScroll: true }); });
@@ -299,7 +303,7 @@ export function bindShopInvitations({
     if (inFlight && inFlight.intent.invitationId !== invitation.id) return;
     if (pending && pending.invitationId !== invitation.id) return;
     setNotice('');
-    dialogFor = pending || { accountContextKey: key, invitationId: invitation.id, householdName: invitation.household_name, role: 'member', expiresAt: invitation.expires_at, currentShopId: context().activeShopId };
+    dialogFor = pending || { accountContextKey: key, invitationId: invitation.id, householdName: invitation.household_name, role: invitation.role, expiresAt: invitation.expires_at, currentShopId: context().activeShopId };
     render();
     showDialog();
   }
@@ -347,7 +351,7 @@ export function bindShopInvitations({
     submit.disabled = true;
     submit.textContent = 'Joining…';
     form.setAttribute('aria-busy', 'true');
-    dialogMessage(`Joining ${intent.householdName} as a Member…`);
+    dialogMessage(`Joining ${intent.householdName} as ${roleWithArticle(intent.role)}…`);
     render();
     let data;
     try {
@@ -408,7 +412,7 @@ export function bindShopInvitations({
   }
 
   /** Reads memberships only. The response's preference-derived active Shop is never applied to this tab. */
-  async function refreshMemberships(expectedId = null) {
+  async function refreshMemberships(expectedId = null, expectedRole = 'member') {
     const accountKey = key, generation = epoch;
     try {
       const next = await request('/api/shops');
@@ -417,7 +421,7 @@ export function bindShopInvitations({
       const valid = isPlainObject(next) && next.accountContextKey === accountKey && Array.isArray(next.shops)
         && next.shops.every(shop => isPlainObject(shop) && typeof shop.id === 'string' && typeof shop.name === 'string')
         && next.shops.some(shop => shop.id === current.activeShopId)
-        && (!expectedId || next.shops.some(shop => shop.id === expectedId && shop.role === 'member'));
+        && (!expectedId || next.shops.some(shop => shop.id === expectedId && shop.role === expectedRole));
       if (!valid) return false;
       renderContext({ ...current, shops: next.shops });
       return true;
@@ -426,7 +430,7 @@ export function bindShopInvitations({
 
   async function verifyJoin() {
     const accountKey = key, generation = epoch, target = joined;
-    const [shopsOk, invitationsOk] = await Promise.all([refreshMemberships(target.id), loadFirst()]);
+    const [shopsOk, invitationsOk] = await Promise.all([refreshMemberships(target.id, target.role), loadFirst()]);
     if (shopsOk === null || !isCurrent(accountKey, generation) || joined !== target) return;
     if (shopsOk) {
       target.verified = true;
@@ -446,8 +450,8 @@ export function bindShopInvitations({
     removeJoinIntent(storage, accountKey);
     const currentName = currentShop()?.name || 'this Shop';
     finishBusy();
-    joined = { id: accepted.householdId, name: intent.householdName, verified: false };
-    setNotice(`${accepted.accepted ? 'Joined' : 'You already joined'} ${intent.householdName} as a Member. Your current Shop is still ${currentName}.`);
+    joined = { id: accepted.householdId, name: intent.householdName, role: accepted.role, verified: false };
+    setNotice(`${accepted.accepted ? 'Joined' : 'You already joined'} ${intent.householdName} as ${roleWithArticle(accepted.role)}. Your current Shop is still ${currentName}.`);
     closeDialog(false);
     render();
     await verifyJoin();

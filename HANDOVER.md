@@ -1,5 +1,10 @@
 # Medicine Inventory Tracker — handover
 
+## Email chunk 3: Owner-role invitations (2026-09-29)
+- Migration `0026_owner_role_invitations.sql` (rebuilds `household_invitations` with role IN member/owner; adds `role` to acceptance receipts). Apply 0026 BEFORE deploying.
+- `POST /api/household/invitations` accepts optional `role` (`member` default, `owner`; anything else 400). Acceptance grants exactly the persisted role, enforces the 5-owned-Shops cap for Owner invites, and replays report the receipt role. Pending list and join response now carry `role`; client decoders accept only member/owner.
+- UI: Role select on the invite form, Owner-aware pending list, join dialog ("Access: Owner" plus authority warning), email wording. Email chunks 1-3 are all built; 1 and 2 are live (Worker `ac39e43c`).
+
 ## Email chunk 2: deletion and transfer notices (2026-09-29)
 - Migration `0025_notification_outbox_kinds.sql` (rebuilds the outbox: new kinds, `deadline` column). Apply 0025 BEFORE deploying, or deletion/transfer fail on the CHECK.
 - Deletion queues one notice per other member (deadline = purge date); cancelled at send time if the Shop was restored or purged. Transfer queues one notice to the new Owner. No Shop name in either email.
