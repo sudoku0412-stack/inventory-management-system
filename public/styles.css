@@ -144,6 +144,11 @@ tbody tr:hover { background: #f9fbfa; }
 #promoteMemberModal .modal-body { overflow-y: auto; min-height: 0; }
 #promoteMemberModal .modal-header, #promoteMemberModal .modal-footer { flex-shrink: 0; }
 #promoteMemberModal .button, #householdAccessStatus .button { min-height: 44px; }
+#removeMemberModal { overflow-wrap: anywhere; }
+#removeMemberForm { display: flex; flex-direction: column; max-height: inherit; min-height: 0; }
+#removeMemberModal .modal-body { overflow-y: auto; min-height: 0; }
+#removeMemberModal .modal-header, #removeMemberModal .modal-footer { flex-shrink: 0; }
+#removeMemberModal .button, #householdMembers .button { min-height: 44px; }
 .profile-card { padding: 23px; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; box-shadow: 0 4px 16px rgba(18,62,61,.03); }
 .shop-selector-card { max-width: 900px; margin: 0 0 18px; }.shop-selector-card .form-field { max-width: 560px; }.shop-selector-card select { min-height: 44px; }.shop-switch-status { min-height: 1.5em; margin: 10px 0 0; color: var(--ink-soft); }.shop-role { margin: 8px 0 16px; color: var(--ink-soft); font-size: .88rem; font-weight: 600; }
 .shop-invitations-card { max-width: 900px; margin: 0 0 18px; overflow-wrap: anywhere; }

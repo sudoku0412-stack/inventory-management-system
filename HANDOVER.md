@@ -278,3 +278,9 @@ Do not launch Cursor cloud agents for this project. Read this file at the start 
 ## Member removal designed; change feed follow-ups (2026-09-29)
 - `ARCHITECTURE.md` now has "Design: remove a member (not implemented)": Owner removes a Member only, migration 0016 (receipt table + `member_removed` audit), route `POST /api/household/members/:userId/remove`, same-batch cleanup of the target's push subscriptions and preference, client handling of 403 from the change feed. Awaiting review before implementation.
 - Added a change-feed test for a medicine deleted from another device; ARCHITECTURE change-feed section and deferred list no longer say "not implemented".
+
+## Member removal implemented (branch cursor/member-removal)
+- Migration `0016_shop_member_removal.sql` (receipt table with eligibility trigger; `access_audit` rebuilt with `member_removed`), `removeHouseholdMember` in `lib/household-access.js`, route `POST /api/household/members/:userId/remove`, `public/member-removal-client.js`, Remove button + dialog, and change-feed `onAccessLost` (403 stops polling, toast, reload).
+- Tests: `test/member-removal.test.js` (13), `test/member-removal-ui.test.js` (6), route test in `worker-invitations.test.js`, 403 test in `change-feed-client.test.js`. Full suite passes.
+- Verified against real Worker code with curl (member 403 after removal, replay no-op, roster updated). NOT verified in a real browser (no browser tool in that session): check the Remove button layout on a phone-width Profile and the dialog flow.
+- Deploy order: apply 0016 to remote D1, then deploy Worker/UI. New module is in both asset allowlists.

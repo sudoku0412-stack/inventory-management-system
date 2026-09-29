@@ -26,7 +26,7 @@ function d1(sqlite) {
 }
 function database() {
   const sqlite = new DatabaseSync(':memory:');
-  for (const migration of ['0001_initial.sql', '0003_profile_settings.sql', '0004_household_tenants.sql', '0005_household_invitations.sql', '0006_household_invitation_expiration.sql', '0007_sync_mutation_foundation.sql', '0008_household_display_name_source.sql', '0009_seed_legacy_household_display_names.sql', '0010_access_audit.sql', '0011_user_shop_preferences.sql', '0012_shop_creation.sql', '0013_shop_owner_promotion.sql', '0014_additional_shop_invitation_joins.sql', '0015_batch_change_feed.sql']) sqlite.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), 'utf8'));
+  for (const migration of ['0001_initial.sql', '0003_profile_settings.sql', '0004_household_tenants.sql', '0005_household_invitations.sql', '0006_household_invitation_expiration.sql', '0007_sync_mutation_foundation.sql', '0008_household_display_name_source.sql', '0009_seed_legacy_household_display_names.sql', '0010_access_audit.sql', '0011_user_shop_preferences.sql', '0012_shop_creation.sql', '0013_shop_owner_promotion.sql', '0014_additional_shop_invitation_joins.sql', '0015_batch_change_feed.sql', '0016_shop_member_removal.sql']) sqlite.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), 'utf8'));
   return { sqlite, db: d1(sqlite) };
 }
 function preCreationDatabase() {
@@ -496,5 +496,48 @@ test('GET /api/changes fails closed with 503 when the feed schema is missing', a
   try {
     const response = await handleRequest(shopRequest('/api/changes', jwt({ subject: 'no-feed', email: 'nofeed@example.test' }), { shopId: owner.householdId }), env, { waitUntil() {} });
     assert.equal(response.status, 503);
+  } finally { globalThis.fetch = originalFetch; sqlite.close(); }
+});
+
+test('removal route authenticates, validates, isolates, and immediately revokes the removed member', async () => {
+  const { sqlite, db } = database(), originalFetch = globalThis.fetch;
+  try {
+    const owner = await setupInitialShop(db, { provider: 'cloudflare_access', subject: 'removal-owner', email: 'owner@example.test' }, { INITIAL_OWNER_EMAILS: 'owner@example.test' }, { displayName: 'Owner', shopName: 'Shop A' });
+    const member = uuid(201), other = uuid(202);
+    for (const [id, subject, shop, role] of [[member, 'removal-member', owner.householdId, 'member'], [other, 'removal-other', uuid(203), 'owner']]) {
+      if (shop === uuid(203)) sqlite.prepare('INSERT INTO households VALUES (?,?,?)').run(shop, 'Shop B', 'before');
+      sqlite.prepare('INSERT INTO users VALUES (?,?)').run(id, 'before');
+      sqlite.prepare('INSERT INTO identities VALUES (?,?,?,?,?)').run('cloudflare_access', subject, id, `${subject}@example.test`, 'before');
+      sqlite.prepare('INSERT INTO memberships VALUES (?,?,?,?)').run(shop, id, role, 'before');
+    }
+    const env = { DB: db, ACCESS_TEAM_DOMAIN: 'team.cloudflareaccess.com', ACCESS_AUD: 'medicine-audience' };
+    globalThis.fetch = async () => new Response(JSON.stringify({ keys: [jwk] }));
+    const call = async ({ path = `/api/household/members/${member}/remove`, method = 'POST', subject = 'removal-owner', email = 'owner@example.test', headers = {}, body = { operationId: uuid(210) } } = {}) => {
+      const response = await handleRequest(new Request(`https://medicineinventory.craftloop.ca${path}`, {
+        method, headers: { 'Cf-Access-Jwt-Assertion': jwt({ subject, email }), Origin: 'https://medicineinventory.craftloop.ca', 'Content-Type': 'application/json', 'X-Shop-Id': owner.householdId, ...headers },
+        ...(method === 'GET' ? {} : { body: JSON.stringify(body) })
+      }), env, { waitUntil() {} });
+      assert.equal(response.headers.get('cache-control'), 'no-store');
+      return response;
+    };
+    assert.equal((await call({ method: 'GET' })).status, 404);
+    assert.equal((await call({ headers: { 'Cf-Access-Jwt-Assertion': '' } })).status, 401);
+    assert.equal((await call({ headers: { Origin: 'https://evil.example' } })).status, 403);
+    assert.equal((await call({ headers: { 'Sec-Fetch-Site': 'cross-site' } })).status, 403);
+    assert.equal((await call({ body: { operationId: uuid(210), role: 'member' } })).status, 400);
+    assert.equal((await call({ headers: { 'X-Shop-Id': '' } })).status, 400);
+    assert.equal((await call({ subject: 'removal-member', email: 'removal-member@example.test' })).status, 403);
+    assert.equal((await call({ subject: 'removal-other', email: 'removal-other@example.test' })).status, 403);
+    assert.equal(sqlite.prepare('SELECT count(*) AS n FROM memberships WHERE household_id=?').get(owner.householdId).n, 2);
+
+    const before = await call({ path: '/api/changes', method: 'GET', subject: 'removal-member', email: 'removal-member@example.test' });
+    assert.equal(before.status, 200);
+    const removed = await call();
+    assert.equal(removed.status, 200);
+    assert.deepEqual(await removed.json(), { removed: true });
+    const after = await call({ path: '/api/changes', method: 'GET', subject: 'removal-member', email: 'removal-member@example.test' });
+    assert.equal(after.status, 403);
+    assert.equal((await call({ path: '/api/changes?after=0', method: 'GET', subject: 'removal-member', email: 'removal-member@example.test' })).status, 403);
+    assert.equal((await call()).status, 200, 'replay is a no-op');
   } finally { globalThis.fetch = originalFetch; sqlite.close(); }
 });

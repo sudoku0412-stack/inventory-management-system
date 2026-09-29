@@ -25,7 +25,7 @@ export function decodeCursor(data) {
  * The cursor must be read BEFORE the list it accompanies (see readCursor/adopt).
  */
 export function bindChangeFeed({
-  getContext, request, applyChanges, reloadAll, isEligible,
+  getContext, request, applyChanges, reloadAll, isEligible, onAccessLost = () => {},
   now = () => Date.now(), random = Math.random, setTimer = (fn, ms) => setTimeout(fn, ms), clearTimer = handle => clearTimeout(handle),
   intervalMs = 60_000, maxPagesPerTick = 5, safetyReloadMs = 10 * 60_000
 }) {
@@ -71,6 +71,7 @@ export function bindChangeFeed({
       if (generation !== epoch) return;
       const status = error?.status;
       if (status === 404 || status === 405) disabled = true;
+      else if (status === 403) { disabled = true; onAccessLost(); }
       else if (status === 429) blockedUntil = now() + (Number.isInteger(error.retryAfter) ? error.retryAfter : 60) * 1000;
       failures = Math.min(failures + 1, 6);
     } finally {

@@ -10,14 +10,14 @@ const page = (changes = [], nextAfter = 0, more = false, reset = false) => ({ ch
 const flush = async () => { for (let i = 0; i < 6; i += 1) await new Promise(resolve => setImmediate(resolve)); };
 const fail = (status, retryAfter) => Object.assign(Error('x'), { status, retryAfter });
 
-function harness({ handler, eligible = true, context } = {}) {
+function harness({ handler, eligible = true, context, onAccessLost } = {}) {
   const state = { time: 1_000_000, eligible, applied: [], reloads: 0, requests: [], timers: [], context: context || { accountContextKey: 'acct', activeShopId: 'shop-a' } };
   const feed = bindChangeFeed({
     getContext: () => state.context,
     request: async path => { state.requests.push(path); return handler(path, state); },
     applyChanges: changes => state.applied.push(...changes),
     reloadAll: async () => { state.reloads += 1; },
-    isEligible: () => state.eligible,
+    isEligible: () => state.eligible, onAccessLost: () => { state.lost = (state.lost || 0) + 1; onAccessLost?.(); },
     now: () => state.time, random: () => 0.5,
     setTimer: (fn, ms) => { const timer = { fn, ms, cleared: false }; state.timers.push(timer); return timer; },
     clearTimer: timer => { timer.cleared = true; }
@@ -197,4 +197,15 @@ test('app wiring: eligibility, cursor-before-list, apply semantics, and no unsaf
   assert.match(app, /openBatchState\(c\.id\)/);
   assert.match(app, /addEventListener\('visibilitychange'/);
   assert.doesNotMatch(client, /innerHTML|setInterval|X-Shop-Id|localStorage/);
+});
+
+test('403 (access removed) stops the feed permanently and reports access loss exactly once', async () => {
+  const h = harness({ handler: async () => { throw fail(403); } });
+  h.feed.adopt(3); h.feed.start(); await flush();
+  assert.equal(h.lost, 1);
+  assert.equal(h.feed.disabled, true);
+  assert.equal(h.live().length, 0);
+  h.feed.wake(); await flush();
+  assert.equal(h.requests.length, 1);
+  assert.equal(h.lost, 1);
 });

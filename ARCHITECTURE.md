@@ -283,7 +283,7 @@ Tests: same-transaction append with rollback (no change row on aborted mutation/
 
 WebSocket/SSE or Durable Object push (revisit if polling cost or latency matters), settings/notification/roster feeds, offline queue and reconciliation, and per-field merge.
 
-## Design: remove a member (not implemented)
+## Implemented: remove a member (migration 0016)
 
 ### Smallest slice
 
@@ -295,7 +295,7 @@ An Owner can **Remove** another accepted **Member** of the displayed Shop. Nothi
 
 ### Atomicity, replay and audit
 
-One D1 batch commits the guarded membership delete, one receipt, and one `member_removed` audit event (`target_identifier = 'user:' + <id>`), or none. Migration `0016_shop_member_removal.sql` adds `shop_member_removal_receipts (household_id, actor_user_id, operation_id, target_user_id, created_at, PRIMARY KEY (household_id, actor_user_id, operation_id))` and rebuilds `access_audit` with the 0012/0013 copy/count/FK guard pattern to widen its CHECK with `member_removed`. Replay of the same operation and target returns `removed:false` with no write after fresh owner authorization; the same key for another target is 409. Removing someone already gone with a new operation is a 200 no-op without receipt or audit.
+One D1 batch commits the guarded membership delete, one receipt, and one `member_removed` audit event (`target_identifier = 'user:' + <id>`), or none. Migration `0016_shop_member_removal.sql` adds `shop_member_removal_receipts (household_id, actor_user_id, operation_id, target_user_id, created_at, PRIMARY KEY (household_id, actor_user_id, operation_id))` and rebuilds `access_audit` with the 0012/0013 copy/count/FK guard pattern to widen its CHECK with `member_removed`. Replay of the same operation and target returns `removed:false` with no write after fresh owner authorization; the same key for another target is 409. Removing someone already gone with a new operation is 404 (same as any missing target) with no receipt or audit; the UI treats 404 as "no longer a member" and refreshes.
 
 ### Effects on the removed person
 
