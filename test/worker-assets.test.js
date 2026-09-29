@@ -28,3 +28,22 @@ test('invite gate remains hidden when the app reveals the shell', async () => {
   const styles = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
   assert.match(styles, /\.invite-gate\[hidden\]\s*\{\s*display:\s*none\s*;\s*\}/);
 });
+
+test('every browser module imported by the shell is served by the Worker and the local server, with bootstrap cache policy', async () => {
+  const { readdirSync } = await import('node:fs');
+  const { publicAssetPaths } = await import('../lib/shared.js');
+  const files = readdirSync(new URL('../public/', import.meta.url)).filter(name => name.endsWith('.js'));
+  const imported = new Set();
+  for (const file of files) {
+    const source = await readFile(new URL(`../public/${file}`, import.meta.url), 'utf8');
+    for (const match of source.matchAll(/(?:from|import)\s*['"]\.\/([\w.-]+\.js)['"]/g)) imported.add(match[1]);
+  }
+  assert.ok(imported.size >= 5);
+  for (const name of imported) {
+    const path = `/${name}`;
+    assert.ok(publicAssetPaths.has(path), `${path} must be in publicAssetPaths or the Worker returns 404 and the app never starts`);
+    assert.equal(assetCacheControl(path), 'no-cache, must-revalidate', `${path} needs bootstrap cache policy`);
+    const response = await handleRequest(new Request(`https://example.test${path}`), { ASSETS: { fetch: async () => new Response('module') } }, {});
+    assert.equal(response.status, 200, `${path} must be served`);
+  }
+});
