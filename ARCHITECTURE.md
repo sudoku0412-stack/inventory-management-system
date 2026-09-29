@@ -351,11 +351,53 @@ Replay: same key and target returns the no-op result (`changed:false` / `left:fa
 
 Real SQLite-backed D1 batches: authorization matrix; last-owner guard including mutual demotion and demote-versus-leave races; leaver cleanup scoped to this Shop; replay and conflict; atomicity via a blocking audit trigger; removed-role effects on the next request; migration preserving audit rows; change-feed 403 path reused; UI states. Roll out with 0017 before the Worker.
 
+## Design: company-only platform admin console, read-only v1 (not implemented)
+
+### Scope and principles
+
+A separate console for company staff at `/admin`. Version 1 is **read-only and metadata-only**: staff can see Shops, members and roles, counts, health and audit history. They cannot see medicine names, strengths, notes, photos, push endpoints or any other customer inventory content, and they cannot change anything. Write actions are later slices, each with its own design, and will call the existing store/access functions (same validation and audit), never raw SQL. Every admin request is audited.
+
+### Authentication and authorization
+
+- A **second Cloudflare Access application** protects `/admin*` with its own policy allowing only company emails (initially `kaushik.majumder@craftloop.ca`). It is a separate application with its own AUD, so a customer-app token can never satisfy admin routes and an admin token can never satisfy customer routes; the existing customer check (`aud` must equal `ACCESS_AUD`) already rejects it.
+- The Worker adds config `ADMIN_ACCESS_AUD` (var or secret) and `ADMIN_EMAILS` (secret, comma-separated). Admin routes verify the Access JWT against `ADMIN_ACCESS_AUD` using the same team domain and signature verification, then require the token's `email` (lower-cased) to be in `ADMIN_EMAILS`. Defence in depth: policy and Worker allowlist must both agree. Missing config, or a failing JWKS fetch, fails closed (503, never open).
+- Admin dispatch runs **before** the customer `ensureAccess`/`resolveTenant` and before static assets. Admin files live outside `publicAssetPaths` and are served through `env.ASSETS` only after admin authorization (`run_worker_first = true` guarantees the Worker sees every request). Customer identities, memberships and Shop headers are irrelevant to admin routes and are never consulted.
+- Cookie caveat to verify during setup: two Access applications on one hostname distinguished by path. If sign-in loops or the wrong token reaches the Worker, fall back to a dedicated hostname (for example a second custom domain routed to the same Worker); the Worker logic is unchanged because it verifies AUD and email, not the path.
+
+### Read API (all `GET`, `HEAD` allowed, everything else 405)
+
+Responses are `no-store`, JSON, no CORS, with explicit column allow-lists (never `SELECT *`).
+
+- `GET /admin/api/overview`: totals of Shops, users, memberships, pending invitations, medicines (a count only), change-feed rows, audit events in the last 24 hours, applied migration count, and the migration-run state.
+- `GET /admin/api/shops?cursor=`: keyset-paginated `{ id, name, created_at, owner_count, member_count, medicine_count, last_audit_at }`.
+- `GET /admin/api/shops/:id`: Shop metadata, members (`user_id`, email, role, joined date), pending invitation count and expiry dates, and that Shop's last 50 audit events. Not medicines, not photos.
+- `GET /admin/api/audit?cursor=&shop=`: customer `access_audit` events across Shops, paginated.
+- `GET /admin/api/admin-audit?cursor=`: the admin audit log itself.
+
+### Admin audit
+
+Migration `0018_admin_audit.sql` adds `admin_audit (id, admin_email, action, target, request_id, created_at)` with an index on `created_at`. Each authorized admin request inserts one row (`action` such as `overview.view`, `shops.list`, `shop.view`, `audit.view`; `target` a Shop id where relevant) **before** data is returned; if the insert fails the request fails (fail closed). Rejected attempts (wrong AUD or email not allowed) are not written to D1, to avoid unauthenticated write amplification; they appear in Worker logs. There is no route that edits or deletes `admin_audit`.
+
+### UI
+
+A small static page `public/admin/index.html` with `admin.js` (no third-party scripts, no inline script) served after admin auth with a strict CSP (`default-src 'self'`). Tabs: Overview, Shops (list to detail), Audit, Admin log. Clear "Read-only" banner and the signed-in admin email. Accessible tables and keyboard navigation.
+
+### Verification
+
+JWT matrix (customer AUD rejected on admin routes and admin AUD rejected on customer routes, listed vs unlisted email, expired, wrong issuer, missing config 503); admin assets not served to unauthenticated or customer tokens; non-GET methods 405; leak tests asserting no fixture medicine name, note, photo path or push endpoint ever appears in any admin response; exactly one `admin_audit` row per authorized request and fail-closed when the insert is blocked; pagination and isolation; migration test.
+
+### Rollout
+
+1. Apply `0018` to remote D1.
+2. Create the Access application for `/admin*` (owner action, see HANDOVER.md) and read its AUD.
+3. Set `ADMIN_ACCESS_AUD` and `ADMIN_EMAILS` with `wrangler secret put`.
+4. Deploy the Worker; verify signed in as the admin email, and that a customer-only login gets 403 or the Access denial.
+
 ## Deferred architecture work
 
 - Offline synchronization reconciliation (offline mutation queue, conflict UI, background reconciliation). The online pull/change feed is implemented and deployed; see its section above.
 - Native mobile clients.
-- Export, account deletion, configurable reminder windows, ownership transfer, a separate in-Shop admin role, a company-only platform admin (undesigned; see open questions in HANDOVER.md), and non-owner roster or pending-invitation visibility. Owner promotion is the finalized slice below.
+- Export, account deletion, configurable reminder windows, ownership transfer, a separate in-Shop admin role, a company-only platform admin beyond the read-only console designed below, and non-owner roster or pending-invitation visibility. Owner promotion is the finalized slice below.
 
 ## Implemented and deployed: make an existing member an owner
 

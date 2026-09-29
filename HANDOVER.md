@@ -303,3 +303,7 @@ Do not launch Cursor cloud agents for this project. Read this file at the start 
 ## Demotion and leave released
 - PR #64 merged as `1d2576c`. Remote migration `0017_shop_demotion_leave.sql` applied (both receipt tables and guard triggers present, 6 audit rows preserved, `member_left` allowed), then Worker deployed: version `f1887e97-b031-46be-95ef-991bbadde181`.
 - Signed-in check pending: Make member on another Owner, Leave this Shop as a Member, and the disabled Leave with a reason for the last Owner. Platform-admin decisions still open.
+
+## Platform admin: design and setup (2026-09-29)
+- Decisions (user): use the recommended defaults; admin email `kaushik.majumder@craftloop.ca`. Design is in `ARCHITECTURE.md` ("company-only platform admin console, read-only v1"): separate Access app for `/admin*`, Worker checks AUD plus email allowlist, metadata only, every request audited, no writes.
+- Tooling finding: the agent cannot create the Access application. Wrangler's OAuth token only has account/zone read plus Workers/D1-type scopes, and the Cloudflare MCP servers (bindings, builds, docs, observability) do not manage Zero Trust Access. Owner steps: Zero Trust, Access, Applications, Add, Self-hosted; domain `medicineinventory.craftloop.ca`, path `admin`; policy Allow, email equals `kaushik.majumder@craftloop.ca`; copy the Application Audience (AUD) tag.
