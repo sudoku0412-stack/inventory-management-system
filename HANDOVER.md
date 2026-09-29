@@ -270,3 +270,7 @@ Do not launch Cursor cloud agents for this project. Read this file at the start 
 - Deploy: apply 0015 to remote D1 BEFORE deploying the Worker. Not yet applied or deployed unless a later entry says so.
 - Lessons: D1 `meta.changes` counts trigger rows (no triggers); two asset allowlists must both list new modules.
 - Browser-verified against the real Worker code (local harness, real asset allowlist): a medicine added from another client appeared on Inventory within about a minute with the "Inventory updated." toast; an update made while the medicine dialog was open refreshed the list, left the dialog open, and showed the "updated elsewhere" notice.
+
+## Change feed released
+- PR #58 merged as `736928a`. Remote migration `0015_batch_change_feed.sql` applied (verified: `batch_changes` empty, floor 0, throttle table accepts route `changes`), then Worker deployed: version `eaf1e219-54bc-40a5-a4ca-81cf34efc171`.
+- Unauthenticated curl only shows the Access 302, so it does not prove assets are served (allowlist covered by `test/worker-assets.test.js`). Authenticated check pending: open the app signed in, confirm it loads, and that a change made on another device appears on Inventory within about a minute.
