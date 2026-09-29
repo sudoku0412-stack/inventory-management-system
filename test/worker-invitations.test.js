@@ -26,7 +26,7 @@ function d1(sqlite) {
 }
 function database() {
   const sqlite = new DatabaseSync(':memory:');
-  for (const migration of ['0001_initial.sql', '0003_profile_settings.sql', '0004_household_tenants.sql', '0005_household_invitations.sql', '0006_household_invitation_expiration.sql', '0007_sync_mutation_foundation.sql', '0008_household_display_name_source.sql', '0009_seed_legacy_household_display_names.sql', '0010_access_audit.sql', '0011_user_shop_preferences.sql', '0012_shop_creation.sql', '0013_shop_owner_promotion.sql', '0014_additional_shop_invitation_joins.sql']) sqlite.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), 'utf8'));
+  for (const migration of ['0001_initial.sql', '0003_profile_settings.sql', '0004_household_tenants.sql', '0005_household_invitations.sql', '0006_household_invitation_expiration.sql', '0007_sync_mutation_foundation.sql', '0008_household_display_name_source.sql', '0009_seed_legacy_household_display_names.sql', '0010_access_audit.sql', '0011_user_shop_preferences.sql', '0012_shop_creation.sql', '0013_shop_owner_promotion.sql', '0014_additional_shop_invitation_joins.sql', '0015_batch_change_feed.sql']) sqlite.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), 'utf8'));
   return { sqlite, db: d1(sqlite) };
 }
 function preCreationDatabase() {
@@ -432,5 +432,69 @@ test('POST creation leaves every preference byte unchanged on validation, quota,
     assert.equal((await post({ ...payload, operationId: '123e4567-e89b-42d3-a456-426614174092' })).status, 500);
     assert.equal(snapshot(), stateBefore);
     assert.deepEqual(preferences(), before);
+  } finally { globalThis.fetch = originalFetch; sqlite.close(); }
+});
+
+test('GET /api/changes is Shop-scoped, strict, throttled, and reflects real mutations from the Worker', async () => {
+  const { sqlite, db } = database();
+  const owner = await setupInitialShop(db, { provider: 'cloudflare_access', subject: 'feed-owner', email: 'feed@example.test' }, { INITIAL_OWNER_EMAILS: 'feed@example.test' }, { displayName: 'Feed', shopName: 'Feed Shop' });
+  sqlite.exec("INSERT INTO households VALUES ('other','Other Shop','now'); INSERT INTO users VALUES ('other-user','now'); INSERT INTO memberships VALUES ('other','other-user','owner','now');");
+  const env = { DB: db, ACCESS_TEAM_DOMAIN: 'team.cloudflareaccess.com', ACCESS_AUD: 'medicine-audience', KV: { get: async () => JSON.stringify({ publicKey: 'test' }), put: async () => {} }, PHOTOS: { put: async () => {}, delete: async () => {} } };
+  const originalFetch = globalThis.fetch; globalThis.fetch = async () => new Response(JSON.stringify({ keys: [jwk] }), { status: 200 });
+  const call = (path, options = {}) => handleRequest(shopRequest(path, jwt({ subject: 'feed-owner', email: 'feed@example.test' }), { shopId: owner.householdId, ...options }), env, { waitUntil() {} });
+  try {
+    const start = await call('/api/changes');
+    assert.equal(start.status, 200);
+    assert.equal(start.headers.get('cache-control'), 'no-store');
+    assert.deepEqual(await start.json(), { changes: [], nextAfter: 0, more: false, reset: false });
+
+    const created = await call('/api/batches', { method: 'POST', body: { name: 'Feed medicine', form: 'Tablets', quantity: 2, unit: 'tablets', low_stock_threshold: 1, operationId: uuid(101), baseRevision: 0 } });
+    assert.equal(created.status, 201);
+    const batch = await created.json();
+    const page = await (await call('/api/changes?after=0')).json();
+    assert.deepEqual(Object.keys(page).sort(), ['changes', 'more', 'nextAfter', 'reset']);
+    assert.equal(page.changes.length, 1);
+    assert.deepEqual(Object.keys(page.changes[0]).sort(), ['batch', 'id', 'kind', 'revision', 'seq']);
+    assert.equal(page.changes[0].id, batch.id);
+    assert.equal(page.changes[0].kind, 'upsert');
+    assert.equal(page.changes[0].batch.name, 'Feed medicine');
+    assert.equal('change_seq' in page.changes[0].batch, false);
+    assert.equal(page.nextAfter, page.changes[0].seq);
+
+    const consumed = await call(`/api/batches/${batch.id}/consume`, { method: 'POST', body: { amount: 2, operationId: uuid(102), baseRevision: 1 } });
+    assert.equal(consumed.status, 200);
+    const after = await (await call(`/api/changes?after=${page.nextAfter}`)).json();
+    assert.equal(after.changes.length, 1);
+    assert.equal(after.changes[0].kind, 'remove');
+    assert.equal(after.changes[0].batch, null);
+
+    // A member of another Shop sees nothing of this Shop, and a non-member header is refused.
+    sqlite.prepare("INSERT INTO identities VALUES ('cloudflare_access','other-subject','other-user','other@example.test','now')").run();
+    const otherView = await handleRequest(shopRequest('/api/changes?after=0', jwt({ subject: 'other-subject', email: 'other@example.test' }), { shopId: 'other' }), env, { waitUntil() {} });
+    assert.deepEqual((await otherView.json()).changes, []);
+    const foreign = await handleRequest(shopRequest('/api/changes?after=0', jwt({ subject: 'other-subject', email: 'other@example.test' }), { shopId: owner.householdId }), env, { waitUntil() {} });
+    assert.equal(foreign.status, 403);
+
+    for (const bad of ['after=-1', 'after=abc', 'after=1.5', 'after=', `after=${'9'.repeat(16)}`, 'after=0&limit=0', 'after=0&limit=201', 'after=0&limit=x']) assert.equal((await call(`/api/changes?${bad}`)).status, 400, bad);
+
+    // Rolling-minute limiter: requests 60 and 61 within a minute.
+    sqlite.exec('DELETE FROM household_invitation_route_throttle_events');
+    let limited;
+    for (let i = 0; i < 70 && !limited; i += 1) { const response = await call('/api/changes?after=0'); if (response.status === 429) limited = response; }
+    assert.ok(limited, 'limiter must trip');
+    assert.ok(Number(limited.headers.get('retry-after')) >= 1);
+    assert.equal(sqlite.prepare("SELECT count(*) AS n FROM household_invitation_route_throttle_events WHERE route='changes'").get().n, 60);
+  } finally { globalThis.fetch = originalFetch; sqlite.close(); }
+});
+
+test('GET /api/changes fails closed with 503 when the feed schema is missing', async () => {
+  const { sqlite, db } = database();
+  const owner = await setupInitialShop(db, { provider: 'cloudflare_access', subject: 'no-feed', email: 'nofeed@example.test' }, { INITIAL_OWNER_EMAILS: 'nofeed@example.test' }, { displayName: 'No', shopName: 'No Feed' });
+  sqlite.exec('DROP TABLE batch_changes');
+  const env = { DB: db, ACCESS_TEAM_DOMAIN: 'team.cloudflareaccess.com', ACCESS_AUD: 'medicine-audience', KV: { get: async () => null, put: async () => {} }, PHOTOS: {} };
+  const originalFetch = globalThis.fetch; globalThis.fetch = async () => new Response(JSON.stringify({ keys: [jwk] }), { status: 200 });
+  try {
+    const response = await handleRequest(shopRequest('/api/changes', jwt({ subject: 'no-feed', email: 'nofeed@example.test' }), { shopId: owner.householdId }), env, { waitUntil() {} });
+    assert.equal(response.status, 503);
   } finally { globalThis.fetch = originalFetch; sqlite.close(); }
 });
