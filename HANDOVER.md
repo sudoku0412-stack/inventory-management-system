@@ -1,5 +1,9 @@
 # Medicine Inventory Tracker — handover
 
+## Admin Email tab (2026-09-29)
+- Admin console tab **Email** lists unsent outbox rows (queued, failed, uncertain) via `GET /admin/api/email-outbox`; Overview shows "Emails needing attention" and "Emails queued". No migration. Resend domain `craftloop.ca` is verified; DMARC is Cloudflare's single record.
+- Cleanup: a stray `build.log` was committed in #91; removed and git-ignored here.
+
 ## Email chunk 3: Owner-role invitations (2026-09-29)
 - Migration `0026_owner_role_invitations.sql` (rebuilds `household_invitations` with role IN member/owner; adds `role` to acceptance receipts). Apply 0026 BEFORE deploying.
 - `POST /api/household/invitations` accepts optional `role` (`member` default, `owner`; anything else 400). Acceptance grants exactly the persisted role, enforces the 5-owned-Shops cap for Owner invites, and replays report the receipt role. Pending list and join response now carry `role`; client decoders accept only member/owner.
