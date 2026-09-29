@@ -1,5 +1,10 @@
 # Medicine Inventory Tracker — handover
 
+## Email chunk 1 built, not committed or deployed (2026-09-29)
+- Migration `0024_notification_outbox.sql`, `lib/email-outbox.js` (enqueue statement, lease/retry/cancel dispatcher, Resend send with idempotency key, 30-day prune), invitation-created notice queued in the same D1 batch as the invitation in `createHouseholdInvitation`, dispatcher + prune in the cron (`worker/index.js`). Apply 0024 BEFORE deploying.
+- Sender stays off until `RESEND_API_KEY` (secret), `EMAIL_FROM` and `APP_URL` (https) are all set. Rows queue meanwhile; a still-pending invitation is sent once enabled, stale ones are cancelled.
+- Full suite 314 pass (existing fixtures got the outbox schema). Dispatcher smoke-checked with a throwaway script; no new tests (user rule). Next: chunk 2 (deletion + transfer notices), chunk 3 (Owner invites).
+
 ## Transactional email and Owner invitations — design checkpoint (2026-09-29)
 - Architecture is finalized in `ARCHITECTURE.md`; no application code, migration, provider account, secret, DNS record, deployment, or production data changed in this checkpoint.
 - Provider choice: Resend HTTP API, initially on the free tier, with a D1 transactional outbox and the existing 15-minute cron. Business mutations commit independently of email delivery; stable event keys prevent duplicate sends on retry.

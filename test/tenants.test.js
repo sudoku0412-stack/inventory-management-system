@@ -1,4 +1,4 @@
-import { deletionReadSchema } from './deletion-stub.js';
+import { deletionReadSchema, outboxSchema } from './deletion-stub.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
@@ -45,6 +45,7 @@ function tenantDatabase(displayName = 'Legacy', { compatibilityMigration = true 
   sqlite.exec(readFileSync(new URL('../migrations/0010_access_audit.sql', import.meta.url), 'utf8'));
   sqlite.exec(readFileSync(new URL('../migrations/0011_user_shop_preferences.sql', import.meta.url), 'utf8'));
   sqlite.exec(deletionReadSchema);
+  sqlite.exec(outboxSchema);
   sqlite.exec(readFileSync(new URL('../migrations/0014_additional_shop_invitation_joins.sql', import.meta.url), 'utf8'));
   sqlite.exec(readFileSync(new URL('../migrations/0015_batch_change_feed.sql', import.meta.url), 'utf8'));
   sqlite.prepare('INSERT INTO profile_settings VALUES (1,?,?,?,?)').run(displayName, 'Legacy house', 'Medicine cabinet', '2026-01-01T00:00:00.000Z');
