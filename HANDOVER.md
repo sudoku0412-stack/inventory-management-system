@@ -1,5 +1,9 @@
 # Medicine Inventory Tracker — handover
 
+## Email notice opt-out (2026-09-29)
+- Migration `0027_user_email_preferences.sql` (apply BEFORE deploying). `GET/PUT /api/email-preferences` `{ noticesEnabled }` (before tenant resolution, account-scoped), Profile card `public/email-preferences-client.js` (both allowlists). Off = no deletion or ownership-transfer emails, applied at queue time and again at send time; invitation emails always send. Default on (no row).
+- Next agreed item: offline use (IndexedDB plus a change queue) — needs a design first.
+
 ## Admin Email tab (2026-09-29)
 - Admin console tab **Email** lists unsent outbox rows (queued, failed, uncertain) via `GET /admin/api/email-outbox`; Overview shows "Emails needing attention" and "Emails queued". No migration. Resend domain `craftloop.ca` is verified; DMARC is Cloudflare's single record.
 - Cleanup: a stray `build.log` was committed in #91; removed and git-ignored here.

@@ -225,6 +225,11 @@
               <p class="access-status" id="deleteShopStatus" role="status" aria-live="polite"></p>
             </div>
           </section>
+          <section class="profile-card" id="emailPreferencesCard" aria-labelledby="emailPreferencesTitle" hidden>
+            <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">✉</span><div><h2 id="emailPreferencesTitle">Email notices</h2><p>Emails about Shop changes you are part of: a Shop being deleted, or ownership passing to you. Invitations are always sent.</p></div></div>
+            <label class="check-row"><input type="checkbox" id="emailNoticesToggle" /> <span>Email me about Shop changes</span></label>
+            <p class="access-status" id="emailPreferencesStatus" role="status" aria-live="polite"></p>
+          </section>
           <section class="profile-card" id="deletedShopsCard" aria-labelledby="deletedShopsTitle" tabindex="-1" hidden>
             <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">↺</span><div><h2 id="deletedShopsTitle">Recently deleted Shops</h2><p>Shops you own that were deleted. You can restore one until its keep period ends; after that it is permanently removed.</p></div></div>
             <p class="access-status" id="deletedShopsStatus" role="status" aria-live="polite"></p>
