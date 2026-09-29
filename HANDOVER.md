@@ -1,11 +1,12 @@
 # Medicine Inventory Tracker — handover
 
-## Profile Shop invitations card (implemented; PR #55 commits on `main` at `c412de3`, NOT yet deployed, 2026-09-29)
+## Profile Shop invitations card (implemented and deployed 2026-09-29)
 
 - Implements the cloud-only Profile **Shop invitations** card and join dialog from `ARCHITECTURE.md` in `public/shop-invitations-client.js`, bound from `app.js`; no server, migration, or secret change. Deploy is Worker/UI only (the file is in the Worker bootstrap-asset allowlist).
 - Exact decoders for pending `{ invitations, nextCursor, member }` (also used by the unaffiliated gate; `member` is validated then dropped) and acceptance `{ householdId, role, accepted }`. `requestShopApi` now exposes a validated `retryAfter`, and `isShopScoped` ignores query strings so paginated discovery never sends `X-Shop-Id`.
 - Join intents persist in session storage keyed by account before dispatch; ambiguous outcomes keep the same intent (**Retry joining**, or **Check previous join request** after reload). Confirmed joins merge only the refreshed membership list; the active Shop, preference and dirty Profile fields are untouched, and **Switch to <Shop>** reuses the existing switch path (`switchToShopId`).
 - Verification: `npm test` 170/170 (24 new tests with real payload fixtures). A Chrome run against a temporary mock API confirmed placement, dialog focus/Escape, 503 -> Retry joining -> success, selector unchanged, and 320px/200% layout without horizontal scroll.
+- PR #55 is on `main` (`c50e889`) and was deployed with `npx wrangler deploy` as Worker version `594305e9-3f27-41c2-8d37-e111b745e7e2` (100%). The D1 ledger reported no pending migrations, so none were run. From the agent VM the custom domain answers with a Cloudflare bot challenge (403, `cf-mitigated: challenge`) on `/`, `/index.html` and `/api/*`, and the expected Access 302 on static asset paths, so the browser flow could not be exercised from there.
 - Remaining: authenticated multi-Shop production verification (join, replay, switch), a real screen-reader pass, and the owner-promotion checks listed below. Mock-API browser runs are not production evidence.
 
 ## Current Shop role label overlap fix (2026-09-27)
