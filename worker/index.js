@@ -8,7 +8,7 @@ import {
   visionConfig
 } from '../lib/shared.js';
 import { createD1Store, loadVapid } from '../lib/store-d1.js';
-import { adminActivity, adminAudit, adminOverview, adminShopDetail, adminShops, adminRestoreShop, adminRevokeInvitation, authorizeAdmin, writeAdminAudit } from '../lib/admin.js';
+import { adminActivity, adminAudit, adminOverview, adminShopDetail, adminShops, adminExtendShop, adminRestoreShop, adminRevokeInvitation, authorizeAdmin, writeAdminAudit } from '../lib/admin.js';
 import { listBatchChanges, parseChangeQuery, pruneBatchChanges } from '../lib/batch-changes.js';
 import { purgeDeletedShops } from '../lib/shop-purge.js';
 import { createAdditionalShop, listShops, onboardingStatus, pinnedTenant, resolveTenant, setupInitialShop, shopContext } from '../lib/tenants.js';
@@ -89,7 +89,7 @@ async function handleAdmin(request, env, url) {
   try {
     const access = accessConfig({ ...env, ACCESS_AUD: env.ADMIN_ACCESS_AUD });
     const admin = await authorizeAdmin(request, env, access ? await accessKeys(access) : undefined);
-    const writeRoute = request.method === 'POST' && api ? url.pathname.match(/^\/admin\/api\/shops\/([^/]+)\/(?:invitations\/([^/]+)\/revoke|restore)$/) : null;
+    const writeRoute = request.method === 'POST' && api ? url.pathname.match(/^\/admin\/api\/shops\/([^/]+)\/(?:invitations\/([^/]+)\/revoke|restore|extend)$/) : null;
     if (request.method !== 'GET' && request.method !== 'HEAD' && !writeRoute) return json({ error: 'Not found' }, 405, { ...adminHeaders, allow: 'GET, HEAD' });
     const writesEnabled = env.ADMIN_WRITES_ENABLED === 'true';
     if (writeRoute) {
@@ -99,7 +99,9 @@ async function handleAdmin(request, env, url) {
       const body = await readJson(request);
       const done = writeRoute[2]
         ? await adminRevokeInvitation(env.DB, admin, { shopId: writeRoute[1], invitationId: writeRoute[2] }, body, { requestId })
-        : await adminRestoreShop(env.DB, admin, writeRoute[1], body, { requestId });
+        : url.pathname.endsWith('/extend')
+          ? await adminExtendShop(env.DB, admin, writeRoute[1], body, { requestId })
+          : await adminRestoreShop(env.DB, admin, writeRoute[1], body, { requestId });
       return json(done, 200, adminHeaders);
     }
     const params = url.searchParams, db = env.DB;

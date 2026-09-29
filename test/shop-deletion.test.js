@@ -162,3 +162,24 @@ test('UI contract: gated card, dialog, binding, allowlists, and the route stays 
   assert.match(worker, /SHOP_PURGE_ENABLED !== 'true'/, 'purge is dry-run unless explicitly enabled');
   assert.match(read('public/shop-deletion-client.js'), /getAccess\(\)\?\.shop_deletion === true/);
 });
+
+test('the Owner chooses how many days to keep a deleted Shop: 7 to 30, default 14', async () => {
+  for (const [keepDays, expected] of [[undefined, '2026-10-13T12:00:00.000Z'], [7, '2026-10-06T12:00:00.000Z'], [30, '2026-10-29T12:00:00.000Z']]) {
+    const f = fixture();
+    const body = { operationId: uuid(100), confirmName: 'Family Shop', ...(keepDays === undefined ? {} : { keepDays }) };
+    assert.equal((await f.del({ body })).purgeAfter, expected, String(keepDays));
+    assert.equal(f.rows('SELECT purge_after FROM household_deletions')[0].purge_after, expected);
+  }
+  for (const keepDays of [0, 6, 31, 10.5, '14', null, NaN, 1e9]) {
+    const f = fixture();
+    assert.equal(await status(f.del({ body: { operationId: uuid(100), confirmName: 'Family Shop', keepDays } })), 400, String(keepDays));
+    assert.equal(f.rows('SELECT * FROM household_deletions').length, 0);
+  }
+  assert.throws(() => validateShopDeletion({ operationId: uuid(1), confirmName: 'x', keepDays: 14, extra: 1 }), { status: 400 });
+});
+
+test('UI contract: the delete dialog asks for 7 to 30 days and sends keepDays', () => {
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8'), js = readFileSync(new URL('../public/shop-deletion-client.js', import.meta.url), 'utf8');
+  assert.match(html, /id="deleteShopDays" type="number"[^>]*min="7"[^>]*max="30"[^>]*value="14"/);
+  assert.match(js, /keepDays: chosenDays/);
+});

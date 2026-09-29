@@ -2,10 +2,12 @@
 // survive dismissal so Retry replays the same request, but never cross account or Shop context.
 export function bindShopDeletion({ document, getContext, getAccess, request, operationId, reload = () => location.reload() }) {
   const node = id => document.querySelector(`#${id}`);
-  const modal = node('deleteShopModal'), form = node('deleteShopForm'), submit = node('confirmDeleteShop'), button = node('deleteShopButton'), input = node('deleteShopConfirm');
+  const modal = node('deleteShopModal'), form = node('deleteShopForm'), submit = node('confirmDeleteShop'), button = node('deleteShopButton'), input = node('deleteShopConfirm'), days = node('deleteShopDays');
   let intent = null, inFlight = false;
   const matches = value => value && value.shopId === getContext()?.activeShopId && value.accountKey === getContext()?.accountContextKey;
   const typed = () => input.value.trim() === intent?.shopName;
+  const keepDays = () => Number(days.value);
+  const daysOk = () => days.value !== '' && Number.isInteger(keepDays()) && keepDays() >= 7 && keepDays() <= 30;
   function refresh() {
     const context = getContext();
     const visible = Boolean(context?.accountContextKey && context.active?.role === 'owner' && getAccess()?.shop_deletion === true);
@@ -13,10 +15,14 @@ export function bindShopDeletion({ document, getContext, getAccess, request, ope
     if (visible) button.disabled = inFlight;
   }
   function close() { if (modal.open) modal.close(); }
-  function syncSubmit() { submit.disabled = inFlight || !typed(); }
+  function syncSubmit() {
+    node('deleteShopDaysText').textContent = daysOk() ? String(keepDays()) : '7 to 30';
+    submit.disabled = inFlight || !typed() || !daysOk();
+  }
   modal.addEventListener('close', () => { if (!inFlight) button.focus({ preventScroll: true }); });
   node('cancelDeleteShop').addEventListener('click', close);
   input.addEventListener('input', syncSubmit);
+  days.addEventListener('input', syncSubmit);
   button.addEventListener('click', () => {
     const context = getContext();
     if (!context?.accountContextKey || context.active?.role !== 'owner' || inFlight) return;
@@ -24,7 +30,7 @@ export function bindShopDeletion({ document, getContext, getAccess, request, ope
     node('deleteShopTitle').textContent = `Delete ${intent.shopName}?`;
     node('deleteShopShop').textContent = `Shop: ${intent.shopName}`;
     node('deleteShopConfirmLabel').textContent = `Type ${intent.shopName} to confirm`;
-    input.value = '';
+    input.value = ''; days.value = '14';
     submit.textContent = intent.retry ? 'Retry' : 'Delete Shop';
     syncSubmit();
     node('deleteShopModalStatus').textContent = intent.retry ? 'We couldn’t confirm the deletion. Retry, or reload to check your access.' : '';
@@ -34,11 +40,12 @@ export function bindShopDeletion({ document, getContext, getAccess, request, ope
     event.preventDefault();
     if (inFlight) return;
     const value = intent;
-    if (!matches(value) || !typed()) return;
-    inFlight = true; form.setAttribute('aria-busy', 'true'); submit.disabled = true; input.disabled = true; node('shopSelector').disabled = true;
+    if (!matches(value) || !typed() || !daysOk()) return;
+    const chosenDays = keepDays();
+    inFlight = true; form.setAttribute('aria-busy', 'true'); submit.disabled = true; input.disabled = true; days.disabled = true; node('shopSelector').disabled = true;
     submit.textContent = 'Deleting…'; node('deleteShopModalStatus').textContent = 'Deleting…';
     try {
-      await request('/api/household/delete', { method: 'POST', headers: { 'X-Shop-Id': value.shopId }, body: JSON.stringify({ operationId: value.operationId, confirmName: input.value.trim() }) });
+      await request('/api/household/delete', { method: 'POST', headers: { 'X-Shop-Id': value.shopId }, body: JSON.stringify({ operationId: value.operationId, confirmName: input.value.trim(), keepDays: chosenDays }) });
       intent = null;
       reload();
       return;
@@ -57,7 +64,7 @@ export function bindShopDeletion({ document, getContext, getAccess, request, ope
         node('deleteShopStatus').classList.toggle('error', true);
       }
     } finally {
-      inFlight = false; input.disabled = false;
+      inFlight = false; input.disabled = false; days.disabled = false;
       if (matches(value)) { form.removeAttribute('aria-busy'); node('shopSelector').disabled = false; syncSubmit(); }
     }
   });

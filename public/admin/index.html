@@ -31,6 +31,8 @@
       <p id="actionEffect"></p>
       <label for="actionName" id="actionNameLabel" hidden></label>
       <input id="actionName" type="text" autocomplete="off" hidden>
+      <label for="actionDays" id="actionDaysLabel" hidden>Keep for how many days from today? (7 to 30)</label>
+      <input id="actionDays" type="number" min="7" max="30" step="1" value="14" hidden>
       <label for="actionReason">Reason (10 to 500 characters, recorded in the audit log)</label>
       <textarea id="actionReason" rows="3" maxlength="500" required></textarea>
       <p class="counter" id="actionCounter" aria-live="polite"></p>
