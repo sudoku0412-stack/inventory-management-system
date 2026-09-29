@@ -1,4 +1,4 @@
-import { deletionReadSchema } from './deletion-stub.js';
+import { deletionReadSchema, outboxSchema } from './deletion-stub.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign } from 'node:crypto';
@@ -29,6 +29,7 @@ function database() {
   const sqlite = new DatabaseSync(':memory:');
   for (const migration of ['0001_initial.sql', '0003_profile_settings.sql', '0004_household_tenants.sql', '0005_household_invitations.sql', '0006_household_invitation_expiration.sql', '0007_sync_mutation_foundation.sql', '0008_household_display_name_source.sql', '0009_seed_legacy_household_display_names.sql', '0010_access_audit.sql', '0011_user_shop_preferences.sql', '0012_shop_creation.sql', '0013_shop_owner_promotion.sql', '0014_additional_shop_invitation_joins.sql', '0015_batch_change_feed.sql', '0016_shop_member_removal.sql', '0017_shop_demotion_leave.sql']) sqlite.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), 'utf8'));
   sqlite.exec(deletionReadSchema);
+  sqlite.exec(outboxSchema);
   return { sqlite, db: d1(sqlite) };
 }
 function preCreationDatabase() {
