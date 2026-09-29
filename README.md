@@ -94,8 +94,10 @@ Required Worker secrets: `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`, `INITIAL_OWNER_EMAI
 
 Feature flags (Worker secrets whose value is `true`; unset means off): `ADMIN_WRITES_ENABLED` (admin changes), `SHOP_DELETION_ENABLED` (owner **Delete this Shop**), `SHOP_PURGE_ENABLED` (permanent purge; without it the cron only logs a dry run). Set with `echo true | npx wrangler secret put NAME`, turn off with `npx wrangler secret delete NAME`. Turn on admin changes before Shop deletion so a deleted Shop can be restored.
 
+**Per-Shop flags:** `SHOP_DELETION_ENABLED` and `SHOP_PURGE_ENABLED` are only the global defaults. In `/admin`, open a Shop and use **Feature flags for this Shop** to force a flag on, force it off, or make the Shop follow the global secret again. Changes need a written reason, are audited (admin log plus the Shop's own history) and apply on the very next request, with no deploy. A per-Shop override always beats the global secret, so **Automatic purge: off** holds one Shop's data while purging continues elsewhere. `ADMIN_WRITES_ENABLED` stays global because it guards `/admin` itself.
+
 1. Run the tests: `npm test`.
-2. Apply new D1 migrations first: `npm run cf:migrate` (migrations `0001` to `0022` live in `migrations/`; list pending ones with `npx wrangler d1 migrations list medicine-inventory --remote`).
+2. Apply new D1 migrations first: `npm run cf:migrate` (migrations `0001` to `0023` live in `migrations/`; list pending ones with `npx wrangler d1 migrations list medicine-inventory --remote`).
 3. Deploy the Worker and UI: `npm run deploy`.
 
 Always migrate before deploying. Any new browser module under `public/` must be added to both `publicAssetPaths` (`lib/shared.js`) and `bootstrapAssetPaths` (`worker/index.js`), or it returns 404 in production; a test enforces this. Admin files under `public/admin/` are deliberately not in the public list.

@@ -351,3 +351,60 @@ test('admin extend is atomic with both audit rows', () => withFetch(async () => 
     assert.equal(w.rows("SELECT * FROM access_audit WHERE event='shop_extended'").length, 0);
   }
 }));
+
+// ---- Per-Shop feature flags ----
+test('admin sets a per-Shop flag on, off, or back to the global default; audited both ways, replay-safe', () => withFetch(async () => {
+  const f = fixture(), w = writable(f);
+  const setFlag = (value, op, flag = 'shop_deletion', shop = uuid(11), extra = {}) => w.post(`/admin/api/shops/${shop}/flags`, { operationId: op, reason: REASON, flag, value, ...extra });
+  const states = async () => (await (await f.call(`/admin/api/shops/${uuid(11)}`)).json()).flags;
+  f.env.SHOP_DELETION_ENABLED = 'true';
+  assert.deepEqual((await states()).map(s => [s.flag, s.global, s.override, s.effective]), [['shop_deletion', true, null, true], ['shop_purge', false, null, false]]);
+  assert.deepEqual(await (await setFlag(false, opId(40))).json(), { changed: true, flag: 'shop_deletion', value: false });
+  assert.deepEqual((await states())[0], { flag: 'shop_deletion', label: 'Shop deletion', help: (await states())[0].help, global: true, override: false, effective: false });
+  assert.deepEqual(w.rows("SELECT household_id,actor_user_id,target_identifier FROM access_audit WHERE event='shop_flag_changed'"), [{ household_id: uuid(11), actor_user_id: null, target_identifier: 'shop_deletion=off' }]);
+  assert.deepEqual(w.rows("SELECT action,target,reason FROM admin_audit WHERE action='shop.flag'"), [{ action: 'shop.flag', target: `shop:${uuid(11)}:shop_deletion=off`, reason: REASON }]);
+  assert.equal(w.rows('SELECT updated_by FROM shop_feature_flags')[0].updated_by, EMAIL);
+  assert.deepEqual(await (await setFlag(false, opId(40))).json(), { changed: false }, 'replay');
+  assert.deepEqual(await (await setFlag(false, opId(41))).json(), { changed: false, flag: 'shop_deletion', value: false }, 'already off: no write');
+  assert.equal(w.rows("SELECT * FROM admin_audit WHERE action='shop.flag'").length, 1);
+  assert.equal((await setFlag(true, opId(40))).status, 409, 'same key, different value');
+  assert.equal((await setFlag(true, opId(42))).status, 200);
+  assert.equal((await states())[0].effective, true);
+  assert.equal((await setFlag(null, opId(43))).status, 200);
+  assert.deepEqual(w.rows('SELECT * FROM shop_feature_flags'), [], 'back to following the global secret');
+  assert.equal((await states())[0].override, null);
+  f.env.SHOP_DELETION_ENABLED = undefined;
+  assert.equal((await states())[0].effective, false, 'follows the global secret in real time');
+  assert.equal(w.rows("SELECT * FROM access_audit WHERE event='shop_flag_changed'").length, 3);
+  assert.equal((await setFlag(null, opId(44))).status, 200, 'no override to clear is a no-op');
+  assert.equal(w.rows("SELECT * FROM admin_audit WHERE action='shop.flag'").length, 3);
+}));
+
+test('admin flag changes validate input, target only that Shop, and refuse when writes are off', () => withFetch(async () => {
+  const f = fixture(), w = writable(f);
+  const path = `/admin/api/shops/${uuid(11)}/flags`, ok = { operationId: opId(50), reason: REASON, flag: 'shop_deletion', value: true };
+  for (const patch of [{ flag: 'nope' }, { flag: 5 }, { value: 'yes' }, { value: undefined }, { value: 1 }, { extra: 1 }, { reason: 'short' }, { operationId: 'x' }]) assert.equal((await w.post(path, { ...ok, ...patch })).status, 400, JSON.stringify(patch));
+  assert.equal((await w.post(`/admin/api/shops/${uuid(99)}/flags`, ok)).status, 404);
+  assert.equal((await w.post(path, ok, { token: jwt({ aud: CUSTOMER }) })).status, 401);
+  assert.equal((await w.post(path, ok, { headers: { 'x-admin-action': '' } })).status, 403);
+  assert.equal((await w.post(path, ok)).status, 200);
+  assert.deepEqual(w.rows('SELECT household_id FROM shop_feature_flags'), [{ household_id: uuid(11) }], 'other Shops are untouched');
+  f.env.ADMIN_WRITES_ENABLED = undefined;
+  assert.equal((await w.post(path, { ...ok, operationId: opId(51), value: false })).status, 403);
+}));
+
+test('admin flag changes are atomic with both audit rows', () => withFetch(async () => {
+  for (const [table, when] of [['admin_audit', "NEW.action='shop.flag'"], ['access_audit', "NEW.event='shop_flag_changed'"]]) {
+    const f = fixture(), w = writable(f);
+    f.sqlite.exec(`CREATE TRIGGER block_${table} BEFORE INSERT ON ${table} WHEN ${when} BEGIN SELECT RAISE(ABORT, 'blocked'); END;`);
+    assert.notEqual((await w.post(`/admin/api/shops/${uuid(11)}/flags`, { operationId: opId(60), reason: REASON, flag: 'shop_deletion', value: true })).status, 200, table);
+    assert.deepEqual(w.rows('SELECT * FROM shop_feature_flags'), [], `${table}: the flag did not change`);
+  }
+}));
+
+test('the console lists per-Shop flags with on, off and follow-global actions', () => {
+  const js = readFileSync(new URL('../public/admin/admin.js', import.meta.url), 'utf8');
+  assert.match(js, /Feature flags for this Shop/);
+  assert.match(js, /Follow global/);
+  assert.match(js, /extra: \{ flag: row\.flag, value \}/);
+});

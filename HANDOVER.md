@@ -1,5 +1,8 @@
 # Medicine Inventory Tracker — handover
 
+## Per-Shop feature flags (2026-09-29)
+- Migration `0023_shop_feature_flags.sql`, `lib/feature-flags.js` (registry: `shop_deletion`, `shop_purge`), `adminSetShopFlag` (`POST /admin/api/shops/:id/flags`), admin Shop page section **Feature flags for this Shop** (Turn on / Turn off / Follow global, each with a reason). Overrides beat the global secrets and apply on the next request. Apply 0023 BEFORE deploying (the code reads and writes the new table and history event).
+
 ## Current state summary (2026-09-29)
 - Everything requested in this session is built, deployed and tested by the user in production: icon, ownership transfer, Shop deletion with owner-chosen keep days, admin revoke/restore/extend (with Shop-history rows), admin Sign out, roster layout fix. Migrations 0001 to 0022 are applied. Flags `ADMIN_WRITES_ENABLED`, `SHOP_DELETION_ENABLED`, `SHOP_PURGE_ENABLED` are all set. Latest Worker: `fbed3ba4-0b39-4054-882f-eeaedf85ed4a`.
 - The local SQLite import tool (`tools/export-local-to-d1.js`) is merged but has never been run against real data (the user has no local data to import).

@@ -65,7 +65,7 @@ echo true | npx wrangler secret put SHOP_DELETION_ENABLED  # owners can delete a
 echo true | npx wrangler secret put SHOP_PURGE_ENABLED     # cron permanently purges Shops after their keep period
 ```
 
-Enable admin changes first so a deleted Shop can be restored. Without `SHOP_PURGE_ENABLED` the 15-minute cron only logs what it would purge. Turn a flag off with `npx wrangler secret delete NAME`; the change takes effect immediately.
+Enable admin changes first so a deleted Shop can be restored. These secrets are global defaults; staff can override `SHOP_DELETION_ENABLED` and `SHOP_PURGE_ENABLED` for a single Shop in `/admin` (migration 0023), and an override wins immediately. Without `SHOP_PURGE_ENABLED` the 15-minute cron only logs what it would purge. Turn a flag off with `npx wrangler secret delete NAME`; the change takes effect immediately.
 
 7. Attach the custom domain in the Cloudflare dashboard if Wrangler has not already linked `medicineinventory.craftloop.ca`.
 
