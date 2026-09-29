@@ -312,3 +312,7 @@ Do not launch Cursor cloud agents for this project. Read this file at the start 
 - `lib/admin.js`, `handleAdmin` in `worker/index.js`, `public/admin/{index.html,admin.js,admin.css}` (served only after admin authorization; not in `publicAssetPaths`), migration `0018_admin_audit.sql`, `test/admin-console.test.js` (11). Full suite passes.
 - The Access application for `/admin*` exists (owner-created); its AUD tag was given in chat and is deliberately not committed. Rollout: apply 0018, `wrangler secret put ADMIN_ACCESS_AUD` and `ADMIN_EMAILS` (`kaushik.majumder@craftloop.ca`), deploy, then verify signed in at `/admin`. Until both secrets exist the console returns 503.
 - If the path-scoped Access app causes sign-in loops, move to a dedicated admin hostname; code is unchanged.
+
+## Platform admin released
+- PR #66 merged as `3053399`. Remote migration `0018_admin_audit.sql` applied, Worker secrets `ADMIN_ACCESS_AUD` and `ADMIN_EMAILS` set, Worker deployed: version `a28a24c7-58f3-4f29-a77a-60b557db6cdc`.
+- Unauthenticated requests to `/admin*` redirect to Access using the admin application's AUD, so the path-scoped app takes precedence over the customer app. Signed-in check pending: open `/admin` as `kaushik.majumder@craftloop.ca`, confirm each tab loads and that the Admin log shows the visits.
