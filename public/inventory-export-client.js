@@ -1,4 +1,4 @@
-// Owner-only download of the current Shop's inventory as CSV. The file is built by the server for the pinned Shop
+// Download (any Shop member) of the current Shop's inventory as CSV. The file is built by the server for the pinned Shop
 // (`X-Shop-Id`), so the browser fetches it and saves the blob instead of navigating.
 export function exportFileName(shopName, date = new Date()) {
   const slug = String(shopName || 'shop').normalize('NFKD').replace(/[^\x20-\x7e]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'shop';
@@ -12,12 +12,12 @@ export function bindInventoryExport({ document, getContext, request, createObjec
   const status = (message, error = false) => { statusNode.textContent = message; statusNode.classList.toggle('error', error); };
   function refresh() {
     const context = getContext();
-    section.hidden = !(context?.accountContextKey && context.active?.role === 'owner');
+    section.hidden = !(context?.accountContextKey && context.active);
     if (section.hidden) status('');
   }
   button.addEventListener('click', async () => {
     const context = getContext();
-    if (inFlight || !context?.accountContextKey || context.active?.role !== 'owner') return;
+    if (inFlight || !context?.accountContextKey || !context.active) return;
     const shopId = context.activeShopId, accountKey = context.accountContextKey, shopName = context.active.name;
     inFlight = true; button.disabled = true; status('Preparing your export…');
     try {
@@ -32,7 +32,7 @@ export function bindInventoryExport({ document, getContext, request, createObjec
     } catch (error) {
       const current = getContext();
       if (current?.activeShopId !== shopId) return;
-      status(error.status === 403 ? 'Only a Shop owner can export inventory.' : error.status === 413 ? error.message : 'We couldn’t prepare the export. Try again.', true);
+      status(error.status === 403 ? 'You no longer have access to export this Shop.' : error.status === 413 ? error.message : 'We couldn’t prepare the export. Try again.', true);
     } finally {
       inFlight = false; button.disabled = false;
     }

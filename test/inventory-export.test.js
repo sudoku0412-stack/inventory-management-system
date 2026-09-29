@@ -38,7 +38,7 @@ test('csvCell quotes per RFC 4180 and neutralizes spreadsheet formulas', () => {
   assert.equal(csvCell('a=b'), 'a=b', 'only a leading character matters');
 });
 
-test('an Owner exports every medicine of their Shop, including discarded ones, in a stable order', async () => {
+test('an Owner or Member exports every medicine of their Shop, including discarded ones, in a stable order', async () => {
   const f = fixture();
   f.add('b1', shop, { name: 'zinc', expiry_date: '2027-01-01' });
   f.add('b2', shop, { name: 'Aspirin', strength: '500 mg', expiry_date: '2026-12-01', notes: 'with "food", after meals', photo_path: 'photos/b2.jpg' });
@@ -59,10 +59,10 @@ test('an Owner exports every medicine of their Shop, including discarded ones, i
   assert.doesNotMatch(file.csv, /photos\/b2\.jpg/, 'photo paths are not exported');
 });
 
-test('Members, outsiders and members of deleted Shops cannot export', async () => {
+test('outsiders and members of deleted Shops cannot export, but Members can', async () => {
   const f = fixture();
   f.add('b1', shop);
-  await assert.rejects(exportInventoryCsv(f.db, tenant(member)), { status: 403 });
+  assert.equal((await exportInventoryCsv(f.db, tenant(member))).rows, 1, 'a Member may export');
   await assert.rejects(exportInventoryCsv(f.db, tenant(outsider)), { status: 403 });
   await assert.rejects(exportInventoryCsv(f.db, tenant(owner, other)), { status: 403 }, 'not a member of that Shop');
   await assert.rejects(exportInventoryCsv(f.db, {}), { status: 403 });
@@ -88,7 +88,7 @@ test('the browser file name is a safe slug with the date', () => {
   assert.equal(exportFileName('../../etc/passwd\r\n', new Date('2026-09-30T10:00:00Z')), 'etc-passwd-inventory-2026-09-30.csv');
 });
 
-test('UI and Worker contract: owner-only button, pinned Shop route before tenant resolution, safe headers, allow-listed', () => {
+test('UI and Worker contract: button, pinned Shop route before tenant resolution, safe headers, allow-listed', () => {
   const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
   const worker = read('worker/index.js'), html = read('public/index.html'), app = read('public/app.js');
   assert.ok(worker.indexOf("'/api/household/export'") < worker.indexOf('const tenant = await resolveTenant('));
@@ -98,5 +98,5 @@ test('UI and Worker contract: owner-only button, pinned Shop route before tenant
   assert.match(html, /id="exportInventorySection"[^>]*hidden/);
   assert.match(app, /bindInventoryExport/);
   assert.ok(read('lib/shared.js').includes("'/inventory-export-client.js'") && worker.includes("'/inventory-export-client.js'"));
-  assert.match(read('public/inventory-export-client.js'), /context\.active\?\.role !== 'owner'/);
+  assert.doesNotMatch(read('public/inventory-export-client.js'), /role/, 'visibility does not depend on the role');
 });
