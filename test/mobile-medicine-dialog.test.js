@@ -21,4 +21,7 @@ test('medicine form keeps a compact accessible expiry date and unknown-expiry ch
   assert.match(styles, /\.expiry-unknown input\[type="checkbox"\] \{ width: 18px; height: 18px; flex: none;/);
   assert.match(styles, /\.expiry-date-input \{[\s\S]*?appearance: none;[\s\S]*?-webkit-appearance: none;[\s\S]*?box-sizing: border-box;[\s\S]*?block-size: 44px;[\s\S]*?min-block-size: 44px;[\s\S]*?max-block-size: 44px;[\s\S]*?height: 44px;[\s\S]*?min-height: 44px;[\s\S]*?max-height: 44px;/);
   assert.match(styles, /\.expiry-date-input::\-webkit-calendar-picker-indicator \{ display: none; -webkit-appearance: none; \}/);
+  assert.match(styles, /\.expiry-field \.expiry-date-input \{ padding-right: 40px; background-image: url\("data:image\/svg\+xml[^}]*background-repeat: no-repeat; background-position: right 12px center;/);
+  assert.match(styles, /\.expiry-field \.expiry-date-input:disabled \{ background-image: url\("data:image\/svg\+xml/);
+  assert.match(styles, /\.expiry-field input\[type="date"\]:disabled \{ background-color: #f2f5f4;/);
 });
