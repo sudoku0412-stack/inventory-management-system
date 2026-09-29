@@ -8,6 +8,7 @@ import { bindOwnershipTransfer } from './ownership-transfer-client.js';
 import { bindShopLeave } from './shop-leave-client.js';
 import { bindShopDeletion } from './shop-deletion-client.js';
 import { bindDeletedShops } from './deleted-shops-client.js';
+import { bindEmailPreferences } from './email-preferences-client.js';
 import { bindInventoryExport } from './inventory-export-client.js';
 import { bindShopInvitations, decodePendingPage } from './shop-invitations-client.js';
 import { bindChangeFeed } from './change-feed-client.js';
@@ -37,7 +38,7 @@ function profileChanged(){const f=qs('#profileSettingsForm'),save=qs('#saveProfi
 function roleLabel(role){return role==='owner'?'Owner':'Member'}
 function shopStatus(message){qs('#shopSwitchStatus').textContent=message}
 function renderShopContext(context){
-  shopContext=context;queueMicrotask(()=>{shopLeave.refresh();shopDeletion.refresh();deletedShops.refresh();inventoryExport.refresh()});
+  shopContext=context;queueMicrotask(()=>{shopLeave.refresh();shopDeletion.refresh();deletedShops.refresh();emailPreferences.refresh();inventoryExport.refresh()});
   const active=context.shops.find(shop=>shop.id===context.activeShopId);
   if(!active)throw Error('No Shop access found.');
   context.active=active;activeShopId=active.id;
@@ -98,6 +99,7 @@ bindOwnershipTransfer({document,getContext:()=>shopContext,getAccess:()=>househo
 const shopLeave=bindShopLeave({document,getContext:()=>shopContext,getAccess:()=>householdAccess,request:api,operationId});
 const inventoryExport=bindInventoryExport({document,getContext:()=>shopContext,request:(path,opts)=>api(path,opts)});
 const deletedShops=bindDeletedShops({document,getContext:()=>shopContext,request:api,operationId});
+const emailPreferences=bindEmailPreferences({document,getContext:()=>shopContext,request:api});
 const shopDeletion=bindShopDeletion({document,getContext:()=>shopContext,getAccess:()=>householdAccess,request:api,operationId});
 qs('#householdInvitations').addEventListener('click',e=>{const button=e.target.closest('[data-revoke-invitation]');if(!button)return;revokeInvitationId=button.dataset.revokeInvitation;const invitation=householdAccess?.invitations.find(item=>item.id===revokeInvitationId);qs('#revokeInvitationMessage').textContent=`Revoke the pending invitation for ${invitation?.email||'this email'}? This person will no longer be able to accept it.`;qs('#revokeInvitationModal').showModal();qs('#confirmRevokeInvitation').focus()});
 qs('#confirmRevokeInvitation').addEventListener('click',async()=>{if(!revokeInvitationId)return;const button=qs('#confirmRevokeInvitation');button.disabled=true;try{await api(`/api/household/invitations/${encodeURIComponent(revokeInvitationId)}`,{method:'DELETE'});householdAccess.invitations=householdAccess.invitations.filter(item=>item.id!==revokeInvitationId);renderHouseholdAccess();qs('#revokeInvitationModal').close();householdStatus('Invitation revoked.')}catch(error){householdStatus(error.message,true);qs('#revokeInvitationModal').close()}finally{button.disabled=false;revokeInvitationId=null}});
