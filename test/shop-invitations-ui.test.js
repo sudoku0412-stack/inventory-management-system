@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { publicAssetPaths } from '../lib/shared.js';
 import { isShopScoped, requestShopApi } from '../public/shop-client.js';
 import {
   bindShopInvitations, decodeAcceptance, decodePendingPage, joinIntentForAccount, joinIntentStorageKey, persistJoinIntent, retryDuration
@@ -504,6 +505,7 @@ test('markup, styles, worker cache policy and app wiring satisfy the UI contract
   assert.match(css, /\.shop-invitation-row \{ grid-template-columns: 1fr; \}/);
   assert.match(css, /prefers-reduced-motion: reduce/);
   assert.match(worker, /'\/shop-invitations-client\.js'/);
+  assert.equal(publicAssetPaths.has('/shop-invitations-client.js'), true);
   assert.match(app, /bindShopInvitations\(\{document,storage:sessionStorage,getContext:\(\)=>shopContext/);
   assert.match(app, /switchToShop:switchToShopId/);
   assert.match(app, /decodePendingPage\(await api\('\/api\/household\/invitations\/pending'\)\)/);

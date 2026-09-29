@@ -1,5 +1,10 @@
 # Medicine Inventory Tracker — handover
 
+## Local Shop invitations module allowlist (2026-09-29)
+
+- `publicAssetPaths` omitted `/shop-invitations-client.js`, so the browser module request 404ed and the local UI stayed blank. The Worker cache-policy set already named the file, but serving is gated by `publicAssetPaths`. The path is now in that set, with a contract assertion in `test/shop-invitations-ui.test.js`.
+- `npm test` passes 170/170 on Node.js 26. A local browser run added Ibuprofen (12 tablets) and marked one Paracetamol tablet used (quantity 19).
+
 ## Profile Shop invitations card (implemented and deployed 2026-09-29)
 
 - Implements the cloud-only Profile **Shop invitations** card and join dialog from `ARCHITECTURE.md` in `public/shop-invitations-client.js`, bound from `app.js`; no server, migration, or secret change. Deploy is Worker/UI only (the file is in the Worker bootstrap-asset allowlist).
