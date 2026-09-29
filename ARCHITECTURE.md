@@ -46,7 +46,7 @@ Local development
 - Local mode is loopback-only and uses SQLite as a single-user Shop.
 - Cloud mode uses D1 as the source of truth. Inventory and push data are tenant-scoped by internal household ID.
 - Each cloud batch has a revision. Browser mutations carry an operation ID and base revision; duplicate operations replay safely and stale changes return a conflict for user review.
-- No offline mutation queue, bidirectional change feed, background reconciliation, or cross-device conflict UI exists yet.
+- No offline mutation queue, change feed, background reconciliation, or cross-device conflict UI exists yet. An online pull feed is designed below (not implemented).
 - Packaging images live in R2. Optional Gemini suggestions are server-side, require a configured secret, and are never saved until the user confirms the medicine form.
 
 ## Deployment and operations
@@ -249,9 +249,43 @@ Required automated coverage: forged JWT/role/user/email, no-member refusal, owne
 
 Explicit deferrals: self-service creation by users with no memberships; existing members accepting additional invitations (today's acceptance intentionally returns 409 for any existing membership); admin role/schema changes; role changes, transfer, removal, Shop deletion, import/copy, shared user profile redesign, email sending, stronger traffic rate limiting, and receipt cleanup. Each new Shop already has its sole owner and existing owner-only invitation management; admin management is a later designed slice. Do not imply those full lifecycle requirements are delivered by this chunk.
 
+## Design: online pull/change feed for inventory (not implemented)
+
+### Problem and boundary
+
+Two people (or two devices) in one Shop only see each other's medicine changes after a manual reload, and a stale edit is discovered only when its write returns 409. This slice adds a **read-only, online, per-Shop pull feed** so open clients converge quickly. It deliberately excludes an offline mutation queue, background sync while the app is closed, merge UI, WebSocket/SSE/Durable Objects, and feeds for settings, notifications or Shop access. D1 stays the source of truth; existing `revision` + `operationId` mutation semantics are unchanged.
+
+### Data
+
+Additive migration `0015_batch_change_feed.sql`: `batch_changes(seq INTEGER PRIMARY KEY AUTOINCREMENT, household_id TEXT NOT NULL REFERENCES households(id), batch_id TEXT NOT NULL, revision INTEGER NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('upsert','remove')), created_at TEXT NOT NULL)` with index `(household_id, seq)`. Every batch mutation (create, update, consume to zero or not, discard, photo add/remove) appends exactly one row **inside the same D1 batch/transaction** as the mutation and its receipt, so a rolled-back mutation leaves no change and a committed one always has one. `kind='remove'` is used for discard and for consume-to-zero (the rows the list endpoint already hides). The feed stores identifiers only, never medicine data. SQLite serializes writers, so `seq` order equals commit order; gaps are allowed and meaningless.
+
+### API
+
+`GET /api/changes?after=<seq>&limit=<n>` is Shop-scoped (pinned `X-Shop-Id`, normal tenant resolution and membership check) and read-only. `after` is a non-negative integer; anything else is 400. `limit` defaults to 100 and is capped at 200. The query always filters `household_id = tenant`, so a forged or foreign cursor can only skip or repeat the caller's own Shop's changes; it is not an authorization credential. Response: `{ changes: [{ seq, id, kind, batch }], nextAfter, more, reset }`. Changes are collapsed to the latest row per batch within the page; `batch` is the current list-shaped row for `upsert` and null for `remove`, joined at read time so the payload is always the latest state. `nextAfter` is the last `seq` returned (or `after` if none). `more` is true when the page was full. `reset: true` (with no changes) means `after` predates retained history; the client must do a full `GET /api/batches` and adopt the new cursor.
+
+`GET /api/batches` additionally returns `changeCursor`: the household's max `seq` read **before** the list query. Applying a change is idempotent by revision (ignore an upsert whose `revision` is not greater than the local row), so a change already reflected in the list is harmless and none can be missed between the two reads. A missing `changeCursor` (older Worker) disables the feed for that session.
+
+Add a per-principal read limiter (60 requests/minute, 429 with `Retry-After`, fail closed with 503) reusing the durable throttle pattern from invitation routes, applied before the query.
+
+### Client behavior
+
+A new `public/change-feed-client.js` (injected request/context/render deps like the other controllers) polls only while the tab is visible and the user is on Dashboard or Inventory: once on becoming visible, focus or `online`, then every 60 seconds with jitter; never in a hidden tab, and never in local mode (no `changeCursor`). Errors back off exponentially to 5 minutes; a 429 waits for validated `Retry-After`; 404/405 disables the feed. Follow `more` immediately up to 5 pages per tick. Responses are dropped if the pinned Shop or account context changed while in flight. Applying changes updates the in-memory list and re-renders only the lists; it must not close dialogs, reset filters or search, or overwrite an open Add/Edit form. If the batch open in the detail or edit dialog changes, show a polite, non-blocking notice ("This medicine was updated elsewhere. Reopen it to see the latest version.") and let the existing base-revision check produce the 409 if the user saves stale data. A `remove` for the open batch shows "This medicine was removed elsewhere." A full reload of the list every 10 minutes is a safety net for gaps and rollbacks. Announce nothing visually intrusive; one polite status message at most per tick.
+
+### Retention and rollout
+
+The 15-minute cron deletes `batch_changes` older than 30 days and `mutation_receipts` older than 30 days (closing the open receipt-retention item; client operation intents live in memory only, so replay beyond that window is not needed). A client whose cursor is older than the oldest retained row gets `reset`. Deploy order: apply 0015, deploy the Worker (starts writing changes), then serve the client. Rolling back to an older Worker stops appending changes while the table remains; the 10-minute full reload bounds staleness, and the migration is never dropped. Existing rows have no history, so first use always starts from `changeCursor`.
+
+### Verification
+
+Tests: same-transaction append with rollback (no change row on aborted mutation/receipt), one row per mutation kind including discard and consume-to-zero, exact response keys, collapse-to-latest, page/`more`/`nextAfter` boundaries, `reset` after pruning, malformed `after`/`limit`, tenant isolation (Shop B never sees Shop A ids), non-member 403, limiter and Retry-After, read-before-list `changeCursor` ordering, idempotent revision apply. Client tests: visibility/online triggers, no polling when hidden or local, backoff and 429 handling, Shop-switch response suppression, dialogs and dirty forms untouched, open-batch notices, safety-net reload. Real two-device browser verification and a screen-reader check of the notices are required before calling it accepted.
+
+### Deferred
+
+WebSocket/SSE or Durable Object push (revisit if polling cost or latency matters), settings/notification/roster feeds, offline queue and reconciliation, and per-field merge.
+
 ## Deferred architecture work
 
-- Pull/change feed and offline synchronization reconciliation.
+- Offline synchronization reconciliation. (The online pull/change feed is designed above, not implemented.)
 - Native mobile clients.
 - Export, account deletion, configurable reminder windows, ownership transfer, demotion/resignation, a separate admin role, member removal, and non-owner roster or pending-invitation visibility. Owner promotion is the finalized slice below.
 
