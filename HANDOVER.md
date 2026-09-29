@@ -26,7 +26,7 @@
 
 ## Flags enabled (2026-09-29)
 - `ADMIN_WRITES_ENABLED` and `SHOP_DELETION_ENABLED` are set as Worker secrets; the user tested delete, restore, revoke, sign-out and the other pending checks and confirmed all good. Admin console has a Sign out link (PR #76, Worker `8f4b4c52-e945-458f-9f05-67a18902ab2b`).
-- `SHOP_PURGE_ENABLED` is NOT set: the cron purge only logs a dry run, so deleted Shops are never permanently removed yet. Set it with `echo true | npx wrangler secret put SHOP_PURGE_ENABLED` when ready (permanent after each Shop's 14-day grace).
+- `SHOP_PURGE_ENABLED` is now set too (2026-09-29): the 15-minute cron permanently purges each deleted Shop 14 days after deletion (photos first, then rows; tombstone kept). Nothing is due before 2026-10-13. To stop it, `npx wrangler secret delete SHOP_PURGE_ENABLED`.
 
 ## Admin write actions released (2026-09-29)
 - PR #74 merged as `a03c6bf`. Remote migration `0021_admin_writes.sql` applied, then Worker deployed: version `39064e00-2849-4b5c-801c-ec2ccc5fec55`. Ownership transfer is live (`fdc19e22`), Shop deletion is deployed with its flag off.
