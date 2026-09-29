@@ -117,6 +117,24 @@ test('pages have exact keys, collapse to the latest state, honor limit/more/next
   assert.deepEqual(empty, { changes: [], nextAfter: all.nextAfter, more: false, reset: false });
 });
 
+test('a medicine deleted by another device is a remove for cursors before it, and a bootstrap cursor never reports it', async () => {
+  const f = fixture();
+  const kept = await f.a.create({ ...medicine('Kept'), operationId: op(1), baseRevision: 0 });
+  const doomed = await f.a.create({ ...medicine('Doomed'), operationId: op(2), baseRevision: 0 });
+  const before = (await listBatchChanges(f.db, 'shop-a', { after: null })).nextAfter;
+
+  await f.a.discard(doomed.id, { operationId: op(3), baseRevision: 1 });
+  const page = await listBatchChanges(f.db, 'shop-a', { after: before, limit: 100 });
+  assert.deepEqual(page.changes.map(c => [c.id, c.kind, c.revision, c.batch]), [[doomed.id, 'remove', 2, null]]);
+
+  const fromStart = await listBatchChanges(f.db, 'shop-a', { after: 0, limit: 100 });
+  assert.deepEqual(fromStart.changes.map(c => [c.id, c.kind]), [[kept.id, 'upsert'], [doomed.id, 'remove']]);
+
+  const after = await listBatchChanges(f.db, 'shop-a', { after: page.nextAfter, limit: 100 });
+  assert.deepEqual(after.changes, []);
+  assert.deepEqual((await listBatchChanges(f.db, 'shop-b', { after: 0, limit: 100 })).changes, []);
+});
+
 test('changes are isolated between Shops, and forged cursors only skip the caller\'s own changes', async () => {
   const f = fixture();
   const mine = await f.a.create({ ...medicine('Mine'), operationId: op(1), baseRevision: 0 });

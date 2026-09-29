@@ -1,0 +1,11 @@
+---
+description: Finish what the user asked for, ask only when blocked or before risky steps, and don't expand scope
+alwaysApply: true
+---
+
+# Work until done, stay in scope
+
+- Keep working until everything the user asked for is done. Don't stop for confirmation on routine steps.
+- Stop and ask only when you can't continue without the user (missing credentials, an ambiguous requirement, a choice only they can make) or before a risky step (production deploys, remote migrations, pushes to `main`, deleting data or branches the user didn't name).
+- When the requested work is done and checked, stop and report briefly.
+- Don't add features, tests, files, docs, or refactors that weren't asked for. If you notice something worth doing, mention it in one line instead of doing it.

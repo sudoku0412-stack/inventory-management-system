@@ -46,7 +46,7 @@ Local development
 - Local mode is loopback-only and uses SQLite as a single-user Shop.
 - Cloud mode uses D1 as the source of truth. Inventory and push data are tenant-scoped by internal household ID.
 - Each cloud batch has a revision. Browser mutations carry an operation ID and base revision; duplicate operations replay safely and stale changes return a conflict for user review.
-- No offline mutation queue, change feed, background reconciliation, or cross-device conflict UI exists yet. An online pull feed is implemented (see below).
+- No offline mutation queue, background reconciliation, or cross-device conflict UI exists yet. An online pull feed is implemented (see below).
 - Packaging images live in R2. Optional Gemini suggestions are server-side, require a configured secret, and are never saved until the user confirms the medicine form.
 
 ## Deployment and operations
@@ -249,7 +249,7 @@ Required automated coverage: forged JWT/role/user/email, no-member refusal, owne
 
 Explicit deferrals: self-service creation by users with no memberships; existing members accepting additional invitations (today's acceptance intentionally returns 409 for any existing membership); admin role/schema changes; role changes, transfer, removal, Shop deletion, import/copy, shared user profile redesign, email sending, stronger traffic rate limiting, and receipt cleanup. Each new Shop already has its sole owner and existing owner-only invitation management; admin management is a later designed slice. Do not imply those full lifecycle requirements are delivered by this chunk.
 
-## Design: online pull/change feed for inventory (implemented; migration 0015)
+## Implemented and deployed: online pull/change feed for inventory (migration 0015)
 
 ### Problem and boundary
 
@@ -283,9 +283,40 @@ Tests: same-transaction append with rollback (no change row on aborted mutation/
 
 WebSocket/SSE or Durable Object push (revisit if polling cost or latency matters), settings/notification/roster feeds, offline queue and reconciliation, and per-field merge.
 
+## Implemented: remove a member (migration 0016)
+
+### Smallest slice
+
+An Owner can **Remove** another accepted **Member** of the displayed Shop. Nothing else changes: no removing Owners (demotion is a separate, later design), no self-leave, no ownership transfer, no email or identity lookups. Removal deletes exactly one `memberships` row. The person's identity, user row, other Shops, and the Shop's medicines are untouched. Re-inviting them later uses the existing invitation flow.
+
+### API and authorization
+
+`POST /api/household/members/:userId/remove` with exact body `{ operationId }` (UUID); returns 200 `{ removed: <boolean> }`. It follows the promotion route's rules: dispatched before the preference-writing `resolveTenant`, mandatory pinned `X-Shop-Id` (400 missing/malformed, 403 foreign), verified Access JWT, JSON content type, exact same-origin Origin, cross-site Fetch Metadata rejected, unknown fields rejected, no-store responses, and a fresh owner check inside the state-change batch. Members and non-members get 403 before any target lookup. A missing or foreign target returns the same 404. Targeting an Owner (including yourself) is 409 **Owners can't be removed.**; the UI shows no Remove action on Owner rows. Because only Members can be removed, every removal preserves the owner count, so the last-owner invariant holds without a count check. A guarded `DELETE ... WHERE role='member'` inside the batch makes a concurrent promotion of the same person lose or win cleanly: if promotion commits first the delete affects zero rows and the request is 409.
+
+### Atomicity, replay and audit
+
+One D1 batch commits the guarded membership delete, one receipt, and one `member_removed` audit event (`target_identifier = 'user:' + <id>`), or none. Migration `0016_shop_member_removal.sql` adds `shop_member_removal_receipts (household_id, actor_user_id, operation_id, target_user_id, created_at, PRIMARY KEY (household_id, actor_user_id, operation_id))` and rebuilds `access_audit` with the 0012/0013 copy/count/FK guard pattern to widen its CHECK with `member_removed`. Replay of the same operation and target returns `removed:false` with no write after fresh owner authorization; the same key for another target is 409. Removing someone already gone with a new operation is 404 (same as any missing target) with no receipt or audit; the UI treats 404 as "no longer a member" and refreshes.
+
+### Effects on the removed person
+
+- **Access:** every API resolves membership per request, so the next request from that person gets 403 for this Shop. Their open tab keeps showing the last data until its next request; the change-feed poll turns that into a 403, which the client must handle by refreshing Shop context (falls back to another Shop they belong to, or the invitation gate if none). That client handling is part of this slice.
+- **Preferences:** if `user_shop_preferences` points at this Shop, the same batch deletes that row so the fallback ordering applies. Preference is not authority, so this is tidiness, not security.
+- **Push subscriptions (required, not tidiness):** `push_subscriptions` rows carry `household_id` and `user_id`, and delivery sends to every subscription of the Shop. Without cleanup a removed person would keep receiving this Shop's medicine alerts. The same batch therefore runs `DELETE FROM push_subscriptions WHERE household_id=? AND user_id=?` for the target, and a test asserts no send reaches them afterward. Their subscriptions for other Shops are untouched.
+- **Their contributions:** medicines, mutation receipts, and audit history stay; the audit record keeps `user:<id>`.
+- **Invitations:** pending invitations addressed to their email are unaffected.
+- **Pending invitations they created:** stay valid; `created_by_user_id` keeps its FK because the user row is kept.
+
+### UI
+
+In the Owner roster, each Member row gets a **Remove** button (no action on Owner rows or on yourself). It opens a native confirmation dialog: **Remove <email> from <Shop>?** with the consequence line "They lose access to this Shop immediately. You can invite them again later." Busy state disables duplicate submits; 403/404/409 refresh the roster; success shows a toast and reloads the roster. Follow the promotion dialog's focus and accessibility behavior.
+
+### Verification
+
+Real SQLite-backed D1 batches: authorization matrix (Owner, Member, foreign Owner, no auth), target matrix (Member, Owner, self, missing, foreign), replay/conflict, atomicity with a blocking audit trigger, promotion-versus-removal race, preference cleanup, removed user's next request 403 across every route, other Shops unaffected, change-feed 403 client handling, migration preserving audit rows. Roll out with 0016 before the Worker.
+
 ## Deferred architecture work
 
-- Offline synchronization reconciliation. (The online pull/change feed is designed above, not implemented.)
+- Offline synchronization reconciliation (offline mutation queue, conflict UI, background reconciliation). The online pull/change feed is implemented and deployed; see its section above.
 - Native mobile clients.
 - Export, account deletion, configurable reminder windows, ownership transfer, demotion/resignation, a separate admin role, member removal, and non-owner roster or pending-invitation visibility. Owner promotion is the finalized slice below.
 

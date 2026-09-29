@@ -274,3 +274,13 @@ Do not launch Cursor cloud agents for this project. Read this file at the start 
 ## Change feed released
 - PR #58 merged as `736928a`. Remote migration `0015_batch_change_feed.sql` applied (verified: `batch_changes` empty, floor 0, throttle table accepts route `changes`), then Worker deployed: version `eaf1e219-54bc-40a5-a4ca-81cf34efc171`.
 - Unauthenticated curl only shows the Access 302, so it does not prove assets are served (allowlist covered by `test/worker-assets.test.js`). Authenticated check pending: open the app signed in, confirm it loads, and that a change made on another device appears on Inventory within about a minute.
+
+## Member removal designed; change feed follow-ups (2026-09-29)
+- `ARCHITECTURE.md` now has "Design: remove a member (not implemented)": Owner removes a Member only, migration 0016 (receipt table + `member_removed` audit), route `POST /api/household/members/:userId/remove`, same-batch cleanup of the target's push subscriptions and preference, client handling of 403 from the change feed. Awaiting review before implementation.
+- Added a change-feed test for a medicine deleted from another device; ARCHITECTURE change-feed section and deferred list no longer say "not implemented".
+
+## Member removal implemented (branch cursor/member-removal)
+- Migration `0016_shop_member_removal.sql` (receipt table with eligibility trigger; `access_audit` rebuilt with `member_removed`), `removeHouseholdMember` in `lib/household-access.js`, route `POST /api/household/members/:userId/remove`, `public/member-removal-client.js`, Remove button + dialog, and change-feed `onAccessLost` (403 stops polling, toast, reload).
+- Tests: `test/member-removal.test.js` (13), `test/member-removal-ui.test.js` (6), route test in `worker-invitations.test.js`, 403 test in `change-feed-client.test.js`. Full suite passes.
+- Verified against real Worker code with curl (member 403 after removal, replay no-op, roster updated). NOT verified in a real browser (no browser tool in that session): check the Remove button layout on a phone-width Profile and the dialog flow.
+- Deploy order: apply 0016 to remote D1, then deploy Worker/UI. New module is in both asset allowlists.
