@@ -1,5 +1,10 @@
 # Medicine Inventory Tracker — handover
 
+## Email chunk 2: deletion and transfer notices (2026-09-29)
+- Migration `0025_notification_outbox_kinds.sql` (rebuilds the outbox: new kinds, `deadline` column). Apply 0025 BEFORE deploying, or deletion/transfer fail on the CHECK.
+- Deletion queues one notice per other member (deadline = purge date); cancelled at send time if the Shop was restored or purged. Transfer queues one notice to the new Owner. No Shop name in either email.
+- Chunk 1 (0024, invitation notices) is live: Worker `bf4d5ee8`, test email delivered via Resend. Next: chunk 3 (Owner-role invitations).
+
 ## Email chunk 1 built, not committed or deployed (2026-09-29)
 - Migration `0024_notification_outbox.sql`, `lib/email-outbox.js` (enqueue statement, lease/retry/cancel dispatcher, Resend send with idempotency key, 30-day prune), invitation-created notice queued in the same D1 batch as the invitation in `createHouseholdInvitation`, dispatcher + prune in the cron (`worker/index.js`). Apply 0024 BEFORE deploying.
 - Sender stays off until `RESEND_API_KEY` (secret), `EMAIL_FROM` and `APP_URL` (https) are all set. Rows queue meanwhile; a still-pending invitation is sent once enabled, stale ones are cancelled.
