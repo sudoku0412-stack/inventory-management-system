@@ -32,8 +32,9 @@ const dialog = $('actionDialog'), form = $('actionForm'), reasonBox = $('actionR
 let pending = null, dialogTrigger = null;
 
 // One intent (and operation id) per target, kept across dismissal so a retry replays the same request.
-function openAction({ key, title, effect, verb, path, confirmName = null, trigger, done }) {
+function openAction({ key, title, effect, verb, path, confirmName = null, days = false, trigger, done }) {
   if (!pending || pending.key !== key) pending = { key, operationId: uuid(), path, done };
+  pending.days = days; $('actionDaysLabel').hidden = $('actionDays').hidden = !days; $('actionDays').value = '14';
   dialogTrigger = trigger;
   $('actionTitle').textContent = title; $('actionEffect').textContent = effect; submit.textContent = verb;
   $('actionNameLabel').hidden = nameBox.hidden = !confirmName;
@@ -46,11 +47,13 @@ function openAction({ key, title, effect, verb, path, confirmName = null, trigge
 function syncAction() {
   const reason = reasonBox.value.trim();
   $('actionCounter').textContent = `${reason.length} / 500`;
-  submit.disabled = reason.length < 10 || reason.length > 500 || (pending?.confirmName && nameBox.value.trim() !== pending.confirmName);
+  const daysValue = Number($('actionDays').value), daysBad = pending?.days && !(Number.isInteger(daysValue) && daysValue >= 7 && daysValue <= 30);
+  submit.disabled = reason.length < 10 || reason.length > 500 || Boolean(pending?.confirmName && nameBox.value.trim() !== pending.confirmName) || Boolean(daysBad);
 }
 
 reasonBox.addEventListener('input', syncAction);
 nameBox.addEventListener('input', syncAction);
+$('actionDays').addEventListener('input', syncAction);
 $('actionCancel').addEventListener('click', () => dialog.close());
 dialog.addEventListener('close', () => dialogTrigger?.isConnected && dialogTrigger.focus());
 form.addEventListener('submit', async event => {
@@ -59,7 +62,7 @@ form.addEventListener('submit', async event => {
   const value = pending;
   submit.disabled = true; $('actionStatus').textContent = 'Working…';
   try {
-    const result = await post(value.path, { operationId: value.operationId, reason: reasonBox.value.trim() });
+    const result = await post(value.path, { operationId: value.operationId, reason: reasonBox.value.trim(), ...(value.days ? { keepDays: Number($('actionDays').value) } : {}) });
     pending = null; dialog.close();
     status.textContent = result.changed === false ? 'Already done; nothing changed.' : 'Done. The change is recorded in the audit log.'; status.classList.remove('error');
     await value.done();
@@ -117,6 +120,8 @@ const views = {
     const reload = () => run('shop', null, id);
     const restorable = writesEnabled && data.deletion && !data.deletion.purged_at && data.deletion.purge_after > new Date().toISOString();
     const restoreButton = restorable ? el('button', { type: 'button', class: 'primary' }, 'Restore Shop') : null;
+    const extendButton = restorable ? el('button', { type: 'button' }, 'Extend deadline') : null;
+    extendButton?.addEventListener('click', () => openAction({ key: `extend:${id}`, title: `Extend the deadline for ${data.shop.name}?`, effect: 'Moves the permanent-deletion date later, counted from today. It never shortens it.', verb: 'Extend deadline', path: `/admin/api/shops/${encodeURIComponent(id)}/extend`, days: true, trigger: extendButton, done: reload }));
     restoreButton?.addEventListener('click', () => openAction({ key: `restore:${id}`, title: `Restore ${data.shop.name}?`, effect: 'Members regain their access. Invitations and push subscriptions removed at deletion are not restored.', verb: 'Restore Shop', path: `/admin/api/shops/${encodeURIComponent(id)}/restore`, confirmName: data.shop.name, trigger: restoreButton, done: reload }));
     const revokeCell = row => {
       if (!writesEnabled || !row.pending) return '';
@@ -128,7 +133,7 @@ const views = {
       el('h2', {}, text(data.shop.name)),
       el('p', {}, `ID ${data.shop.id} · created ${when(data.shop.created_at)} · ${data.shop.medicine_count} medicines (count only)`),
       ...(data.deletion ? [el('p', { class: 'note' }, data.deletion.purged_at ? `Purged ${when(data.deletion.purged_at)}.` : `Pending deletion since ${when(data.deletion.deleted_at)}; permanently purged after ${when(data.deletion.purge_after)}.`)] : []),
-      ...(restoreButton ? [restoreButton] : []),
+      ...(restoreButton ? [restoreButton, extendButton] : []),
       el('h2', {}, 'Members'),
       table('Members', [{ label: 'Email', key: 'email' }, { label: 'Role', key: 'role' }, { label: 'Joined', render: row => when(row.joined_at) }, { label: 'User ID', key: 'user_id' }], data.members),
       el('h2', {}, 'Invitations'),

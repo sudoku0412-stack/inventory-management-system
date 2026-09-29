@@ -305,3 +305,34 @@ test('the admin header has a same-origin Cloudflare Access sign-out link', () =>
   const html = readFileSync(new URL('../public/admin/index.html', import.meta.url), 'utf8');
   assert.match(html, /<a class="signout" href="\/cdn-cgi\/access\/logout">Sign out<\/a>/);
 });
+
+test('admin extend moves the purge deadline later only, inside the grace period, audited and replay-safe', () => withFetch(async () => {
+  const f = fixture(), w = writable(f);
+  const extend = (op = opId(20), keepDays = 30, shop = uuid(11), extra = {}) => w.post(`/admin/api/shops/${shop}/extend`, { operationId: op, reason: REASON, keepDays, ...extra });
+  assert.equal((await extend()).status, 409, 'not pending deletion');
+  const soon = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString();
+  w.softDelete(uuid(11), soon);
+  for (const keepDays of [6, 31, 10.5, '30', null]) assert.equal((await extend(opId(21), keepDays)).status, 400, String(keepDays));
+  assert.equal((await extend(opId(22), 7)).status, 409, 'not later than the current deadline');
+  assert.equal((await w.post(`/admin/api/shops/${uuid(11)}/extend`, { operationId: opId(23), reason: REASON })).status, 400, 'keepDays required');
+  const response = await extend();
+  const body = await response.json();
+  assert.equal(body.changed, true);
+  const after = w.rows('SELECT purge_after FROM household_deletions')[0].purge_after;
+  assert.equal(after, body.purgeAfter);
+  assert.ok(after > soon);
+  assert.deepEqual(w.rows("SELECT action,target,reason FROM admin_audit WHERE action='shop.extend'"), [{ action: 'shop.extend', target: `shop:${uuid(11)}:30d`, reason: REASON }]);
+  assert.deepEqual(await (await extend()).json(), { changed: false }, 'replay');
+  assert.equal(w.rows("SELECT * FROM admin_audit WHERE action='shop.extend'").length, 1);
+  assert.equal((await extend(opId(20), 14)).status, 409, 'same key, different days');
+  w.softDelete(uuid(12), '2000-01-01T00:00:00.000Z');
+  assert.equal((await extend(opId(24), 30, uuid(12))).status, 409, 'grace period over');
+  assert.equal((await extend(opId(25), 30, uuid(99))).status, 404);
+}));
+
+test('the console offers Extend deadline with a days input', () => {
+  const js = readFileSync(new URL('../public/admin/admin.js', import.meta.url), 'utf8'), html = readFileSync(new URL('../public/admin/index.html', import.meta.url), 'utf8');
+  assert.match(js, /Extend deadline/);
+  assert.match(js, /keepDays: Number/);
+  assert.match(html, /id="actionDays"/);
+});

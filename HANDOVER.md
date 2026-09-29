@@ -3,6 +3,10 @@
 ## Shop deletion released, flag off (2026-09-29)
 - PR #73 merged as `f2a30c8`. Remote migration `0020_shop_deletion.sql` applied, then Worker deployed: version `f27c3e78-6559-4f14-b8ae-79de4af18b50`. `SHOP_DELETION_ENABLED` and `SHOP_PURGE_ENABLED` are NOT set: the delete route returns 404, the card is hidden, and the cron purge only logs a dry run. User decision: turn deletion on only after admin restore is live.
 
+## Purge days option (2026-09-29)
+- Owners choose how long a deleted Shop is kept when deleting: `keepDays` 7 to 30 (default 14) in `POST /api/household/delete`, number field in the delete dialog. Admin can extend a pending Shop's deadline (later only, counted from now, 7 to 30 days) with `POST /admin/api/shops/:id/extend` `{ operationId, reason, keepDays }`, audited as `shop.extend` in `admin_audit` only (no customer history row: the access_audit CHECK has no event for it). No migration.
+- Purge is enabled (`SHOP_PURGE_ENABLED`), so a Shop is permanently removed at its own `purge_after`.
+
 ## Flags enabled (2026-09-29)
 - `ADMIN_WRITES_ENABLED` and `SHOP_DELETION_ENABLED` are set as Worker secrets; the user tested delete, restore, revoke, sign-out and the other pending checks and confirmed all good. Admin console has a Sign out link (PR #76, Worker `8f4b4c52-e945-458f-9f05-67a18902ab2b`).
 - `SHOP_PURGE_ENABLED` is NOT set: the cron purge only logs a dry run, so deleted Shops are never permanently removed yet. Set it with `echo true | npx wrangler secret put SHOP_PURGE_ENABLED` when ready (permanent after each Shop's 14-day grace).
