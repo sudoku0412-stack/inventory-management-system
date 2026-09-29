@@ -8,7 +8,7 @@ import {
   visionConfig
 } from '../lib/shared.js';
 import { createD1Store, loadVapid } from '../lib/store-d1.js';
-import { adminActivity, adminAudit, adminOverview, adminShopDetail, adminShops, authorizeAdmin, writeAdminAudit } from '../lib/admin.js';
+import { adminActivity, adminAudit, adminOverview, adminShopDetail, adminShops, adminRestoreShop, adminRevokeInvitation, authorizeAdmin, writeAdminAudit } from '../lib/admin.js';
 import { listBatchChanges, parseChangeQuery, pruneBatchChanges } from '../lib/batch-changes.js';
 import { purgeDeletedShops } from '../lib/shop-purge.js';
 import { createAdditionalShop, listShops, onboardingStatus, pinnedTenant, resolveTenant, setupInitialShop, shopContext } from '../lib/tenants.js';
@@ -89,14 +89,26 @@ async function handleAdmin(request, env, url) {
   try {
     const access = accessConfig({ ...env, ACCESS_AUD: env.ADMIN_ACCESS_AUD });
     const admin = await authorizeAdmin(request, env, access ? await accessKeys(access) : undefined);
-    if (request.method !== 'GET' && request.method !== 'HEAD') return json({ error: 'Not found' }, 405, { ...adminHeaders, allow: 'GET, HEAD' });
+    const writeRoute = request.method === 'POST' && api ? url.pathname.match(/^\/admin\/api\/shops\/([^/]+)\/(?:invitations\/([^/]+)\/revoke|restore)$/) : null;
+    if (request.method !== 'GET' && request.method !== 'HEAD' && !writeRoute) return json({ error: 'Not found' }, 405, { ...adminHeaders, allow: 'GET, HEAD' });
+    const writesEnabled = env.ADMIN_WRITES_ENABLED === 'true';
+    if (writeRoute) {
+      if (!writesEnabled) return json({ error: 'Admin changes are not enabled.' }, 403, adminHeaders);
+      if (!/^application\/json(?:\s*;|$)/i.test(request.headers.get('content-type') || '')) return json({ error: 'Content-Type must be application/json.' }, 400, adminHeaders);
+      if (request.headers.get('origin') !== url.origin || request.headers.get('sec-fetch-site') === 'cross-site' || request.headers.get('x-admin-action') !== '1') return json({ error: 'This admin change must come from the console.' }, 403, adminHeaders);
+      const body = await readJson(request);
+      const done = writeRoute[2]
+        ? await adminRevokeInvitation(env.DB, admin, { shopId: writeRoute[1], invitationId: writeRoute[2] }, body, { requestId })
+        : await adminRestoreShop(env.DB, admin, writeRoute[1], body, { requestId });
+      return json(done, 200, adminHeaders);
+    }
     const params = url.searchParams, db = env.DB;
     const audited = async (action, target, load) => { await writeAdminAudit(db, { email: admin.email, action, target, requestId }); return json(await load(), 200, adminHeaders); };
     if (api) {
-      if (url.pathname === '/admin/api/overview') return await audited('overview.view', null, async () => ({ ...await adminOverview(db), admin: admin.email }));
+      if (url.pathname === '/admin/api/overview') return await audited('overview.view', null, async () => ({ ...await adminOverview(db), admin: admin.email, writesEnabled }));
       if (url.pathname === '/admin/api/shops') return await audited('shops.list', null, () => adminShops(db, params));
       const detail = url.pathname.match(/^\/admin\/api\/shops\/([^/]+)$/);
-      if (detail) return await audited('shop.view', detail[1], () => adminShopDetail(db, detail[1]));
+      if (detail) return await audited('shop.view', detail[1], async () => ({ ...await adminShopDetail(db, detail[1]), writesEnabled }));
       if (url.pathname === '/admin/api/audit') return await audited('audit.view', params.get('shop'), () => adminAudit(db, params));
       if (url.pathname === '/admin/api/admin-audit') return await audited('admin-audit.view', null, () => adminActivity(db, params));
       return json({ error: 'Not found' }, 404, adminHeaders);

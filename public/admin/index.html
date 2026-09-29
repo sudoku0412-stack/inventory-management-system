@@ -10,7 +10,7 @@
 <body>
   <header class="bar">
     <h1>Admin console</h1>
-    <p class="banner" role="note">Read-only. Metadata only; medicine contents are never shown.</p>
+    <p class="banner" id="banner" role="note">Read-only. Metadata only; medicine contents are never shown.</p>
     <p class="who" id="who"></p>
   </header>
   <nav aria-label="Admin sections" class="tabs" id="tabs">
@@ -24,6 +24,19 @@
     <section id="content"></section>
     <button type="button" id="more" hidden>Load more</button>
   </main>
+  <dialog id="actionDialog" aria-labelledby="actionTitle" aria-describedby="actionEffect">
+    <form id="actionForm" novalidate>
+      <h2 id="actionTitle"></h2>
+      <p id="actionEffect"></p>
+      <label for="actionName" id="actionNameLabel" hidden></label>
+      <input id="actionName" type="text" autocomplete="off" hidden>
+      <label for="actionReason">Reason (10 to 500 characters, recorded in the audit log)</label>
+      <textarea id="actionReason" rows="3" maxlength="500" required></textarea>
+      <p class="counter" id="actionCounter" aria-live="polite"></p>
+      <p id="actionStatus" role="status" aria-live="polite"></p>
+      <div class="actions"><button type="button" id="actionCancel">Cancel</button><button type="submit" id="actionSubmit" disabled></button></div>
+    </form>
+  </dialog>
   <script src="/admin/admin.js" type="module"></script>
 </body>
 </html>

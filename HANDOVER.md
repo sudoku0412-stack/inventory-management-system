@@ -1,5 +1,15 @@
 # Medicine Inventory Tracker — handover
 
+## Shop deletion released, flag off (2026-09-29)
+- PR #73 merged as `f2a30c8`. Remote migration `0020_shop_deletion.sql` applied, then Worker deployed: version `f27c3e78-6559-4f14-b8ae-79de4af18b50`. `SHOP_DELETION_ENABLED` and `SHOP_PURGE_ENABLED` are NOT set: the delete route returns 404, the card is hidden, and the cron purge only logs a dry run. User decision: turn deletion on only after admin restore is live.
+
+## Admin write actions implemented (branch cursor/admin-writes)
+- Migration `0021_admin_writes.sql` (`admin_audit.reason`, `operation_id`, unique `(admin_email, operation_id)`). `revokeInvitationCore` (household-access) is shared by owners and admin; `adminRevokeInvitation`/`adminRestoreShop` in `lib/admin.js`; `restoreShopStatement` in `lib/shop-purge.js`.
+- Routes `POST /admin/api/shops/:id/invitations/:invId/revoke` and `POST /admin/api/shops/:id/restore`, body `{ operationId, reason }` (10-500 chars). Off (403) unless `ADMIN_WRITES_ENABLED=true`. Requires JSON, exact Origin, no cross-site, header `X-Admin-Action: 1`; 30 writes/minute per admin. The admin row is in the same batch as the mutation and the Shop's own history gets an `invite_revoked`/`shop_restored` row with no admin identity.
+- Console UI: Revoke on pending invitations, Restore Shop (typed name + reason) inside the grace period, banner shows "Changes are audited" when enabled. Restore does not bring back deleted invitations or push subscriptions.
+- Not browser-verified. Full suite 285.
+- Rollout: apply 0021, deploy, `wrangler secret put ADMIN_WRITES_ENABLED` = `true`, exercise revoke on a test invitation and check both audit rows; then enable `SHOP_DELETION_ENABLED` when ready.
+
 ## Shop deletion implemented, flag off (branch cursor/shop-deletion)
 - Migration `0020_shop_deletion.sql`: `household_deletions` side table (not columns on `households`, so positional inserts and readers stay valid), `active_memberships` view, `shop_deletion_receipts` with guard trigger, audit events `shop_deleted`/`shop_restored`/`shop_purged`.
 - Every Shop reader in `lib/tenants.js`, `lib/household-access.js` and the scheduled push enumeration now reads `active_memberships`; writes still use `memberships`. Pending-invitation discovery also hides deleted Shops. New code REQUIRES 0020: apply it before deploying the Worker. Test fixtures that apply only older migrations add `test/deletion-stub.js`.
