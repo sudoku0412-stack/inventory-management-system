@@ -3,7 +3,14 @@
 ## Shop deletion released, flag off (2026-09-29)
 - PR #73 merged as `f2a30c8`. Remote migration `0020_shop_deletion.sql` applied, then Worker deployed: version `f27c3e78-6559-4f14-b8ae-79de4af18b50`. `SHOP_DELETION_ENABLED` and `SHOP_PURGE_ENABLED` are NOT set: the delete route returns 404, the card is hidden, and the cron purge only logs a dry run. User decision: turn deletion on only after admin restore is live.
 
-## Admin write actions implemented (branch cursor/admin-writes)
+## Flags enabled (2026-09-29)
+- `ADMIN_WRITES_ENABLED` and `SHOP_DELETION_ENABLED` are set as Worker secrets; the user tested delete, restore, revoke, sign-out and the other pending checks and confirmed all good. Admin console has a Sign out link (PR #76, Worker `8f4b4c52-e945-458f-9f05-67a18902ab2b`).
+- `SHOP_PURGE_ENABLED` is NOT set: the cron purge only logs a dry run, so deleted Shops are never permanently removed yet. Set it with `echo true | npx wrangler secret put SHOP_PURGE_ENABLED` when ready (permanent after each Shop's 14-day grace).
+
+## Admin write actions released (2026-09-29)
+- PR #74 merged as `a03c6bf`. Remote migration `0021_admin_writes.sql` applied, then Worker deployed: version `39064e00-2849-4b5c-801c-ec2ccc5fec55`. Ownership transfer is live (`fdc19e22`), Shop deletion is deployed with its flag off.
+
+## Admin write actions implemented
 - Migration `0021_admin_writes.sql` (`admin_audit.reason`, `operation_id`, unique `(admin_email, operation_id)`). `revokeInvitationCore` (household-access) is shared by owners and admin; `adminRevokeInvitation`/`adminRestoreShop` in `lib/admin.js`; `restoreShopStatement` in `lib/shop-purge.js`.
 - Routes `POST /admin/api/shops/:id/invitations/:invId/revoke` and `POST /admin/api/shops/:id/restore`, body `{ operationId, reason }` (10-500 chars). Off (403) unless `ADMIN_WRITES_ENABLED=true`. Requires JSON, exact Origin, no cross-site, header `X-Admin-Action: 1`; 30 writes/minute per admin. The admin row is in the same batch as the mutation and the Shop's own history gets an `invite_revoked`/`shop_restored` row with no admin identity.
 - Console UI: Revoke on pending invitations, Restore Shop (typed name + reason) inside the grace period, banner shows "Changes are audited" when enabled. Restore does not bring back deleted invitations or push subscriptions.
