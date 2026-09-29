@@ -353,6 +353,8 @@ Real SQLite-backed D1 batches: authorization matrix; last-owner guard including 
 
 ## Implemented: company-only platform admin console, read-only v1 (migration 0018)
 
+_Superseded in part: v1 writes shipped afterwards (see the admin write actions section). The read-only rules below still hold for every GET route._
+
 ### Scope and principles
 
 A separate console for company staff at `/admin`. Version 1 is **read-only and metadata-only**: staff can see Shops, members and roles, counts, health and audit history. They cannot see medicine names, strengths, notes, photos, push endpoints or any other customer inventory content, and they cannot change anything. Write actions are later slices, each with its own design, and will call the existing store/access functions (same validation and audit), never raw SQL. Every admin request is audited.
@@ -393,7 +395,9 @@ JWT matrix (customer AUD rejected on admin routes and admin AUD rejected on cust
 3. Set `ADMIN_ACCESS_AUD` and `ADMIN_EMAILS` with `wrangler secret put`.
 4. Deploy the Worker; verify signed in as the admin email, and that a customer-only login gets 403 or the Access denial.
 
-## Design (not implemented): ownership transfer between Owners and Members
+## Implemented and deployed: ownership transfer between Owners and Members (migration 0019)
+
+_Status (2026-09-29): built as designed and live. Decisions taken: atomic transfer, the actor becomes a Member, the target must already be a Member, immediate (no acceptance step), five-owned-Shops cap kept. The page reloads after success so roles and owner-only cards refresh. There is no server capability flag: UI and Worker ship together. `test/ownership-transfer.test.js`._
 
 ### Problem and smallest slice
 
@@ -431,7 +435,9 @@ Apply 0019, deploy Worker plus UI together (the UI checks a server capability fl
 4. Require the target to **accept** the transfer (two-step, needs a pending-state table and expiry) versus immediate (recommended; targets are already trusted Members and they can leave).
 5. Keep the five-owned-Shops cap for the target (recommended) versus exempting transfers.
 
-## Design (not implemented): Shop deletion by an Owner
+## Implemented and deployed: Shop deletion by an Owner (migration 0020)
+
+_Status (2026-09-29): built and live with `SHOP_DELETION_ENABLED` and `SHOP_PURGE_ENABLED` on. Differences from the text below: (1) deletion state lives in a `household_deletions` side table (`household_id`, `deleted_at`, `purge_after`, `deleted_by_user_id`, `purged_at`), not columns on `households`, and every reader uses the `active_memberships` view (writes keep using `memberships`), so positional inserts and old readers stay valid; (2) the Owner chooses the keep period, `keepDays` 7 to 30 (default 14), in `POST /api/household/delete`; (3) the purge runs in the 15-minute cron, dry-run unless `SHOP_PURGE_ENABLED=true`, photos first and rows kept if a photo delete fails; (4) restore and deadline extension are admin actions (next section); there is no owner self-service undelete. Tests: `test/shop-deletion.test.js`._
 
 ### Problem and boundary
 
@@ -476,7 +482,9 @@ Apply 0020, deploy the Worker with all readers filtering `deleted_at` **before**
 5. Restore: **platform admin only in v1 (recommended, see admin write actions)** versus owner self-service "Recently deleted" list in Profile.
 6. Push subscriptions and invitations deleted at soft-delete time (recommended, fail safe, not restored) versus kept and filtered.
 
-## Design (not implemented): admin write actions v1 for the /admin console
+## Implemented and deployed: admin write actions v1 for the /admin console (migrations 0021, 0022)
+
+_Status (2026-09-29): built and live with `ADMIN_WRITES_ENABLED` on. Shipped actions: revoke a pending invitation, restore a Shop inside its grace period, and **extend a pending Shop's purge deadline** (`POST /admin/api/shops/:id/extend` with `keepDays` 7 to 30, later only, counted from now; not in the original design). Migration 0021 adds `admin_audit.reason` and `operation_id`; 0022 adds the `shop_extended` history event, so each action also leaves a Shop-history row without the admin identity. Writes are throttled to 30 per minute per admin. Tests: `test/admin-console.test.js`._
 
 ### Scope and principles
 
@@ -522,7 +530,7 @@ Apply migration; deploy Worker with `ADMIN_WRITES_ENABLED` unset; verify GET beh
 
 - Offline synchronization reconciliation (offline mutation queue, conflict UI, background reconciliation). The online pull/change feed is implemented and deployed; see its section above.
 - Native mobile clients.
-- Export, account deletion, configurable reminder windows, ownership transfer, a separate in-Shop admin role, a company-only platform admin beyond the read-only console designed below, and non-owner roster or pending-invitation visibility. Owner promotion is the finalized slice below.
+- Export, account deletion, configurable reminder windows, a separate in-Shop admin role, a company-only platform admin beyond the read-only console designed below, and non-owner roster or pending-invitation visibility. Owner promotion is the finalized slice below.
 
 ## Implemented and deployed: make an existing member an owner
 

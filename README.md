@@ -73,7 +73,8 @@ Cloud data is isolated by server-side **Shop** membership; the browser pins a Sh
 
 - **Roles:** Owners manage a Shop's access; Members use its inventory. A Shop always keeps at least one Owner.
 - **Invitations:** Owners invite people by email in Profile. The invitee accepts after signing in through Access, either on first visit or from the **Shop invitations** card in Profile if they already belong to another Shop.
-- **Owner actions:** make a Member an Owner, make another Owner a Member, or remove a Member. Anyone can leave a Shop (the last Owner cannot). Each change is atomic and recorded in an audit table.
+- **Owner actions:** make a Member an Owner, make another Owner a Member, transfer ownership to a Member (you become a Member), or remove a Member. Anyone can leave a Shop (the last Owner cannot). Each change is atomic and recorded in an audit table.
+- **Deleting a Shop:** an Owner can delete a Shop (never their only one) by typing its name and choosing how many days to keep it (7 to 30, default 14). Everyone loses access at once; medicines and photos are permanently purged after that period. Company staff can restore or extend it from `/admin` until then.
 - **Another Shop:** users can create additional empty Shops (capped at five owned Shops).
 - **Live updates:** while a tab is open on Dashboard or Inventory, the app polls a per-Shop change feed about once a minute and applies changes made on other devices.
 
@@ -81,18 +82,20 @@ Initial setup: set `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` and `INITIAL_OWNER_EMAILS`
 
 ## Admin console (company use only)
 
-`/admin` is a separate, read-only console for company staff. It shows totals, Shops with members and roles, audit events and an admin activity log. It never shows medicine names, notes, photos or push details, and it cannot change data.
+`/admin` is a separate console for company staff. It shows totals, Shops with members and roles, audit events and an admin activity log. It never shows medicine names, notes, photos or push details. With `ADMIN_WRITES_ENABLED=true` it can also revoke a pending invitation, restore a deleted Shop and extend its purge deadline; each needs a written reason and is audited. Without the flag it is read-only. The header has a **Sign out** link.
 
 - It sits behind its own Cloudflare Access application for `/admin*`, separate from the customer application.
 - The Worker also checks that token's audience (`ADMIN_ACCESS_AUD`) and that the email is in `ADMIN_EMAILS` (comma-separated Worker secret). If either is missing the console returns 503.
-- Every authorized request writes to `admin_audit` before any data is returned.
+- Every authorized request writes to `admin_audit` before any data is returned. Every change writes its `admin_audit` row in the same transaction as the change.
 
 ## Deploying to Cloudflare
 
 Required Worker secrets: `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`, `INITIAL_OWNER_EMAILS`, `ADMIN_ACCESS_AUD`, `ADMIN_EMAILS`, plus optional `GEMINI_API_KEY`.
 
+Feature flags (Worker secrets whose value is `true`; unset means off): `ADMIN_WRITES_ENABLED` (admin changes), `SHOP_DELETION_ENABLED` (owner **Delete this Shop**), `SHOP_PURGE_ENABLED` (permanent purge; without it the cron only logs a dry run). Set with `echo true | npx wrangler secret put NAME`, turn off with `npx wrangler secret delete NAME`. Turn on admin changes before Shop deletion so a deleted Shop can be restored.
+
 1. Run the tests: `npm test`.
-2. Apply new D1 migrations first: `npm run cf:migrate` (migrations `0001` to `0018` live in `migrations/`; list pending ones with `npx wrangler d1 migrations list medicine-inventory --remote`).
+2. Apply new D1 migrations first: `npm run cf:migrate` (migrations `0001` to `0022` live in `migrations/`; list pending ones with `npx wrangler d1 migrations list medicine-inventory --remote`).
 3. Deploy the Worker and UI: `npm run deploy`.
 
 Always migrate before deploying. Any new browser module under `public/` must be added to both `publicAssetPaths` (`lib/shared.js`) and `bootstrapAssetPaths` (`worker/index.js`), or it returns 404 in production; a test enforces this. Admin files under `public/admin/` are deliberately not in the public list.

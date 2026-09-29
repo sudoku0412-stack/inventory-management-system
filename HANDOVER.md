@@ -1,6 +1,13 @@
 # Medicine Inventory Tracker — handover
 
-## Shop deletion released, flag off (2026-09-29)
+## Current state summary (2026-09-29)
+- Everything requested in this session is built, deployed and tested by the user in production: icon, ownership transfer, Shop deletion with owner-chosen keep days, admin revoke/restore/extend (with Shop-history rows), admin Sign out, roster layout fix. Migrations 0001 to 0022 are applied. Flags `ADMIN_WRITES_ENABLED`, `SHOP_DELETION_ENABLED`, `SHOP_PURGE_ENABLED` are all set. Latest Worker: `fbed3ba4-0b39-4054-882f-eeaedf85ed4a`.
+- The local SQLite import tool (`tools/export-local-to-d1.js`) is merged but has never been run against real data (the user has no local data to import).
+- Deploy rule reminder: apply migrations first, then `npm run deploy`; new browser modules go in both asset allowlists.
+- Working rule from the user: one agent at a time, no multiple background agents.
+- Docs refreshed in this pass: `README.md`, `ARCHITECTURE.md` (status notes), `deploy/cloudflare-workers.md` (flags).
+
+## Shop deletion released (2026-09-29)
 - PR #73 merged as `f2a30c8`. Remote migration `0020_shop_deletion.sql` applied, then Worker deployed: version `f27c3e78-6559-4f14-b8ae-79de4af18b50`. `SHOP_DELETION_ENABLED` and `SHOP_PURGE_ENABLED` are NOT set: the delete route returns 404, the card is hidden, and the cron purge only logs a dry run. User decision: turn deletion on only after admin restore is live.
 
 ## Extension in Shop history (2026-09-29)
