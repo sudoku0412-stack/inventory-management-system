@@ -12,6 +12,7 @@ import { adminActivity, adminAudit, adminOverview, adminShopDetail, adminShops, 
 import { listBatchChanges, parseChangeQuery, pruneBatchChanges } from '../lib/batch-changes.js';
 import { purgeDeletedShops } from '../lib/shop-purge.js';
 import { effectiveFlag } from '../lib/feature-flags.js';
+import { pruneReceipts, retentionDays } from '../lib/retention.js';
 import { listDeletedShops, restoreOwnDeletedShop, validateOwnRestore } from '../lib/deleted-shops.js';
 import { createAdditionalShop, listShops, onboardingStatus, pinnedTenant, resolveTenant, setupInitialShop, shopContext } from '../lib/tenants.js';
 import { acceptHouseholdInvitation, createHouseholdInvitation, listHouseholdAccess, pendingHouseholdInvitations, demoteHouseholdOwner, leaveHousehold, promoteHouseholdMember, removeHouseholdMember, revokeHouseholdInvitation, transferHouseholdOwnership, validateOwnershipTransfer, deleteHousehold, validateShopDeletion, validateMemberRemoval, validateOwnerDemotion, validateOwnerPromotion, validateShopLeave, throttleInvitationRoute } from '../lib/household-access.js';
@@ -372,6 +373,6 @@ export default {
     return handleRequest(request, env, ctx);
   },
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(Promise.all([deliverScheduledPushes(env), pruneBatchChanges(env.DB).catch(() => {}), purgeDeletedShops(env.DB, env.PHOTOS, { dryRun: env.SHOP_PURGE_ENABLED !== 'true', log: message => console.log(message) }).catch(() => {})]));
+    ctx.waitUntil(Promise.all([deliverScheduledPushes(env), pruneBatchChanges(env.DB).catch(() => {}), pruneReceipts(env.DB, { days: retentionDays(env) }).then(deleted => { if (Object.keys(deleted).length) console.log(`receipt retention: ${JSON.stringify(deleted)}`); }).catch(() => {}), purgeDeletedShops(env.DB, env.PHOTOS, { dryRun: env.SHOP_PURGE_ENABLED !== 'true', log: message => console.log(message) }).catch(() => {})]));
   }
 };
