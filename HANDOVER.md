@@ -299,3 +299,7 @@ Do not launch Cursor cloud agents for this project. Read this file at the start 
 - Tests: `test/demotion-leave.test.js` (14 incl. last-owner races), `test/demotion-leave-ui.test.js` (7), route test in `worker-invitations.test.js`. Full suite 241 passing.
 - Not browser-verified. Deploy order: apply 0017 to remote D1, then deploy the Worker.
 - The platform-admin questions above are still open for the morning.
+
+## Demotion and leave released
+- PR #64 merged as `1d2576c`. Remote migration `0017_shop_demotion_leave.sql` applied (both receipt tables and guard triggers present, 6 audit rows preserved, `member_left` allowed), then Worker deployed: version `f1887e97-b031-46be-95ef-991bbadde181`.
+- Signed-in check pending: Make member on another Owner, Leave this Shop as a Member, and the disabled Leave with a reason for the last Owner. Platform-admin decisions still open.
