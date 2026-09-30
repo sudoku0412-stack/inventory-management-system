@@ -16,6 +16,7 @@ import { pruneReceipts, retentionDays } from '../lib/retention.js';
 import { dispatchOutbox, pruneOutbox } from '../lib/email-outbox.js';
 import { enqueueWeeklyDigests } from '../lib/digest.js';
 import { exportInventoryCsv } from '../lib/export.js';
+import { lookupBarcode } from '../lib/barcode.js';
 import { ownerOverview, ownerOverviewCsv } from '../lib/overview.js';
 import { addDefaultOption, addShopOption, isShopType, listDefaultOptions, removeDefaultOption, removeShopOption, setShopOptionHidden, setShopType, shopOptions, shopTypeOf } from '../lib/options.js';
 import { getEmailPreferences, setEmailPreferences } from '../lib/email-preferences.js';
@@ -25,7 +26,7 @@ import { acceptHouseholdInvitation, createHouseholdInvitation, listHouseholdAcce
 
 const jwksCache = { at: 0, keys: null };
 
-const bootstrapAssetPaths = new Set(['/index.html', '/app.js', '/greeting.js', '/shop-client.js', '/shop-creation-client.js', '/owner-promotion-client.js', '/member-removal-client.js', '/owner-demotion-client.js', '/ownership-transfer-client.js', '/shop-leave-client.js', '/shop-deletion-client.js', '/deleted-shops-client.js', '/email-preferences-client.js', '/inventory-export-client.js', '/options-client.js', '/overview-client.js', '/shop-invitations-client.js', '/change-feed-client.js', '/offline-store.js', '/offline-queue.js', '/restock-client.js', '/styles.css', '/sw.js']);
+const bootstrapAssetPaths = new Set(['/index.html', '/app.js', '/greeting.js', '/shop-client.js', '/shop-creation-client.js', '/owner-promotion-client.js', '/member-removal-client.js', '/owner-demotion-client.js', '/ownership-transfer-client.js', '/shop-leave-client.js', '/shop-deletion-client.js', '/deleted-shops-client.js', '/email-preferences-client.js', '/inventory-export-client.js', '/options-client.js', '/overview-client.js', '/barcode-client.js', '/shop-invitations-client.js', '/change-feed-client.js', '/offline-store.js', '/offline-queue.js', '/restock-client.js', '/styles.css', '/sw.js']);
 
 export function assetCacheControl(path) {
   if (path === '/index.html') return 'no-store';
@@ -343,6 +344,7 @@ export async function handleRequest(request, env, ctx) {
         await setShopType(env.DB, tenant, body.shop_type);
         try { return json(await store.updateSettings(body)); } catch (error) { await setShopType(env.DB, tenant, previous); throw error; }
       }
+      if (request.method === 'GET' && url.pathname === '/api/barcode') return json(await lookupBarcode(env.DB, tenant.householdId, url.searchParams.get('code')));
       if (url.pathname === '/api/options') {
         if (request.method === 'GET') return json(await shopOptions(env.DB, tenant.householdId));
         if (request.method !== 'POST') return json({ error: 'Not found' }, 404);

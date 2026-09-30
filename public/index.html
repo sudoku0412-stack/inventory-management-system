@@ -143,7 +143,7 @@
         <section class="view" id="inventoryView" data-view-panel="inventory" hidden>
           <div class="page-heading inventory-heading">
             <div data-wording><p class="eyebrow">YOUR MEDICINE CABINET</p><h1>Inventory</h1><p>Search, review and update every medicine in your home.</p></div>
-            <button class="button primary add-medicine-trigger" type="button" data-wording><span aria-hidden="true">＋</span> Add medicine</button>
+            <div class="header-actions"><button class="button secondary scan-barcode-trigger" type="button">Scan barcode</button><button class="button primary add-medicine-trigger" type="button" data-wording><span aria-hidden="true">＋</span> Add medicine</button></div>
           </div>
 
           <div class="inventory-toolbar">
@@ -352,6 +352,18 @@
       <div class="modal-footer"><button class="button secondary" id="restockCopy" type="button">Copy list</button><button class="button secondary" id="restockShare" type="button" hidden>Share</button><button class="button primary" type="button" data-close-modal>Done</button></div>
     </dialog>
 
+    <dialog class="modal" id="scanModal" aria-labelledby="scanTitle">
+      <div class="modal-header"><div><span class="overline">BARCODE</span><h2 id="scanTitle">Scan a barcode</h2></div><button class="modal-close" type="button" data-close-modal aria-label="Close scan dialog">×</button></div>
+      <div class="modal-body">
+        <video id="scanVideo" class="scan-video" playsinline muted></video>
+        <p id="scanStatus" role="status" aria-live="polite"></p>
+        <form id="scanManualForm" class="options-add" novalidate>
+          <input id="scanManual" type="text" inputmode="numeric" maxlength="20" placeholder="Or type the barcode number" aria-label="Barcode number" autocomplete="off" />
+          <button class="button secondary" type="submit">Look up</button>
+        </form>
+        <small>Matches your earlier scans first, then free public product and drug databases. Always check the details before saving.</small>
+      </div>
+    </dialog>
     <dialog class="modal" id="addMedicineModal" aria-labelledby="addMedicineTitle">
       <form id="addMedicineForm" novalidate autocomplete="off">
         <div class="modal-header"><div><span class="overline">NEW ITEM</span><h2 id="addMedicineTitle" data-wording>Add medicine</h2></div><button class="modal-close" type="button" data-close-modal aria-label="Close add medicine dialog">×</button></div>

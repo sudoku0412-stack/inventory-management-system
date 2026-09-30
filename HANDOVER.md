@@ -1,5 +1,12 @@
 # Medicine Inventory Tracker — handover
 
+## Barcode scan (2026-09-30)
+- Migration `0030_batch_barcodes.sql` (apply BEFORE deploying): `batch_barcodes` remembers what a Shop saved for a scanned code (best effort, written after a create that carries `barcode`).
+- `GET /api/barcode?code=` (Shop-scoped, any member): Shop's own earlier scans, then openFDA drug label `openfda.upc`, then Open Food/Beauty/Products Facts. All free, no key, 4 s timeout each; a miss returns `{ found: false }`, never an error.
+- UI: "Scan barcode" button on Dashboard and Inventory headers opens a dialog with live scanning (`BarcodeDetector`, `public/barcode-client.js`) plus a type-the-number box. Result opens Add prefilled; the code is sent with the new item.
+- Limits: `BarcodeDetector` exists in Chrome and Edge only; Safari (iPhone) and Firefox get the typed box. A vendored decoder library would fix that. Free databases miss many medicines. Health Canada DPD is not used (keyed by DIN, not the barcode).
+- Verified: 331 tests (new `test/barcode.test.js`), the dialog flow in the in-app browser against a mock API. Live camera not verified (blocked in the browser pane); test on an Android phone.
+
 ## Configurable lists, Shop type, Owner overview (2026-09-30, built, not deployed)
 - Migration `0029_option_lists.sql` (apply BEFORE deploying): `option_defaults` (platform defaults per Shop type, seeded with today's medicine lists plus goods lists), `shop_options` (a Shop's own additions or hidden defaults), `shop_types` (no row = medicine, so every existing Shop is unchanged).
 - Lists (`lib/options.js`): effective list = defaults for the Shop type, plus the Shop's custom options, minus the ones it hid. Server validation (`normalizeBatch` third argument, `allowedFor`) uses it; values an item already holds stay valid on edit, and the old plural units (`tablets`, `ml`, ...) are always accepted for older clients. Routes: `GET/POST /api/options`, `POST /api/options/hide`, `POST /api/options/remove` (writes Owner-only, same-origin). Profile "Dropdown lists" card for Owners. Admin console tab **Lists** edits platform defaults (`/admin/api/option-defaults`, needs `ADMIN_WRITES_ENABLED`, audited).
