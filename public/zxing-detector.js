@@ -1,27 +1,27 @@
 // Barcode reading for browsers without the built-in BarcodeDetector (Safari, Firefox). It wraps the vendored
-// ZXing library (Apache-2.0, public/vendor/) behind the same `new Detector({ formats }).detect(video)` shape.
-const FORMAT_NAMES = { ean_13: 'EAN_13', ean_8: 'EAN_8', upc_a: 'UPC_A', upc_e: 'UPC_E', code_128: 'CODE_128', itf: 'ITF' };
-const MAX_WIDTH = 960;
+// zxing-wasm reader (MIT; zxing-cpp compiled to WebAssembly, in public/vendor/) behind the same
+// `new Detector({ formats }).detect(video)` shape. It reads UPC-E, which the plain JavaScript ZXing could not.
+const FORMAT_NAMES = { ean_13: 'EAN-13', ean_8: 'EAN-8', upc_a: 'UPC-A', upc_e: 'UPC-E', code_128: 'Code128', itf: 'ITF' };
+const MAX_WIDTH = 1280;
+export const ZXING_SCRIPT = '/vendor/zxing-reader.iife.js';
+export const ZXING_WASM = '/vendor/zxing_reader.wasm';
 
-export function loadZxing(doc = document, src = '/vendor/zxing-library.min.js', win = globalThis) {
-  if (win.ZXing) return Promise.resolve(win.ZXing);
+export function loadZxing(doc = document, src = ZXING_SCRIPT, win = globalThis) {
+  if (win.ZXingWASM) return Promise.resolve(win.ZXingWASM);
   return new Promise((resolve, reject) => {
     const script = doc.createElement('script');
     script.src = src;
-    script.onload = () => win.ZXing ? resolve(win.ZXing) : reject(new Error('Scanner library did not load.'));
+    script.onload = () => win.ZXingWASM ? resolve(win.ZXingWASM) : reject(new Error('Scanner library did not load.'));
     script.onerror = () => reject(new Error('Scanner library could not be loaded.'));
     doc.head.append(script);
   });
 }
 
-export function createZxingDetectorClass(ZXing, doc = document) {
+export function createZxingDetectorClass(ZXingWASM, doc = document, { wasmUrl = ZXING_WASM, overrides = null } = {}) {
+  ZXingWASM.setZXingModuleOverrides(overrides || { locateFile: (path, prefix) => path.endsWith('.wasm') ? wasmUrl : prefix + path });
   return class ZxingDetector {
     constructor({ formats = Object.keys(FORMAT_NAMES) } = {}) {
-      this.reader = new ZXing.MultiFormatReader();
-      const hints = new Map();
-      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats.filter(name => FORMAT_NAMES[name]).map(name => ZXing.BarcodeFormat[FORMAT_NAMES[name]]));
-      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-      this.reader.setHints(hints);
+      this.formats = formats.map(name => FORMAT_NAMES[name]).filter(Boolean);
       this.canvas = doc.createElement('canvas');
     }
 
@@ -33,11 +33,8 @@ export function createZxingDetectorClass(ZXing, doc = document) {
       this.canvas.width = width; this.canvas.height = height;
       const context = this.canvas.getContext('2d', { willReadFrequently: true });
       context.drawImage(video, 0, 0, width, height);
-      const { data } = context.getImageData(0, 0, width, height);
-      const luminance = new Uint8ClampedArray(width * height);
-      for (let i = 0, p = 0; i < luminance.length; i += 1, p += 4) luminance[i] = (data[p] * 306 + data[p + 1] * 601 + data[p + 2] * 117) >> 10;
-      const bitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(new ZXing.RGBLuminanceSource(luminance, width, height)));
-      try { return [{ rawValue: this.reader.decode(bitmap).getText() }]; } catch { return []; } finally { this.reader.reset(); }
+      const results = await ZXingWASM.readBarcodes(context.getImageData(0, 0, width, height), { formats: this.formats, tryHarder: true, maxNumberOfSymbols: 1 });
+      return results.filter(result => result.isValid && result.text).map(result => ({ rawValue: result.text, format: result.format }));
     }
   };
 }

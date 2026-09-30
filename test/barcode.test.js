@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readdirSync, readFileSync } from 'node:fs';
-import { lookupBarcode, normalizeBarcode, parseCode, rememberBarcode } from '../lib/barcode.js';
+import { canonicalCode, lookupBarcode, normalizeBarcode, parseCode, rememberBarcode, upceToUpca } from '../lib/barcode.js';
 import { createD1Store } from '../lib/store-d1.js';
 import { bindBarcodeScan, cleanBarcode } from '../public/barcode-client.js';
 
@@ -162,13 +162,49 @@ test('parseCode reads a DIN with its prefix, pads it, and treats plain 8 digits 
   assert.equal(cleanBarcode('DIN 12'), null);
 });
 
-test('an 8-digit code is tried as a DIN first and returns name, strength and a standard form', async () => {
+test('a DIN with its prefix returns name, strength and a standard form from Health Canada alone', async () => {
   const { db } = fixture();
   const calls = [];
-  const fetchImpl = async url => { calls.push(url); return fetchFrom(dpd)(url); };
-  const result = await lookupBarcode(db, shop, '00559407', fetchImpl);
+  const result = await lookupBarcode(db, shop, 'DIN 00559407', async url => { calls.push(url); return fetchFrom(dpd)(url); });
   assert.deepEqual([result.found, result.source, result.name, result.strength, result.form], [true, 'din', 'Tylenol Extra Strength', '500 mg', 'Tablets']);
-  assert.ok(calls[0].includes('health-products.canada.ca') && !calls.some(url => url.includes('api.fda.gov')));
+  assert.ok(calls.every(url => url.includes('health-products.canada.ca')));
+});
+
+test('a plain 8-digit code is tried as a product barcode first and as a DIN only as a last resort', async () => {
+  const { db } = fixture();
+  const calls = [];
+  const result = await lookupBarcode(db, shop, '00559407', async url => { calls.push(url); return fetchFrom(dpd)(url); });
+  assert.equal(result.source, 'din');
+  assert.ok(calls[0].includes('api.fda.gov'), 'product databases come first');
+  assert.ok(calls.findIndex(url => url.includes('health-products')) > calls.findIndex(url => url.includes('openfoodfacts')));
+  const food = await lookupBarcode(db, shop, '96385074', fetchFrom({ 'openfoodfacts': json({ status: 1, product: { product_name: 'Coke' } }), 'drugproduct': json([{ drug_code: 1, brand_name: 'WRONG DRUG' }]) }));
+  assert.deepEqual([food.source, food.name], ['openfacts', 'Coke'], 'a product hit is never replaced by a DIN match');
+});
+
+test('UPC-E expands to UPC-A, EAN-8 is left alone, and one product has one stored form', () => {
+  assert.equal(upceToUpca('05525504'), '055000002554');
+  assert.equal(upceToUpca('05525503'), null, 'a wrong check digit is not a UPC-E');
+  assert.equal(upceToUpca('96385074'), null);
+  assert.equal(canonicalCode('05525504'), '055000002554');
+  assert.equal(canonicalCode('0055000002554'), '055000002554');
+  assert.equal(canonicalCode('055000002554'), '055000002554');
+  assert.equal(canonicalCode('3017620422003'), '3017620422003');
+  assert.equal(canonicalCode('96385074'), '96385074');
+});
+
+test('a UPC-E scan finds the product under its UPC-A and EAN-13 forms and is remembered once for every browser', async () => {
+  const { db, sqlite } = fixture();
+  const calls = [];
+  const fetchImpl = async url => { calls.push(url); return fetchFrom({ '/0055000002554.json': json({ status: 1, product: { product_name: 'Nescafe Classic', brands: 'Nescafe' } }) })(url); };
+  const result = await lookupBarcode(db, shop, '05525504', fetchImpl);
+  assert.deepEqual([result.found, result.code, result.name], [true, '055000002554', 'Nescafe Classic']);
+  assert.ok(calls.some(url => url.includes('0055000002554')));
+  await rememberBarcode(db, shop, '05525504', { name: 'Nescafe Classic', unit: 'piece' });
+  assert.equal(sqlite.prepare('SELECT barcode FROM batch_barcodes').get().barcode, '055000002554');
+  for (const scanned of ['0055000002554', '055000002554', '05525504']) {
+    const own = await lookupBarcode(db, shop, scanned, async () => { throw new Error('network must not be used'); });
+    assert.deepEqual([own.source, own.name, own.code], ['shop', 'Nescafe Classic', '055000002554']);
+  }
 });
 
 test('a DIN prefix uses Health Canada only; an 8-digit miss falls through to the other databases', async () => {

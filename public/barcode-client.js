@@ -53,7 +53,10 @@ export function bindBarcodeScan({ document, api, onResult, getMediaDevices = () 
         if (mySession !== session || !dialog.open) return;
       }
       if (typeof Detector !== 'function') { say('Live scanning is not available in this browser. Type the barcode below.'); return; }
-      const detector = new Detector({ formats: SCAN_FORMATS });
+      // Chrome throws on a format it does not support (desktop lacks upc_a), so ask which ones exist.
+      const supported = typeof Detector.getSupportedFormats === 'function' ? await Detector.getSupportedFormats().catch(() => null) : null;
+      const formats = supported ? SCAN_FORMATS.filter(name => supported.includes(name)) : SCAN_FORMATS;
+      const detector = new Detector({ formats: formats.length ? formats : undefined });
       const media = await getMediaDevices().getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
       if (mySession !== session || !dialog.open) { media.getTracks().forEach(track => track.stop()); return; }
       stream = media; video.srcObject = media; await video.play?.();

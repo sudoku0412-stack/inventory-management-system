@@ -1,5 +1,12 @@
 # Medicine Inventory Tracker — handover
 
+## UPC-E fix: fallback decoder replaced (2026-09-30)
+- Bug: a Nestle jar (UPC-E barcode `0 552550 4`) did nothing in the scanner. The first fallback (plain-JS `@zxing/library`) cannot read UPC-E at all. Replaced with `zxing-wasm` 3.1.4 reader (MIT, zxing-cpp as WebAssembly): `public/vendor/zxing-reader.iife.js` (36 KB) + `public/vendor/zxing_reader.wasm` (954 KB), licence in `public/vendor/ZXING-WASM-LICENSE.txt`. Loaded only on first scan; `locateFile` points at the local wasm so nothing comes from a CDN. Decoded the real jar photo in the in-app browser in about 200 ms.
+- Native `BarcodeDetector`: formats are now filtered through `getSupportedFormats()` (desktop Chrome lacks `upc_a` and the constructor throws on unsupported formats).
+- `lib/barcode.js`: UPC-E is expanded to UPC-A (`upceToUpca`, check digit verified so EAN-8 is untouched) and one canonical 12-digit form is stored and returned (`canonicalCode`), so native (8-digit UPC-E) and wasm (13-digit) scans match the same remembered item. Public databases are tried under both the 13-digit and 12-digit forms.
+- A plain 8-digit code is now tried as a product barcode first and as a DIN LAST (UPC-E codes look like DINs and would otherwise match a random drug). `DIN 02241234` with the prefix still goes to Health Canada only.
+- To update the library: `npm pack zxing-wasm`, copy `dist/iife/reader/index.js` and `dist/reader/zxing_reader.wasm`.
+
 ## Safari and Firefox scanning (2026-09-30)
 - No migration. Browsers without `BarcodeDetector` load a vendored ZXing build (`public/vendor/zxing-library.min.js`, `@zxing/library` 0.21.3, Apache-2.0, licence in `public/vendor/ZXING-LICENSE.txt`) on first scan, through `public/zxing-detector.js` (same `new Detector({formats}).detect(video)` shape). Library is in both allowlists, not in `PRECACHE` (336 KB; loaded only when needed). Chrome and Edge keep the native detector.
 - Tests: `test/zxing-detector.test.js` decodes real EAN-13, EAN-8 and UPC-A pixel frames through the adapter, plus the loader and the scanner's fallback choice. Loaded and decoded in the in-app browser too. NOT verified: a real iPhone camera (needs Safari 14.3+ on https; video is `playsinline muted`).
