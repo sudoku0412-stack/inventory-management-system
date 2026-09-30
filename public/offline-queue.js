@@ -63,7 +63,7 @@ export function applyQueue(list, queue, day = isoDay(new Date())) {
     const index = out.findIndex(item => item.id === entry.batchId);
     if (entry.kind === 'create') {
       const stamp = new Date(entry.editedAt).toISOString();
-      const batch = { id: entry.batchId, strength: '', location: '', notes: '', low_stock_threshold: 4, expiry_date: null, ...numeric(entry.fields), has_photo: false, revision: 0, discarded_at: null, created_at: stamp, updated_at: stamp };
+      const batch = { id: entry.batchId, strength: '', location: '', notes: '', low_stock_threshold: 4, expiry_date: null, ...numeric(entry.fields), has_photo: false, revision: 0, discarded_at: null, created_at: stamp, updated_at: stamp, pending: true };
       batch.status = statusFor(batch, day);
       out.push(batch);
     } else if (index < 0) continue;
@@ -71,6 +71,7 @@ export function applyQueue(list, queue, day = isoDay(new Date())) {
     else {
       const batch = { ...out[index], ...(entry.kind === 'update' ? numeric(entry.fields) : { quantity: entry.quantityAfter }) };
       batch.status = statusFor(batch, day);
+      batch.pending = true;
       out[index] = batch;
     }
   }

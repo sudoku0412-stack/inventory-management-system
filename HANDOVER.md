@@ -1,5 +1,9 @@
 # Medicine Inventory Tracker — handover
 
+## Offline follow-ups (2026-09-29)
+- Offline edits (slice 2) and read (slice 1) are deployed and were confirmed working on the user's phone. Fixed: an empty yellow banner showed online (`display:flex` overrode `hidden`; PR #96).
+- Added: per-row "Waiting to sync" mark (optimistic rows carry `pending`), and a "session expired, reload to sign in" banner when the probe or sync sees an Access redirect (`redirect:'manual'` fetch returns `opaqueredirect`) or 401/403; entries stay queued. Verified in the in-app browser against a mock API.
+
 ## Offline edits, slice 2 (2026-09-29, built, not deployed)
 - Plan `docs/superpowers/plans/2026-09-29-offline-edits.md`. Browser-only, no migration, no server change. `public/offline-queue.js` (pure queue rules: collapse per medicine, optimistic list, replay with the later-timestamp-wins rule on the 409's current batch), `public/offline-store.js` (`queues` store, DB version 2), `public/app.js` (batch mutations queue when offline or on a network error; `syncQueue()`; banner with **Sync now**).
 - New module `/offline-queue.js` is in both allowlists and in `PRECACHE`. Queue is per account-and-Shop. Photos stay online-only: a data-URL photo, or removing an existing photo, is rejected offline; `photo: null` on a medicine with no photo is dropped.
