@@ -46,6 +46,10 @@
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 5.5h14v15H5zM8 3.5h8v4H8zM9 12h6M9 16h4" /></svg>
             Inventory
           </button>
+          <button class="nav-item" type="button" data-view="overview" data-owner-overview hidden>
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2" /></svg>
+            Overview
+          </button>
           <button class="nav-item" type="button" data-view="notifications">
             <span class="icon-wrap">
               <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 8h18c0-1-3-1-3-8M10 21h4" /></svg>
@@ -87,9 +91,9 @@
             <div>
               <p class="eyebrow" id="todayDate">SHOP OVERVIEW</p>
               <h1 id="dashboardGreeting">Good morning, Kaushik</h1>
-              <p>Here’s what needs attention in your medicine cabinet.</p>
+              <p data-wording>Here’s what needs attention in your medicine cabinet.</p>
             </div>
-            <button class="button primary add-medicine-trigger" type="button">
+            <button class="button primary add-medicine-trigger" type="button" data-wording>
               <span aria-hidden="true">＋</span> Add medicine
             </button>
           </div>
@@ -109,7 +113,7 @@
           <div class="metric-grid" aria-label="Inventory summary">
             <button class="metric-card" type="button" data-filter-jump="all">
               <span class="metric-icon teal"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 6h12v15H6zM9 3h6v5H9zM10 13h4M10 17h4" /></svg></span>
-              <span><span class="metric-label">Total medicines</span><strong id="totalMetric">—</strong><small id="totalMetricNote">Loading…</small></span>
+              <span><span class="metric-label" data-wording>Total medicines</span><strong id="totalMetric">—</strong><small id="totalMetricNote">Loading…</small></span>
             </button>
             <button class="metric-card" type="button" data-filter-jump="expiring">
               <span class="metric-icon amber"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v6l4 2" /></svg></span>
@@ -129,7 +133,7 @@
 
           <section class="section-block">
             <div class="section-heading">
-              <div><h2>Next to expire</h2><p>Medicines to use or replace first.</p></div>
+              <div><h2>Next to expire</h2><p data-wording>Medicines to use or replace first.</p></div>
               <button class="text-button" type="button" data-view="inventory">View all inventory <span aria-hidden="true">→</span></button>
             </div>
             <div class="expiry-list" id="expiryList"></div>
@@ -138,15 +142,15 @@
 
         <section class="view" id="inventoryView" data-view-panel="inventory" hidden>
           <div class="page-heading inventory-heading">
-            <div><p class="eyebrow">YOUR MEDICINE CABINET</p><h1>Inventory</h1><p>Search, review and update every medicine in your home.</p></div>
-            <button class="button primary add-medicine-trigger" type="button"><span aria-hidden="true">＋</span> Add medicine</button>
+            <div data-wording><p class="eyebrow">YOUR MEDICINE CABINET</p><h1>Inventory</h1><p>Search, review and update every medicine in your home.</p></div>
+            <button class="button primary add-medicine-trigger" type="button" data-wording><span aria-hidden="true">＋</span> Add medicine</button>
           </div>
 
           <div class="inventory-toolbar">
             <label class="search-field">
               <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4" /></svg>
-              <span class="sr-only">Search medicines</span>
-              <input id="inventorySearch" type="search" placeholder="Search medicine, type or location…" autocomplete="off" />
+              <span class="sr-only" data-wording>Search medicines</span>
+              <input data-wording id="inventorySearch" type="search" placeholder="Search medicine, type or location…" autocomplete="off" />
             </label>
             <label class="select-field">
               <span class="sr-only">Filter inventory by status</span>
@@ -173,22 +177,41 @@
           <div class="inventory-surface">
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Medicine</th><th>Status</th><th>Expiry</th><th>Quantity</th><th>Location</th><th><span class="sr-only">Actions</span></th></tr></thead>
+                <thead><tr><th data-wording>Medicine</th><th>Status</th><th>Expiry</th><th>Quantity</th><th>Location</th><th><span class="sr-only">Actions</span></th></tr></thead>
                 <tbody id="inventoryTableBody"></tbody>
               </table>
             </div>
             <div class="mobile-inventory" id="mobileInventory"></div>
             <div class="empty-state" id="emptyState" hidden>
-              <span aria-hidden="true">⌕</span><h2>No medicines found</h2><p>Try a different search or status filter.</p>
+              <span aria-hidden="true">⌕</span><h2 data-wording>No medicines found</h2><p>Try a different search or status filter.</p>
               <button class="text-button" id="clearFilters" type="button">Clear filters</button>
             </div>
             <div class="table-footer"><span id="resultCount">Loading inventory…</span><span>Last updated just now</span></div>
           </div>
         </section>
 
+        <section class="view" id="overviewView" data-view-panel="overview" hidden>
+          <div class="page-heading">
+            <div><p class="eyebrow">ALL YOUR SHOPS</p><h1>Overview</h1><p>Stock across every Shop you own, in one place.</p></div>
+            <div class="overview-actions"><button class="button secondary" id="overviewReport" type="button">Print report</button><button class="button secondary" id="overviewCsv" type="button">Download CSV</button></div>
+          </div>
+          <p class="access-status" id="overviewMessage" role="status" aria-live="polite"></p>
+          <div class="overview-cards" id="overviewCards"></div>
+          <div class="inventory-toolbar overview-toolbar">
+            <label class="search-field"><span class="sr-only">Search items</span><input id="overviewSearch" type="search" placeholder="Search name or location…" autocomplete="off" /></label>
+            <label class="select-field" id="overviewShopLabel"><span class="sr-only">Shop</span><select id="overviewShop"><option value="">All Shops</option></select></label>
+            <label class="select-field"><span class="sr-only">Status</span><select id="overviewStatusFilter"><option value="">Any status</option><option value="expired">Expired</option><option value="expiring">Expiring soon</option><option value="low">Low stock</option><option value="healthy">Healthy</option><option value="unknown">No expiry date</option></select></label>
+          </div>
+          <div class="inventory-surface">
+            <div class="table-wrap"><table id="overviewTable"><thead><tr><th>Shop</th><th>Item</th><th>Quantity</th><th>Expiry</th><th>Location</th><th>Status</th></tr></thead><tbody id="overviewRows"></tbody></table></div>
+            <p class="empty-state" id="overviewEmpty" hidden>No items match.</p>
+            <div class="table-footer"><span id="overviewCount"></span><span id="overviewTruncated" hidden>Showing the first items of a large Shop. Download the CSV for the rest.</span></div>
+          </div>
+        </section>
+
         <section class="view" id="notificationsView" data-view-panel="notifications" hidden>
           <div class="page-heading">
-            <div><p class="eyebrow">STAY AHEAD</p><h1>Notifications</h1><p>Time-sensitive updates about your medicine cabinet.</p></div>
+            <div data-wording><p class="eyebrow">STAY AHEAD</p><h1>Notifications</h1><p>Time-sensitive updates about your medicine cabinet.</p></div>
             <div class="heading-actions">
               <button class="button secondary" id="pushAlertsBtn" type="button">Enable expiry alerts</button>
               <button class="button secondary" id="markAllRead" type="button">Mark all as read</button>
@@ -233,7 +256,7 @@
           <section class="profile-card" id="emailPreferencesCard" aria-labelledby="emailPreferencesTitle" hidden>
             <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">✉</span><div><h2 id="emailPreferencesTitle">Email notices</h2><p>Emails about Shop changes you are part of: a Shop being deleted, or ownership passing to you. Invitations are always sent.</p></div></div>
             <label class="check-row"><input type="checkbox" id="emailNoticesToggle" /> <span>Email me about Shop changes</span></label>
-            <label class="check-row"><input type="checkbox" id="emailDigestToggle" /> <span>Weekly summary: a Monday email when a medicine is expired, expiring within 30 days or running low</span></label>
+            <label class="check-row"><input type="checkbox" id="emailDigestToggle" /> <span data-wording>Weekly summary: a Monday email when a medicine is expired, expiring within 30 days or running low</span></label>
             <p class="access-status" id="emailPreferencesStatus" role="status" aria-live="polite"></p>
           </section>
           <section class="profile-card" id="deletedShopsCard" aria-labelledby="deletedShopsTitle" tabindex="-1" hidden>
@@ -253,6 +276,10 @@
               <button class="button secondary" id="shopInvitationsReload" type="button" hidden>Reload Shops</button>
             </div>
           </section>
+          <section class="profile-card" id="overviewProfileCard" data-owner-overview aria-labelledby="overviewProfileTitle" hidden>
+            <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">▤</span><div><h2 id="overviewProfileTitle">Overview of all your Shops</h2><p>See stock across every Shop you own and print a report.</p></div></div>
+            <button class="button secondary" type="button" data-view="overview">Open overview</button>
+          </section>
           <section class="profile-card create-shop-card" id="createShopCard" aria-labelledby="createShopTitle" hidden>
             <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">+</span><div><h2 id="createShopTitle">Create another Shop</h2><p>Create a separate, empty Shop. Your current Shop will stay open.</p></div></div>
             <button class="button secondary" id="createShopButton" type="button">Create another Shop</button>
@@ -267,9 +294,10 @@
               <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">⌂</span><div><h2 id="householdDetailsTitle">Shop</h2><p>This is the label shown in the sidebar.</p></div></div>
               <p class="shop-role" id="shopRole" hidden></p>
               <div class="form-field"><label for="householdName">Shop name</label><input id="householdName" name="household_name" type="text" minlength="1" maxlength="80" required autocomplete="organization" aria-describedby="householdNameHelp" /><small id="householdNameHelp">1–80 characters</small></div>
+              <div class="form-field"><label for="shopTypeSelect">Shop type</label><select id="shopTypeSelect" name="shop_type" aria-describedby="shopTypeHelp"><option value="medicine">Medicine</option><option value="goods">General goods</option></select><small id="shopTypeHelp">Changes the wording and default lists. Saved items are not changed. Only Owners can change this.</small></div>
             </section>
             <section class="profile-card" aria-labelledby="medicineDefaultsTitle">
-              <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">+</span><div><h2 id="medicineDefaultsTitle">Medicine defaults</h2><p>Applied only when you add a new medicine. Existing medicines stay unchanged.</p></div></div>
+              <div class="profile-card-heading" data-wording><span class="profile-icon" aria-hidden="true">+</span><div><h2 id="medicineDefaultsTitle">Medicine defaults</h2><p>Applied only when you add a new medicine. Existing medicines stay unchanged.</p></div></div>
               <div class="form-field"><label for="defaultStorageLocation">Default storage location</label><select id="defaultStorageLocation" name="default_storage_location"><option>Medicine cabinet</option><option>Bathroom cabinet</option><option>Kitchen drawer</option><option>Refrigerator</option><option>First aid kit</option></select></div>
             </section>
             <section class="profile-card device-alert-card" aria-labelledby="deviceAlertsTitle">
@@ -282,6 +310,11 @@
             </section>
             <div class="profile-save-row"><p id="profileSaveStatus" role="status" aria-live="polite"></p><button class="button primary" id="saveProfileSettings" type="submit" disabled>Save changes</button></div>
           </form>
+          <section class="profile-card" id="optionsCard" aria-labelledby="optionsTitle" hidden>
+            <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">≡</span><div><h2 id="optionsTitle">Dropdown lists</h2><p>Choose what appears in Form, Unit and Storage location when adding an item. Only this Shop changes; saved items are not changed.</p></div></div>
+            <div id="optionsLists"></div>
+            <p class="access-status" id="optionsStatus" role="status" aria-live="polite"></p>
+          </section>
           <section class="household-access" id="householdAccess" aria-labelledby="householdAccessTitle">
             <div class="section-heading"><div><h2 id="householdAccessTitle" tabindex="-1">Shop access</h2><p id="householdAccessIntro">Loading Shop access…</p></div></div>
             <p id="householdAccessStatus" class="access-status" role="status" aria-live="polite"></p>
@@ -303,7 +336,7 @@
       <nav class="mobile-nav" aria-label="Mobile navigation">
         <button class="active" type="button" data-view="dashboard" aria-current="page"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" /></svg><span>Home</span></button>
         <button type="button" data-view="inventory"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 5.5h14v15H5zM8 3.5h8v4H8zM9 12h6M9 16h4" /></svg><span>Inventory</span></button>
-        <button class="mobile-add add-medicine-trigger" type="button" aria-label="Add medicine"><span>＋</span></button>
+        <button class="mobile-add add-medicine-trigger" type="button" aria-label="Add medicine" data-wording><span>＋</span></button>
         <button type="button" data-view="notifications"><span class="mobile-icon-wrap"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 8h18c0-1-3-1-3-8M10 21h4" /></svg><i id="mobileNotificationCount" hidden>0</i></span><span>Alerts</span></button>
         <button type="button" id="mobileProfile" data-view="profile"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0" /></svg><span>Profile</span></button>
       </nav>
@@ -321,7 +354,7 @@
 
     <dialog class="modal" id="addMedicineModal" aria-labelledby="addMedicineTitle">
       <form id="addMedicineForm" novalidate autocomplete="off">
-        <div class="modal-header"><div><span class="overline">NEW ITEM</span><h2 id="addMedicineTitle">Add medicine</h2></div><button class="modal-close" type="button" data-close-modal aria-label="Close add medicine dialog">×</button></div>
+        <div class="modal-header"><div><span class="overline">NEW ITEM</span><h2 id="addMedicineTitle" data-wording>Add medicine</h2></div><button class="modal-close" type="button" data-close-modal aria-label="Close add medicine dialog">×</button></div>
         <div class="modal-body">
           <div class="packaging-scan">
             <span>Packaging photo</span>
@@ -337,7 +370,7 @@
               <p id="packagingSuggestStatus" role="status"></p>
             </div>
           </div>
-          <label class="form-field full"><span>Medicine name <em>*</em></span><input id="medicineName" name="name" type="text" placeholder="e.g. Paracetamol" required autocomplete="off" /><small class="field-error"></small></label>
+          <label class="form-field full"><span data-wording>Medicine name <em>*</em></span><input data-wording id="medicineName" name="name" type="text" placeholder="e.g. Paracetamol" required autocomplete="off" /><small class="field-error"></small></label>
           <div class="form-row">
             <label class="form-field"><span>Strength</span><input name="strength" type="text" placeholder="e.g. 500 mg" autocomplete="off" /></label>
             <label class="form-field"><span>Form</span><select name="form" autocomplete="off"><option>Tablets</option><option>Capsules</option><option>Liquid</option><option>Cream</option><option>Inhaler</option><option>Drops</option><option>Other</option></select></label>
@@ -366,6 +399,7 @@
         <div class="modal-header"><div><span class="overline">NEW SHOP</span><h2 id="createShopModalTitle">Create another Shop</h2></div><button class="modal-close" type="button" data-close-modal aria-label="Close create Shop dialog">×</button></div>
         <div class="modal-body"><p id="createShopModalHelp">You’ll be the owner of a new, empty Shop. Your current Shop will stay open.</p>
           <div class="form-field"><label for="createShopName">Shop name</label><input id="createShopName" name="shopName" type="text" required minlength="1" maxlength="80" autocomplete="organization" /><small>1–80 characters</small></div>
+          <div class="form-field"><label for="createShopType">Shop type</label><select id="createShopType" name="shopType"><option value="medicine">Medicine</option><option value="goods">General goods</option></select><small>Sets the wording and default lists. You can change it later.</small></div>
           <div class="form-field"><label for="createDisplayName">Your display name</label><input id="createDisplayName" name="displayName" type="text" required minlength="1" maxlength="60" autocomplete="name" /><small>1–60 characters</small></div>
           <p class="access-status" id="createShopStatus" role="status" aria-live="polite"></p>
         </div>
@@ -407,7 +441,7 @@
       </div>
       <div class="modal-body">
         <video id="packagingCameraVideo" autoplay playsinline muted></video>
-        <p>Allow camera access if Chrome asks. Frame the medicine name and expiry, then capture.</p>
+        <p data-wording>Allow camera access if Chrome asks. Frame the medicine name and expiry, then capture.</p>
       </div>
       <div class="modal-footer">
         <button class="button secondary" type="button" data-close-modal>Cancel</button>

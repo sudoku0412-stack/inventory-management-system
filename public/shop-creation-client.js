@@ -67,6 +67,7 @@ export function bindShopCreation({ document, storage, getContext, getDisplayName
     if (intent?.payload) {
       form.elements.shopName.value = intent.payload.shopName;
       form.elements.displayName.value = intent.payload.displayName;
+      if (form.elements.shopType && intent.payload.shopType) form.elements.shopType.value = intent.payload.shopType;
       message(busy ? 'Creating your Shop…' : 'A previous request needs confirmation. Retry creation to check the same request.');
     } else {
       form.reset();
@@ -82,8 +83,9 @@ export function bindShopCreation({ document, storage, getContext, getDisplayName
     if (busy || !validAccountContextKey(getContext()?.accountContextKey)) return;
     if (!form.checkValidity()) { form.reportValidity(); return; }
     const payload = Object.fromEntries(['shopName', 'displayName'].map(key => [key, form.elements[key].value.normalize('NFKC').trim().replace(/\s+/g, ' ')]));
+    if (form.elements.shopType?.value === 'goods') payload.shopType = 'goods';
     let intent = currentIntent();
-    if (intent && (intent.payload.shopName !== payload.shopName || intent.payload.displayName !== payload.displayName)) {
+    if (intent && (intent.payload.shopName !== payload.shopName || intent.payload.displayName !== payload.displayName || intent.payload.shopType !== payload.shopType)) {
       message('Retry the saved request before changing these details.', true);
       return;
     }

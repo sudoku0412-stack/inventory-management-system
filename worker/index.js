@@ -16,6 +16,8 @@ import { pruneReceipts, retentionDays } from '../lib/retention.js';
 import { dispatchOutbox, pruneOutbox } from '../lib/email-outbox.js';
 import { enqueueWeeklyDigests } from '../lib/digest.js';
 import { exportInventoryCsv } from '../lib/export.js';
+import { ownerOverview, ownerOverviewCsv } from '../lib/overview.js';
+import { addDefaultOption, addShopOption, isShopType, listDefaultOptions, removeDefaultOption, removeShopOption, setShopOptionHidden, setShopType, shopOptions, shopTypeOf } from '../lib/options.js';
 import { getEmailPreferences, setEmailPreferences } from '../lib/email-preferences.js';
 import { listDeletedShops, restoreOwnDeletedShop, validateOwnRestore } from '../lib/deleted-shops.js';
 import { createAdditionalShop, listShops, onboardingStatus, pinnedTenant, resolveTenant, setupInitialShop, shopContext } from '../lib/tenants.js';
@@ -23,7 +25,7 @@ import { acceptHouseholdInvitation, createHouseholdInvitation, listHouseholdAcce
 
 const jwksCache = { at: 0, keys: null };
 
-const bootstrapAssetPaths = new Set(['/index.html', '/app.js', '/greeting.js', '/shop-client.js', '/shop-creation-client.js', '/owner-promotion-client.js', '/member-removal-client.js', '/owner-demotion-client.js', '/ownership-transfer-client.js', '/shop-leave-client.js', '/shop-deletion-client.js', '/deleted-shops-client.js', '/email-preferences-client.js', '/inventory-export-client.js', '/shop-invitations-client.js', '/change-feed-client.js', '/offline-store.js', '/offline-queue.js', '/restock-client.js', '/styles.css', '/sw.js']);
+const bootstrapAssetPaths = new Set(['/index.html', '/app.js', '/greeting.js', '/shop-client.js', '/shop-creation-client.js', '/owner-promotion-client.js', '/member-removal-client.js', '/owner-demotion-client.js', '/ownership-transfer-client.js', '/shop-leave-client.js', '/shop-deletion-client.js', '/deleted-shops-client.js', '/email-preferences-client.js', '/inventory-export-client.js', '/options-client.js', '/overview-client.js', '/shop-invitations-client.js', '/change-feed-client.js', '/offline-store.js', '/offline-queue.js', '/restock-client.js', '/styles.css', '/sw.js']);
 
 export function assetCacheControl(path) {
   if (path === '/index.html') return 'no-store';
@@ -96,6 +98,15 @@ async function handleAdmin(request, env, url) {
   try {
     const access = accessConfig({ ...env, ACCESS_AUD: env.ADMIN_ACCESS_AUD });
     const admin = await authorizeAdmin(request, env, access ? await accessKeys(access) : undefined);
+    if (request.method === 'POST' && url.pathname === '/admin/api/option-defaults') {
+      if (env.ADMIN_WRITES_ENABLED !== 'true') return json({ error: 'Admin changes are not enabled.' }, 403, adminHeaders);
+      if (!/^application\/json(?:\s*;|$)/i.test(request.headers.get('content-type') || '')) return json({ error: 'Content-Type must be application/json.' }, 400, adminHeaders);
+      if (request.headers.get('origin') !== url.origin || request.headers.get('sec-fetch-site') === 'cross-site' || request.headers.get('x-admin-action') !== '1') return json({ error: 'This admin change must come from the console.' }, 403, adminHeaders);
+      const body = await readJson(request);
+      if (body.action !== 'add' && body.action !== 'remove') return json({ error: 'Choose add or remove.' }, 400, adminHeaders);
+      await writeAdminAudit(env.DB, { email: admin.email, action: `option-default.${body.action}`, target: `${body.shopType}/${body.list}/${String(body.value).slice(0, 30)}`, requestId });
+      return json(await (body.action === 'add' ? addDefaultOption : removeDefaultOption)(env.DB, body), 200, adminHeaders);
+    }
     const writeRoute = request.method === 'POST' && api ? url.pathname.match(/^\/admin\/api\/shops\/([^/]+)\/(?:invitations\/([^/]+)\/revoke|restore|extend|flags)$/) : null;
     if (request.method !== 'GET' && request.method !== 'HEAD' && !writeRoute) return json({ error: 'Not found' }, 405, { ...adminHeaders, allow: 'GET, HEAD' });
     const writesEnabled = env.ADMIN_WRITES_ENABLED === 'true';
@@ -121,6 +132,7 @@ async function handleAdmin(request, env, url) {
       const detail = url.pathname.match(/^\/admin\/api\/shops\/([^/]+)$/);
       if (detail) return await audited('shop.view', detail[1], async () => ({ ...await adminShopDetail(db, detail[1], undefined, env), writesEnabled }));
       if (url.pathname === '/admin/api/audit') return await audited('audit.view', params.get('shop'), () => adminAudit(db, params));
+      if (url.pathname === '/admin/api/option-defaults') return await audited('option-defaults.view', null, async () => ({ ...await listDefaultOptions(db), writesEnabled }));
       if (url.pathname === '/admin/api/email-outbox') return await audited('email-outbox.view', null, () => adminEmailOutbox(db, params));
       if (url.pathname === '/admin/api/admin-audit') return await audited('admin-audit.view', null, () => adminActivity(db, params));
       return json({ error: 'Not found' }, 404, adminHeaders);
@@ -195,6 +207,14 @@ export async function handleRequest(request, env, ctx) {
       if (url.pathname === '/api/shops/deleted') {
         if (request.method !== 'GET') return json({ error: 'Not found' }, 404);
         return json(await listDeletedShops(env.DB, principal));
+      }
+      // Owner overview is account-scoped (every Shop the caller owns) and ignores X-Shop-Id.
+      if (url.pathname === '/api/owner/overview' || url.pathname === '/api/owner/export') {
+        if (request.method !== 'GET') return json({ error: 'Not found' }, 404);
+        if (request.headers.get('sec-fetch-site') === 'cross-site') return json({ error: 'This request must come from this site.' }, 403);
+        if (url.pathname === '/api/owner/overview') return json(await ownerOverview(env.DB, principal));
+        const file = await ownerOverviewCsv(env.DB, principal);
+        return new Response(file.csv, { status: 200, headers: { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="${file.filename}"`, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } });
       }
       const ownRestore = url.pathname.match(/^\/api\/shops\/([^/]+)\/restore$/);
       if (ownRestore) {
@@ -312,7 +332,29 @@ export async function handleRequest(request, env, ctx) {
       const store = await getStore(env, tenant, principal);
       const match = url.pathname.match(/^\/api\/batches\/([^/]+)(?:\/(consume|discard|photo))?$/);
       if (request.method === 'GET' && url.pathname === '/api/settings') return json(await store.settings());
-      if (request.method === 'PATCH' && url.pathname === '/api/settings') return json(await store.updateSettings(await readJson(request)));
+      if (request.method === 'PATCH' && url.pathname === '/api/settings') {
+        const body = await readJson(request);
+        const wantsType = body.shop_type !== undefined;
+        if (wantsType && !isShopType(body.shop_type)) return json({ error: 'Choose a valid Shop type.' }, 400);
+        if (wantsType && tenant.role !== 'owner') return json({ error: 'Only Owners can change the Shop type.' }, 403);
+        if (!wantsType) return json(await store.updateSettings(body));
+        // The default location is checked against the new type's lists, so change the type first and undo it if the rest is refused.
+        const previous = await shopTypeOf(env.DB, tenant.householdId);
+        await setShopType(env.DB, tenant, body.shop_type);
+        try { return json(await store.updateSettings(body)); } catch (error) { await setShopType(env.DB, tenant, previous); throw error; }
+      }
+      if (url.pathname === '/api/options') {
+        if (request.method === 'GET') return json(await shopOptions(env.DB, tenant.householdId));
+        if (request.method !== 'POST') return json({ error: 'Not found' }, 404);
+        requirePromotionRequest(request, url);
+        return json(await addShopOption(env.DB, tenant, await readJson(request)));
+      }
+      if (url.pathname === '/api/options/hide' || url.pathname === '/api/options/remove') {
+        if (request.method !== 'POST') return json({ error: 'Not found' }, 404);
+        requirePromotionRequest(request, url);
+        const body = await readJson(request);
+        return json(url.pathname.endsWith('/hide') ? await setShopOptionHidden(env.DB, tenant, body) : await removeShopOption(env.DB, tenant, body));
+      }
       if (request.method === 'GET' && url.pathname === '/api/batches') return json(await store.list());
       if (request.method === 'GET' && url.pathname === '/api/packaging/status') return json({ vision: Boolean(visionConfig(env)) });
       if (request.method === 'POST' && url.pathname === '/api/packaging/suggest') {
