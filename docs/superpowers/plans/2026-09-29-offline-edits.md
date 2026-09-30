@@ -268,10 +268,10 @@ Append to `public/styles.css`:
 
 Add next to the other imports: `import { applyQueue, enqueue, entryFromRequest, replayQueue, requestFor } from './offline-queue.js';`
 
-Replace the lines from `let offlineTimer=null;` through the `function api(...)` line (keep `const offlineStore`, `let offlineMode`, `isNetworkError`, `probeOnline`, `snapshotKey` as they are, but `setOffline` and `api` are replaced) with:
+Replace ONLY the existing `function setOffline(...)` line and the existing `function api(...)` line (keep `const offlineStore`, `let offlineMode`, `let offlineTimer`, `isNetworkError`, `probeOnline` and `snapshotKey` exactly as they are). Put the first line and `renderBanner` and the new `setOffline` where `setOffline` was, and everything from `const batchMutation` on where `api` was:
 
 ```js
-let offlineTimer=null,savedAtShown=null,queue=[],queueScope=null,syncing=false,syncState='',syncNotice='',syncNoticeTimer=null,baseMedicines=[];
+let savedAtShown=null,queue=[],queueScope=null,syncing=false,syncState='',syncNotice='',syncNoticeTimer=null,baseMedicines=[];
 function renderBanner(){const banner=qs('#offlineBanner'),parts=[];if(offlineMode)parts.push(`Offline: showing saved data${savedAtShown?` from ${new Date(savedAtShown).toLocaleString(undefined,{hour:'numeric',minute:'numeric',month:'short',day:'numeric'})}`:''}.`);if(queue.length)parts.push(`${queue.length} change${queue.length===1?'':'s'} waiting to sync.`);if(syncing)parts.push('Syncing…');if(syncState==='auth')parts.push('Sign in again to sync your changes.');if(syncState==='retry')parts.push('Some changes need a retry.');if(syncNotice)parts.push(syncNotice);if(offlineMode&&!queue.length)parts.push('Changes need a connection.');banner.hidden=!parts.length;qs('#offlineBannerText').textContent=parts.join(' ');qs('#syncNow').hidden=!queue.length||syncing}
 function setOffline(on,savedAt){offlineMode=on;if(on&&savedAt!==undefined)savedAtShown=savedAt;clearInterval(offlineTimer);offlineTimer=on?setInterval(()=>{if(!document.hidden)probeOnline()},30000):null;renderBanner()}
 const batchMutation=/^\/api\/batches(?:\/[^/]+(?:\/(?:consume|discard))?)?$/;
