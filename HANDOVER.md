@@ -1,5 +1,10 @@
 # Medicine Inventory Tracker — handover
 
+## Barcode lookup: short-form codes and brand names (2026-09-30)
+- Bug: the Nestle jar scanned but nothing filled. Open Food Facts stores that product under the SHORT UPC-E code (`05525504`), not the UPC-A or EAN-13 forms the scanner now reports. `lookupBarcode` now tries every form in parallel: as scanned, leading-zero EAN-13, UPC-A and UPC-E (`upcaToUpce`, round-trip checked). Stored and returned `code` is still the canonical UPC-A.
+- Open Facts names now get the brand in front unless the name already has it ("Nescafe Cafe"). Strength stays empty for goods; Open Facts quantity (e.g. "400 g") is not used yet.
+- A product missing from every free database still opens a blank Add with the code attached; saving it teaches the Shop's own lookup.
+
 ## UPC-E fix: fallback decoder replaced (2026-09-30)
 - Bug: a Nestle jar (UPC-E barcode `0 552550 4`) did nothing in the scanner. The first fallback (plain-JS `@zxing/library`) cannot read UPC-E at all. Replaced with `zxing-wasm` 3.1.4 reader (MIT, zxing-cpp as WebAssembly): `public/vendor/zxing-reader.iife.js` (36 KB) + `public/vendor/zxing_reader.wasm` (954 KB), licence in `public/vendor/ZXING-WASM-LICENSE.txt`. Loaded only on first scan; `locateFile` points at the local wasm so nothing comes from a CDN. Decoded the real jar photo in the in-app browser in about 200 ms.
 - Native `BarcodeDetector`: formats are now filtered through `getSupportedFormats()` (desktop Chrome lacks `upc_a` and the constructor throws on unsupported formats).
