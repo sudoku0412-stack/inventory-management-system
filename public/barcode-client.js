@@ -1,5 +1,5 @@
-// Live barcode scanning with the browser's built-in BarcodeDetector (Chrome and Edge on Android and desktop).
-// Where it is missing (Safari, Firefox) the dialog still works: type the code or a DIN and look it up.
+// Live barcode scanning with the browser's built-in BarcodeDetector (Chrome, Edge) or, where it is missing (Safari,
+// Firefox), a vendored ZXing decoder loaded on first use. If neither works the dialog still works: type the code or a DIN and look it up.
 // A scanned 8-digit code is tried as a Canadian DIN first, then as an ordinary barcode.
 export const SCAN_FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'itf'];
 const SCAN_INTERVAL_MS = 300;
@@ -16,7 +16,7 @@ export const cleanBarcode = value => {
   return /^\d{8,14}$/.test(digits) ? digits : null;
 };
 
-export function bindBarcodeScan({ document, api, onResult, getMediaDevices = () => globalThis.navigator?.mediaDevices, DetectorClass = globalThis.BarcodeDetector, toast, schedule = (fn, ms) => setInterval(fn, ms), cancel = id => clearInterval(id) }) {
+export function bindBarcodeScan({ document, api, onResult, getMediaDevices = () => globalThis.navigator?.mediaDevices, DetectorClass = globalThis.BarcodeDetector, loadFallback, toast, schedule = (fn, ms) => setInterval(fn, ms), cancel = id => clearInterval(id) }) {
   const $ = id => document.querySelector(`#${id}`);
   const dialog = $('scanModal'), video = $('scanVideo'), status = $('scanStatus'), manual = $('scanManual');
   let stream = null, timer = null, busy = false, session = 0;
@@ -44,9 +44,16 @@ export function bindBarcodeScan({ document, api, onResult, getMediaDevices = () 
 
   async function start() {
     const mySession = session;
-    if (typeof DetectorClass !== 'function' || !getMediaDevices()?.getUserMedia) { say('Live scanning is not available in this browser. Type the barcode below.'); return; }
+    if (!getMediaDevices()?.getUserMedia) { say('Live scanning is not available in this browser. Type the barcode below.'); return; }
     try {
-      const detector = new DetectorClass({ formats: SCAN_FORMATS });
+      let Detector = DetectorClass;
+      if (typeof Detector !== 'function' && loadFallback) {
+        say('Loading the scanner…');
+        try { Detector = await loadFallback(); } catch { Detector = null; }
+        if (mySession !== session || !dialog.open) return;
+      }
+      if (typeof Detector !== 'function') { say('Live scanning is not available in this browser. Type the barcode below.'); return; }
+      const detector = new Detector({ formats: SCAN_FORMATS });
       const media = await getMediaDevices().getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
       if (mySession !== session || !dialog.open) { media.getTracks().forEach(track => track.stop()); return; }
       stream = media; video.srcObject = media; await video.play?.();

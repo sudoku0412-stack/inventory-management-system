@@ -1,5 +1,10 @@
 # Medicine Inventory Tracker — handover
 
+## Safari and Firefox scanning (2026-09-30)
+- No migration. Browsers without `BarcodeDetector` load a vendored ZXing build (`public/vendor/zxing-library.min.js`, `@zxing/library` 0.21.3, Apache-2.0, licence in `public/vendor/ZXING-LICENSE.txt`) on first scan, through `public/zxing-detector.js` (same `new Detector({formats}).detect(video)` shape). Library is in both allowlists, not in `PRECACHE` (336 KB; loaded only when needed). Chrome and Edge keep the native detector.
+- Tests: `test/zxing-detector.test.js` decodes real EAN-13, EAN-8 and UPC-A pixel frames through the adapter, plus the loader and the scanner's fallback choice. Loaded and decoded in the in-app browser too. NOT verified: a real iPhone camera (needs Safari 14.3+ on https; video is `playsinline muted`).
+- To update the library: `npm pack @zxing/library`, copy `umd/index.min.js` (drop the sourceMappingURL line).
+
 ## DIN lookup in the scanner (2026-09-30)
 - No migration. `lib/barcode.js` `parseCode`: "DIN 02241234" (6-8 digits, padded) uses Health Canada's Drug Product Database only; a plain 8-digit code is tried as a DIN first, then openFDA, then Open Facts; longer codes skip Health Canada. Returns name (title-cased), strength (only when one active ingredient) and a standard Form when the dosage form maps; source `din`.
 - Scanner and typed box accept both; `code_128` and `itf` formats are read. Most Canadian packs print the DIN as text, not a barcode, so typing `DIN` plus the number is the reliable route.
