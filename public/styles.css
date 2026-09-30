@@ -287,7 +287,9 @@ tbody tr:hover { background: #f9fbfa; }
 .offline-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .offline-banner .button { min-height: 44px; }
 .offline-banner[hidden] { display: none; }
-.restock-open { margin: 0 0 16px; }
+.restock-open { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 16px 0 18px; }
+.restock-open [data-restock-count] { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: var(--rose-bg); color: var(--rose); font-size: .78rem; font-weight: 700; }
+@media (max-width: 760px) { .restock-open { width: 100%; } }
 #restockList li { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 
 /* Owner overview and Shop list editor */
