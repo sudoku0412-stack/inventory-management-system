@@ -1,5 +1,10 @@
 # Medicine Inventory Tracker — handover
 
+## Weekly medicine check email (2026-09-29, built, not deployed)
+- Migration `0028_weekly_digest.sql` (apply BEFORE deploying): outbox kind `weekly_digest` + `payload`, and `digest_enabled` (default on) on `user_email_preferences`. `lib/digest.js` queues one email per person on Monday 14:00-16:00 UTC via the 15-minute cron (dedupe key per person per week); counts of packs expired / expiring within 30 days / low per Shop (Shop name included, no medicine names); Shops with all zero and people with nothing to report get nothing. Cancelled at send time if the person opted out or the row is over 2 days old.
+- `GET/PUT /api/email-preferences` now carries `noticesEnabled` and `digestEnabled` (PUT takes either or both); Profile card has a second switch "Weekly summary". Digest counts are packs (batches); the in-app Restock list counts medicines, so the numbers can differ by design.
+- Verified with throwaway scripts against the real migrations (window, repeat guard, counts, plurals, opt-out, stale cancel, partial preference update) and the Profile switch in the in-app browser. Real send not exercised. Next in the agreed queue: barcode scan.
+
 ## Restock list (2026-09-29, built, not deployed)
 - Client-only, no migration. `public/restock-client.js` (list rules, copy text, dialog binding; in both allowlists and `PRECACHE`), button + count on Dashboard and Inventory, `#restockModal` in `index.html`, wiring in `app.js`. Lists expired, expiring within 30 days, low stock; a medicine (name, strength, form, unit) with any healthy or no-expiry batch is left off. Per-row **Add stock** opens the Add form pre-filled (name, strength, form, unit, location; quantity focused); **Copy list**, and **Share** where `navigator.share` exists. Works offline from the optimistic list.
 - Verified in the in-app browser against a mock API and a throwaway rules script. Not verified: Share on a real phone.

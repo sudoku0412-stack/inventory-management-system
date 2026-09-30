@@ -6,7 +6,7 @@ const sql = readFileSync(new URL('../migrations/0020_shop_deletion.sql', import.
 export const deletionReadSchema = sql.slice(0, sql.indexOf('CREATE TABLE shop_deletion_receipts'));
 
 // The outbox table (0024, 0025) for fixtures that create invitations but apply only older migrations.
-export const outboxSchema = ['0024_notification_outbox.sql', '0025_notification_outbox_kinds.sql', '0027_user_email_preferences.sql'].map(name => readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8')).join('\n');
+export const outboxSchema = ['0024_notification_outbox.sql', '0025_notification_outbox_kinds.sql', '0027_user_email_preferences.sql', '0028_weekly_digest.sql'].map(name => readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8')).join('\n');
 
 // Owner-role invitations (0026) for fixtures that already apply the acceptance receipts (0014).
 export const invitationRoleSchema = readFileSync(new URL('../migrations/0026_owner_role_invitations.sql', import.meta.url), 'utf8');

@@ -14,6 +14,7 @@ import { purgeDeletedShops } from '../lib/shop-purge.js';
 import { effectiveFlag } from '../lib/feature-flags.js';
 import { pruneReceipts, retentionDays } from '../lib/retention.js';
 import { dispatchOutbox, pruneOutbox } from '../lib/email-outbox.js';
+import { enqueueWeeklyDigests } from '../lib/digest.js';
 import { exportInventoryCsv } from '../lib/export.js';
 import { getEmailPreferences, setEmailPreferences } from '../lib/email-preferences.js';
 import { listDeletedShops, restoreOwnDeletedShop, validateOwnRestore } from '../lib/deleted-shops.js';
@@ -390,6 +391,6 @@ export default {
     return handleRequest(request, env, ctx);
   },
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(Promise.all([deliverScheduledPushes(env), pruneBatchChanges(env.DB).catch(() => {}), pruneReceipts(env.DB, { days: retentionDays(env) }).then(deleted => { if (Object.keys(deleted).length) console.log(`receipt retention: ${JSON.stringify(deleted)}`); }).catch(() => {}), dispatchOutbox(env).then(counts => { if (Object.keys(counts).length) console.log(`email outbox: ${JSON.stringify(counts)}`); }).catch(() => {}), pruneOutbox(env.DB).catch(() => {}), purgeDeletedShops(env.DB, env.PHOTOS, { dryRun: env.SHOP_PURGE_ENABLED !== 'true', log: message => console.log(message) }).catch(() => {})]));
+    ctx.waitUntil(Promise.all([deliverScheduledPushes(env), pruneBatchChanges(env.DB).catch(() => {}), pruneReceipts(env.DB, { days: retentionDays(env) }).then(deleted => { if (Object.keys(deleted).length) console.log(`receipt retention: ${JSON.stringify(deleted)}`); }).catch(() => {}), enqueueWeeklyDigests(env.DB).catch(() => {}), dispatchOutbox(env).then(counts => { if (Object.keys(counts).length) console.log(`email outbox: ${JSON.stringify(counts)}`); }).catch(() => {}), pruneOutbox(env.DB).catch(() => {}), purgeDeletedShops(env.DB, env.PHOTOS, { dryRun: env.SHOP_PURGE_ENABLED !== 'true', log: message => console.log(message) }).catch(() => {})]));
   }
 };
