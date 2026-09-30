@@ -1,10 +1,18 @@
 // Live barcode scanning with the browser's built-in BarcodeDetector (Chrome and Edge on Android and desktop).
-// Where it is missing (Safari, Firefox) the dialog still works: type the code and look it up.
+// Where it is missing (Safari, Firefox) the dialog still works: type the code or a DIN and look it up.
+// A scanned 8-digit code is tried as a Canadian DIN first, then as an ordinary barcode.
 export const SCAN_FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'itf'];
 const SCAN_INTERVAL_MS = 300;
 
+// A barcode is 8 to 14 digits. "DIN 02241234" (6 to 8 digits after DIN) is a Canadian Drug Identification Number.
 export const cleanBarcode = value => {
-  const digits = String(value ?? '').replace(/[\s-]/g, '');
+  const text = String(value ?? '').trim();
+  const din = /^din[\s:-]*(\d[\d\s-]*)$/i.exec(text);
+  if (din) {
+    const digits = din[1].replace(/[\s-]/g, '');
+    return /^\d{6,8}$/.test(digits) ? `DIN${digits.padStart(8, '0')}` : null;
+  }
+  const digits = text.replace(/[\s-]/g, '');
   return /^\d{8,14}$/.test(digits) ? digits : null;
 };
 
@@ -24,7 +32,7 @@ export function bindBarcodeScan({ document, api, onResult, getMediaDevices = () 
 
   async function lookup(rawCode) {
     const code = cleanBarcode(rawCode);
-    if (!code) { say('Enter a barcode of 8 to 14 digits.', true); return; }
+    if (!code) { say('Enter a barcode of 8 to 14 digits, or a DIN like DIN 02241234.', true); return; }
     if (busy) return;
     busy = true; stop(); say('Looking it up…');
     let result;
