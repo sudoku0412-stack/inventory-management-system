@@ -167,6 +167,31 @@ const views = {
     after ? content.append(view) : content.replaceChildren(view);
     return data.nextCursor;
   },
+  async lists() {
+    const data = await get('/admin/api/option-defaults');
+    setWrites(data.writesEnabled);
+    const names = { medicine: 'Medicine Shops', goods: 'General goods Shops' }, listNames = { form: 'Form / category', unit: 'Unit', location: 'Storage location' };
+    const wrap = el('div', {}, el('p', { class: 'note' }, 'Defaults for new and existing Shops of each type. Shop Owners can still add or hide options in their own Shop. Removing a default never changes saved items.'));
+    for (const type of ['medicine', 'goods']) {
+      wrap.append(el('h2', {}, names[type]));
+      for (const list of ['form', 'unit', 'location']) {
+        const row = el('p', {}, el('strong', {}, `${listNames[list]}: `));
+        for (const value of data[type][list]) {
+          const remove = el('button', { type: 'button', class: 'danger', 'aria-label': `Remove ${value} from ${names[type]} ${listNames[list]}` }, `${value} ×`);
+          remove.disabled = !writesEnabled;
+          remove.addEventListener('click', async () => { try { await post('/admin/api/option-defaults', { action: 'remove', shopType: type, list, value }); run('lists'); } catch (error) { status.textContent = error.message; status.classList.add('error'); } });
+          row.append(remove, ' ');
+        }
+        const input = el('input', { type: 'text', maxlength: '30', 'aria-label': `New ${listNames[list]} option for ${names[type]}` }), add = el('button', { type: 'button', class: 'primary' }, 'Add');
+        input.disabled = add.disabled = !writesEnabled;
+        add.addEventListener('click', async () => { try { await post('/admin/api/option-defaults', { action: 'add', shopType: type, list, value: input.value }); run('lists'); } catch (error) { status.textContent = error.message; status.classList.add('error'); } });
+        row.append(input, ' ', add);
+        wrap.append(row);
+      }
+    }
+    content.replaceChildren(wrap);
+    return null;
+  },
   async email(after) {
     const data = await get(`/admin/api/email-outbox${after ? `?cursor=${encodeURIComponent(after)}` : ''}`);
     const view = table('Emails not yet sent', [{ label: 'Queued', render: row => when(row.created_at) }, { label: 'Type', key: 'kind' }, { label: 'To', key: 'recipient_email' }, { label: 'Status', key: 'status' }, { label: 'Attempts', key: 'attempts' }, { label: 'Last error', render: row => row.last_error || '' }], data.emails);

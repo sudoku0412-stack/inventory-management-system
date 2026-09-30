@@ -289,3 +289,25 @@ tbody tr:hover { background: #f9fbfa; }
 .offline-banner[hidden] { display: none; }
 .restock-open { margin: 0 0 16px; }
 #restockList li { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+/* Owner overview and Shop list editor */
+.overview-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.overview-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; margin-bottom: 20px; }
+.overview-card { padding: 18px; border: 1px solid var(--line); border-radius: 15px; background: var(--surface); }
+.overview-card h3 { margin: 0; overflow-wrap: anywhere; }
+.overview-type { margin: 2px 0 12px; color: var(--ink-soft); font-size: .8rem; }
+.overview-card dl { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 8px; }
+.overview-card dt { color: var(--ink-soft); font-size: .78rem; }
+.overview-card dd { margin: 0; font-size: 1.25rem; font-weight: 700; }
+.overview-card dd.attention.expired { color: var(--rose); }
+.overview-card dd.attention.expiring { color: var(--amber); }
+.overview-toolbar { grid-template-columns: minmax(200px, 1fr) 180px 180px; }
+#overviewShopLabel[hidden] { display: none; }
+.options-list { margin: 14px 0; }
+.options-list h3 { margin: 0 0 8px; font-size: .95rem; }
+.options-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; padding: 0; list-style: none; }
+.option-chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; background: #fff; font-size: .85rem; }
+.option-chip.hidden-option { color: var(--ink-soft); background: #f4f7f6; }
+.options-add { display: flex; gap: 8px; }
+.options-add input { flex: 1; min-width: 0; height: 42px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; font: inherit; }
+@media (max-width: 720px) { .overview-toolbar { grid-template-columns: 1fr; } }
