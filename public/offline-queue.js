@@ -3,6 +3,9 @@
 const FIELDS = ['name', 'strength', 'form', 'quantity', 'unit', 'low_stock_threshold', 'location', 'notes', 'expiry_date'];
 const isoDay = date => [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-');
 
+// Form values arrive as strings; the list and status rules need numbers.
+const numeric = fields => { const out = { ...fields }; for (const key of ['quantity', 'low_stock_threshold']) if (out[key] !== undefined && out[key] !== '') out[key] = Number(out[key]); return out; };
+
 export const pickFields = batch => Object.fromEntries(FIELDS.filter(key => batch && batch[key] !== undefined).map(key => [key, batch[key]]));
 
 export function statusFor(batch, day = isoDay(new Date())) {
@@ -60,13 +63,13 @@ export function applyQueue(list, queue, day = isoDay(new Date())) {
     const index = out.findIndex(item => item.id === entry.batchId);
     if (entry.kind === 'create') {
       const stamp = new Date(entry.editedAt).toISOString();
-      const batch = { id: entry.batchId, strength: '', location: '', notes: '', low_stock_threshold: 4, expiry_date: null, ...entry.fields, has_photo: false, revision: 0, discarded_at: null, created_at: stamp, updated_at: stamp };
+      const batch = { id: entry.batchId, strength: '', location: '', notes: '', low_stock_threshold: 4, expiry_date: null, ...numeric(entry.fields), has_photo: false, revision: 0, discarded_at: null, created_at: stamp, updated_at: stamp };
       batch.status = statusFor(batch, day);
       out.push(batch);
     } else if (index < 0) continue;
     else if (entry.kind === 'discard' || (entry.kind === 'consume' && entry.quantityAfter < 1)) out.splice(index, 1);
     else {
-      const batch = { ...out[index], ...(entry.kind === 'update' ? entry.fields : { quantity: entry.quantityAfter }) };
+      const batch = { ...out[index], ...(entry.kind === 'update' ? numeric(entry.fields) : { quantity: entry.quantityAfter }) };
       batch.status = statusFor(batch, day);
       out[index] = batch;
     }
