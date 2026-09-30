@@ -32,3 +32,8 @@ test('tapping a field in the Edit dialog never reopens the batch details', () =>
   assert.match(app, /closest\('\[data-batch-id\]:not\(form\)'\);if\(b\)batch\(b\.dataset\.batchId\)/);
   assert.doesNotMatch(app, /closest\('\[data-batch-id\]'\);if\(b\)batch\(/);
 });
+
+test('the Restock list button is spaced from the cards above it, centered, and full width on phones', () => {
+  assert.match(styles, /\.restock-open \{ display: flex; align-items: center; justify-content: center; gap: 8px; margin: 16px 0 18px; \}/);
+  assert.match(styles, /@media \(max-width: 760px\) \{ \.restock-open \{ width: 100%; \} \}/);
+});
