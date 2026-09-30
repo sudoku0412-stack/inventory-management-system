@@ -125,6 +125,8 @@
             </button>
           </div>
 
+          <button class="button secondary restock-open" type="button" data-open-restock>Restock list <span data-restock-count>0</span></button>
+
           <section class="section-block">
             <div class="section-heading">
               <div><h2>Next to expire</h2><p>Medicines to use or replace first.</p></div>
@@ -158,6 +160,8 @@
               </select>
             </label>
           </div>
+
+          <button class="button secondary restock-open" type="button" data-open-restock>Restock list <span data-restock-count>0</span></button>
 
           <div class="filter-chips" role="group" aria-label="Quick status filters">
             <button class="filter-chip active" type="button" data-filter="all" aria-pressed="true">All <span id="allCount">—</span></button>
@@ -303,6 +307,16 @@
         <button type="button" id="mobileProfile" data-view="profile"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0" /></svg><span>Profile</span></button>
       </nav>
     </div>
+
+    <dialog class="modal confirm-modal" id="restockModal" aria-labelledby="restockTitle">
+      <div class="modal-header"><div><span class="overline">SHOPPING</span><h2 id="restockTitle">Restock list</h2></div><button class="modal-close" type="button" id="restockClose" data-close-modal aria-label="Close">×</button></div>
+      <div class="modal-body">
+        <p class="access-meta">Expired, expiring within 30 days, or low on stock. A medicine with a healthy spare pack is left off.</p>
+        <p class="access-empty" id="restockEmpty" hidden>Nothing needs restocking right now.</p>
+        <ul class="access-list" id="restockList"></ul>
+      </div>
+      <div class="modal-footer"><button class="button secondary" id="restockCopy" type="button">Copy list</button><button class="button secondary" id="restockShare" type="button" hidden>Share</button><button class="button primary" type="button" data-close-modal>Done</button></div>
+    </dialog>
 
     <dialog class="modal" id="addMedicineModal" aria-labelledby="addMedicineTitle">
       <form id="addMedicineForm" novalidate autocomplete="off">

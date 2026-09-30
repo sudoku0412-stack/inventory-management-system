@@ -287,3 +287,5 @@ tbody tr:hover { background: #f9fbfa; }
 .offline-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .offline-banner .button { min-height: 44px; }
 .offline-banner[hidden] { display: none; }
+.restock-open { margin: 0 0 16px; }
+#restockList li { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
