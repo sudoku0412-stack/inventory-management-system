@@ -1,7 +1,7 @@
 // App shell cache. Network first so a deploy is picked up immediately; the cached copy is only used when the network fails.
 // API, admin and Cloudflare Access paths and every non-GET request are never touched. Redirected responses (an Access login) are never cached.
 const SHELL_CACHE = 'medicine-shell-v1';
-const PRECACHE = ['/', '/index.html', '/app.js', '/greeting.js', '/shop-client.js', '/shop-creation-client.js', '/owner-promotion-client.js', '/member-removal-client.js', '/owner-demotion-client.js', '/ownership-transfer-client.js', '/shop-leave-client.js', '/shop-deletion-client.js', '/deleted-shops-client.js', '/email-preferences-client.js', '/inventory-export-client.js', '/options-client.js', '/overview-client.js', '/barcode-client.js', '/shop-invitations-client.js', '/change-feed-client.js', '/offline-store.js', '/offline-queue.js', '/restock-client.js', '/styles.css'];
+const PRECACHE = ['/', '/index.html', '/app.js', '/greeting.js', '/shop-client.js', '/shop-creation-client.js', '/owner-promotion-client.js', '/member-removal-client.js', '/owner-demotion-client.js', '/ownership-transfer-client.js', '/shop-leave-client.js', '/shop-deletion-client.js', '/deleted-shops-client.js', '/email-preferences-client.js', '/inventory-export-client.js', '/options-client.js', '/overview-client.js', '/barcode-client.js', '/zxing-detector.js', '/shop-invitations-client.js', '/change-feed-client.js', '/offline-store.js', '/offline-queue.js', '/restock-client.js', '/styles.css'];
 const STATIC_FILE = /\.(?:js|css|png|svg|ico|webmanifest|json)$/;
 
 self.addEventListener('install', event => {
