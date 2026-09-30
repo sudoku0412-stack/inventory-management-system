@@ -25,3 +25,10 @@ test('medicine form keeps a compact accessible expiry date and unknown-expiry ch
   assert.match(styles, /\.expiry-field \.expiry-date-input:disabled \{ background-image: url\("data:image\/svg\+xml/);
   assert.match(styles, /\.expiry-field input\[type="date"\]:disabled \{ background-color: #f2f5f4;/);
 });
+
+test('tapping a field in the Edit dialog never reopens the batch details', () => {
+  // The edit form carries data-batch-id, so the page-wide row click handler must skip forms.
+  assert.match(app, /f\.dataset\.batchId=b\.id/);
+  assert.match(app, /closest\('\[data-batch-id\]:not\(form\)'\);if\(b\)batch\(b\.dataset\.batchId\)/);
+  assert.doesNotMatch(app, /closest\('\[data-batch-id\]'\);if\(b\)batch\(/);
+});

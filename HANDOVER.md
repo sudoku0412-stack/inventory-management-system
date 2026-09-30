@@ -1,5 +1,8 @@
 # Medicine Inventory Tracker — handover
 
+## Fix: tapping a field in Edit reopened the batch details (2026-09-30)
+- Cause: the Edit form carries `data-batch-id` (set by `edit()`), and the page-wide click handler opens the batch details for any `closest('[data-batch-id]')`, so every click inside the form reopened the details dialog on top. Fix: the handler uses `[data-batch-id]:not(form)`. Reproduced and verified in the in-app browser; source-pattern test added to `test/mobile-medicine-dialog.test.js`.
+
 ## Barcode lookup: short-form codes and brand names (2026-09-30)
 - Bug: the Nestle jar scanned but nothing filled. Open Food Facts stores that product under the SHORT UPC-E code (`05525504`), not the UPC-A or EAN-13 forms the scanner now reports. `lookupBarcode` now tries every form in parallel: as scanned, leading-zero EAN-13, UPC-A and UPC-E (`upcaToUpce`, round-trip checked). Stored and returned `code` is still the canonical UPC-A.
 - Open Facts names now get the brand in front unless the name already has it ("Nescafe Cafe"). Strength stays empty for goods; Open Facts quantity (e.g. "400 g") is not used yet.
