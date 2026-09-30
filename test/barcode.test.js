@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readdirSync, readFileSync } from 'node:fs';
-import { canonicalCode, lookupBarcode, normalizeBarcode, parseCode, rememberBarcode, upceToUpca } from '../lib/barcode.js';
+import { canonicalCode, lookupBarcode, normalizeBarcode, parseCode, rememberBarcode, upcaToUpce, upceToUpca } from '../lib/barcode.js';
 import { createD1Store } from '../lib/store-d1.js';
 import { bindBarcodeScan, cleanBarcode } from '../public/barcode-client.js';
 
@@ -214,7 +214,7 @@ test('a DIN prefix uses Health Canada only; an 8-digit miss falls through to the
   assert.deepEqual(miss, { code: '00000001', found: false });
   assert.ok(calls.every(url => url.includes('health-products.canada.ca')));
   const food = await lookupBarcode(db, shop, '96385074', fetchFrom({ 'drugproduct': json([]), 'openfoodfacts': json({ status: 1, product: { product_name: 'Coke', brands: 'Coca-Cola' } }) }));
-  assert.deepEqual([food.source, food.name], ['openfacts', 'Coke']);
+  assert.deepEqual([food.source, food.name], ['openfacts', 'Coca-Cola Coke']);
   const wide = await lookupBarcode(db, shop, '3017620422003', async url => { calls.push(url); return fetchFrom({ 'openfoodfacts': json({ status: 1, product: { product_name: 'Nutella' } }) })(url); });
   assert.equal(wide.source, 'openfacts');
   assert.ok(!calls.slice(1).some(url => url.includes('drugproduct?din=3017620422003')), '13-digit codes are never tried as a DIN');
@@ -224,4 +224,32 @@ test('a multi-ingredient or unknown-form DIN leaves strength and form for the us
   const { db } = fixture();
   const result = await lookupBarcode(db, shop, 'DIN 00559407', fetchFrom({ ...dpd, 'activeingredient': json([{ strength: '1', strength_unit: 'MG' }, { strength: '2', strength_unit: 'MG' }]), 'form/': json([{ pharmaceutical_form_name: 'Kit' }]) }));
   assert.deepEqual([result.found, result.strength, result.form], [true, '', '']);
+});
+
+test('UPC-A compresses back to UPC-E for every zero pattern, and only when it round-trips', () => {
+  for (const upce of ['05525504', '01234503', '01234514', '01234525', '01234534', '01234544', '01234555', '01234565', '01234575', '01234585', '01234595', '12345671']) {
+    const upca = upceToUpca(upce);
+    if (upca) assert.equal(upcaToUpce(upca), upce, upce);
+  }
+  assert.equal(upcaToUpce('055000002554'), '05525504');
+  assert.equal(upcaToUpce('036000291452'), null);
+  assert.equal(upcaToUpce('3017620422003'), null);
+  assert.equal(upcaToUpce('255000002554'), null);
+});
+
+test('a scan in any form finds a product the public database stores under the short UPC-E form', async () => {
+  const { db } = fixture();
+  const onlyShort = fetchFrom({ '/05525504.json': json({ status: 1, product: { product_name: 'Cafe', brands: 'Nescafe' } }) });
+  for (const scanned of ['05525504', '0055000002554', '055000002554']) {
+    const result = await lookupBarcode(db, shop, scanned, onlyShort);
+    assert.deepEqual([result.found, result.code, result.name], [true, '055000002554', 'Nescafe Cafe'], scanned);
+  }
+});
+
+test('the brand is added to the product name unless the name already has it', async () => {
+  const { db } = fixture();
+  const named = await lookupBarcode(db, shop, '3017620422003', fetchFrom({ 'openfoodfacts': json({ status: 1, product: { product_name: 'Nutella', brands: 'Nutella, Ferrero' } }) }));
+  assert.equal(named.name, 'Nutella');
+  const branded = await lookupBarcode(db, shop, '3017620422003', fetchFrom({ 'openfoodfacts': json({ status: 1, product: { product_name: 'Hazelnut spread', brands: 'Ferrero' } }) }));
+  assert.equal(branded.name, 'Ferrero Hazelnut spread');
 });
