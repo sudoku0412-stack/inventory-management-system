@@ -1,5 +1,10 @@
 # Medicine Inventory Tracker — handover
 
+## Field info tips (2026-09-30)
+- Client-only, no migration. `public/info-tips.js` adds a small "i" button to 18 fields (Add/Edit item form, Profile, Create Shop, Invite). Hover, focus or tap shows a one-line tip; tap pins it, Escape or a tap elsewhere closes. All tip text is in `FIELD_TIPS` in that file (one place to edit). The tip opens inside the open dialog (so it is not hidden behind it) and is placed by measuring where `left:0/top:0` lands, because the mobile dialog is a containing block for fixed elements. Tips avoid the word "medicine" so they fit General goods Shops.
+- `options-client.js` renames the Form label to Category by changing only the label text node (a `textContent` assignment wiped the info button).
+- New module `/info-tips.js` is in both allowlists and `PRECACHE`. Tests in `test/info-tips.test.js`. Not covered: fields added later need an entry in `FIELD_TIPS`.
+
 ## Fix: tapping a field in Edit reopened the batch details (2026-09-30)
 - Cause: the Edit form carries `data-batch-id` (set by `edit()`), and the page-wide click handler opens the batch details for any `closest('[data-batch-id]')`, so every click inside the form reopened the details dialog on top. Fix: the handler uses `[data-batch-id]:not(form)`. Reproduced and verified in the in-app browser; source-pattern test added to `test/mobile-medicine-dialog.test.js`.
 

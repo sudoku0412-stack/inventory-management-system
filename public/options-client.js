@@ -55,7 +55,9 @@ export function bindOptions({ document, api, getRole, getShopId, toast, storage 
     const strength = $('#addMedicineForm')?.elements?.strength?.closest('.form-field');
     if (strength) strength.hidden = type === 'goods';
     const formLabel = $('#addMedicineForm')?.elements?.form?.closest('.form-field')?.querySelector('span');
-    if (formLabel) formLabel.textContent = type === 'goods' ? 'Category' : 'Form';
+    // Change only the label text, so the field's info button stays.
+    const labelText = formLabel?.firstChild;
+    if (labelText?.nodeType === 3) labelText.nodeValue = type === 'goods' ? 'Category' : 'Form';
     const typeSelect = $('#shopTypeSelect');
     if (typeSelect) typeSelect.value = type;
     // Only elements marked data-wording are reworded, so Shop names and item names are never touched.
