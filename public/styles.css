@@ -284,3 +284,5 @@ tbody tr:hover { background: #f9fbfa; }
 #transferOwnershipModal .button { min-height: 44px; }
 
 .offline-banner { margin: 0 0 14px; padding: 11px 14px; border-radius: 12px; background: #fff4d6; color: #5c4200; font-weight: 600; }
+.offline-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.offline-banner .button { min-height: 44px; }

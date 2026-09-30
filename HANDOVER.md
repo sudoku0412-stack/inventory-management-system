@@ -1,5 +1,11 @@
 # Medicine Inventory Tracker — handover
 
+## Offline edits, slice 2 (2026-09-29, built, not deployed)
+- Plan `docs/superpowers/plans/2026-09-29-offline-edits.md`. Browser-only, no migration, no server change. `public/offline-queue.js` (pure queue rules: collapse per medicine, optimistic list, replay with the later-timestamp-wins rule on the 409's current batch), `public/offline-store.js` (`queues` store, DB version 2), `public/app.js` (batch mutations queue when offline or on a network error; `syncQueue()`; banner with **Sync now**).
+- New module `/offline-queue.js` is in both allowlists and in `PRECACHE`. Queue is per account-and-Shop. Photos stay online-only: a data-URL photo, or removing an existing photo, is rejected offline; `photo: null` on a medicine with no photo is dropped.
+- Rulings: no per-row "Waiting to sync" mark (banner counts only); form values are coerced to numbers in the optimistic list (found in browser testing: strings made "12" < "4").
+- Verified in the in-app browser against a mock API: offline consume/edit/add queue and survive reload, reconnect sends them in order with stored operation ids, newer server change drops the entry with a notice, older server change rebases (new revision and operation id). NOT verified: real service worker, real Access session expiry, photo rejection click-through.
+
 ## Offline read, slice 1 (2026-09-29, built, not deployed)
 - Spec `docs/superpowers/specs/2026-09-29-offline-use-design.md`, plan `docs/superpowers/plans/2026-09-29-offline-read.md`. Browser-only, no migration.
 - `public/offline-store.js` (IndexedDB: last Shop context + snapshot per account/Shop, in both allowlists), `public/sw.js` (network-first app shell cache, never `/api` `/admin` `/cdn-cgi`, non-GET or redirected responses), `public/app.js` (registers the worker, saves context/snapshot after loads, opens from them on a network error, offline banner, mutations rejected while offline, `online` re-runs `start()`).

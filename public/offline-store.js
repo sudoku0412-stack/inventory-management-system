@@ -1,14 +1,17 @@
 // Durable local copy for offline reading: the last Shop context and a snapshot per account and Shop.
 // Every method swallows storage failures and resolves null, so a blocked or unavailable IndexedDB never affects the online app.
 const DB_NAME = 'medicine-offline';
-const VERSION = 1;
+const VERSION = 2;
 
 export function openOfflineStore({ indexedDB = globalThis.indexedDB, now = () => new Date().toISOString() } = {}) {
   let dbPromise = null;
   const open = () => dbPromise ||= new Promise((resolve, reject) => {
     if (!indexedDB) return reject(new Error('IndexedDB is unavailable'));
     const request = indexedDB.open(DB_NAME, VERSION);
-    request.onupgradeneeded = () => { request.result.createObjectStore('meta'); request.result.createObjectStore('snapshots'); };
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      for (const name of ['meta', 'snapshots', 'queues']) if (!db.objectStoreNames.contains(name)) db.createObjectStore(name);
+    };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
@@ -32,5 +35,7 @@ export function openOfflineStore({ indexedDB = globalThis.indexedDB, now = () =>
   }
   const saveSnapshot = (key, data) => run('snapshots', 'readwrite', store => store.put({ ...data, savedAt: now() }, key));
   const loadSnapshot = key => run('snapshots', 'readonly', store => store.get(key));
-  return { saveContext, loadContext, saveSnapshot, loadSnapshot };
+  const loadQueue = key => run('queues', 'readonly', store => store.get(key));
+  const saveQueue = (key, entries) => run('queues', 'readwrite', store => store.put(entries, key));
+  return { saveContext, loadContext, saveSnapshot, loadSnapshot, loadQueue, saveQueue };
 }
