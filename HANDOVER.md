@@ -1,5 +1,10 @@
 # Medicine Inventory Tracker — handover
 
+## DIN lookup in the scanner (2026-09-30)
+- No migration. `lib/barcode.js` `parseCode`: "DIN 02241234" (6-8 digits, padded) uses Health Canada's Drug Product Database only; a plain 8-digit code is tried as a DIN first, then openFDA, then Open Facts; longer codes skip Health Canada. Returns name (title-cased), strength (only when one active ingredient) and a standard Form when the dosage form maps; source `din`.
+- Scanner and typed box accept both; `code_128` and `itf` formats are read. Most Canadian packs print the DIN as text, not a barcode, so typing `DIN` plus the number is the reliable route.
+- Tests in `test/barcode.test.js` (13). Verified live against Health Canada's API (DIN 00559407 returns Tylenol Extra Strength, 500 mg, Tablets).
+
 ## Barcode scan (2026-09-30)
 - Migration `0030_batch_barcodes.sql` (apply BEFORE deploying): `batch_barcodes` remembers what a Shop saved for a scanned code (best effort, written after a create that carries `barcode`).
 - `GET /api/barcode?code=` (Shop-scoped, any member): Shop's own earlier scans, then openFDA drug label `openfda.upc`, then Open Food/Beauty/Products Facts. All free, no key, 4 s timeout each; a miss returns `{ found: false }`, never an error.

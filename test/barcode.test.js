@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readdirSync, readFileSync } from 'node:fs';
-import { lookupBarcode, normalizeBarcode, rememberBarcode } from '../lib/barcode.js';
+import { lookupBarcode, normalizeBarcode, parseCode, rememberBarcode } from '../lib/barcode.js';
 import { createD1Store } from '../lib/store-d1.js';
 import { bindBarcodeScan, cleanBarcode } from '../public/barcode-client.js';
 
@@ -143,4 +143,49 @@ test('a lookup failure reports an offline miss instead of throwing', async () =>
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(f.results, [{ code: '3017620422003', found: false, offline: true }]);
   assert.equal(f.nodes.scanModal.open, false);
+});
+
+const dpd = {
+  'drugproduct': json([{ drug_code: 5255, drug_identification_number: '00559407', brand_name: 'TYLENOL EXTRA STRENGTH' }]),
+  'activeingredient': json([{ ingredient_name: 'ACETAMINOPHEN', strength: '500', strength_unit: 'MG' }]),
+  'form/': json([{ pharmaceutical_form_name: 'Tablet' }])
+};
+
+test('parseCode reads a DIN with its prefix, pads it, and treats plain 8 digits as a barcode', () => {
+  assert.deepEqual(parseCode('DIN 00559407'), { code: '00559407', dinOnly: true });
+  assert.deepEqual(parseCode('din:559407'), { code: '00559407', dinOnly: true });
+  assert.deepEqual(parseCode('00559407'), { code: '00559407', dinOnly: false });
+  for (const bad of ['DIN 12', 'DIN 123456789', 'DIN abc', 'DIN']) assert.equal(parseCode(bad), null);
+  assert.equal(normalizeBarcode('DIN 559407'), '00559407');
+  assert.equal(cleanBarcode('DIN 559407'), 'DIN00559407');
+  assert.equal(cleanBarcode('din 02241234'), 'DIN02241234');
+  assert.equal(cleanBarcode('DIN 12'), null);
+});
+
+test('an 8-digit code is tried as a DIN first and returns name, strength and a standard form', async () => {
+  const { db } = fixture();
+  const calls = [];
+  const fetchImpl = async url => { calls.push(url); return fetchFrom(dpd)(url); };
+  const result = await lookupBarcode(db, shop, '00559407', fetchImpl);
+  assert.deepEqual([result.found, result.source, result.name, result.strength, result.form], [true, 'din', 'Tylenol Extra Strength', '500 mg', 'Tablets']);
+  assert.ok(calls[0].includes('health-products.canada.ca') && !calls.some(url => url.includes('api.fda.gov')));
+});
+
+test('a DIN prefix uses Health Canada only; an 8-digit miss falls through to the other databases', async () => {
+  const { db } = fixture();
+  const calls = [];
+  const miss = await lookupBarcode(db, shop, 'DIN 00000001', async url => { calls.push(url); return json([]); });
+  assert.deepEqual(miss, { code: '00000001', found: false });
+  assert.ok(calls.every(url => url.includes('health-products.canada.ca')));
+  const food = await lookupBarcode(db, shop, '96385074', fetchFrom({ 'drugproduct': json([]), 'openfoodfacts': json({ status: 1, product: { product_name: 'Coke', brands: 'Coca-Cola' } }) }));
+  assert.deepEqual([food.source, food.name], ['openfacts', 'Coke']);
+  const wide = await lookupBarcode(db, shop, '3017620422003', async url => { calls.push(url); return fetchFrom({ 'openfoodfacts': json({ status: 1, product: { product_name: 'Nutella' } }) })(url); });
+  assert.equal(wide.source, 'openfacts');
+  assert.ok(!calls.slice(1).some(url => url.includes('drugproduct?din=3017620422003')), '13-digit codes are never tried as a DIN');
+});
+
+test('a multi-ingredient or unknown-form DIN leaves strength and form for the user', async () => {
+  const { db } = fixture();
+  const result = await lookupBarcode(db, shop, 'DIN 00559407', fetchFrom({ ...dpd, 'activeingredient': json([{ strength: '1', strength_unit: 'MG' }, { strength: '2', strength_unit: 'MG' }]), 'form/': json([{ pharmaceutical_form_name: 'Kit' }]) }));
+  assert.deepEqual([result.found, result.strength, result.form], [true, '', '']);
 });
