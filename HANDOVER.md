@@ -1,5 +1,10 @@
 # Medicine Inventory Tracker — handover
 
+## Restock list (2026-09-29, built, not deployed)
+- Client-only, no migration. `public/restock-client.js` (list rules, copy text, dialog binding; in both allowlists and `PRECACHE`), button + count on Dashboard and Inventory, `#restockModal` in `index.html`, wiring in `app.js`. Lists expired, expiring within 30 days, low stock; a medicine (name, strength, form, unit) with any healthy or no-expiry batch is left off. Per-row **Add stock** opens the Add form pre-filled (name, strength, form, unit, location; quantity focused); **Copy list**, and **Share** where `navigator.share` exists. Works offline from the optimistic list.
+- Verified in the in-app browser against a mock API and a throwaway rules script. Not verified: Share on a real phone.
+- Agreed queue for new features: restock list (this), expiry digest email, then barcode scan.
+
 ## Offline follow-ups (2026-09-29)
 - Offline edits (slice 2) and read (slice 1) are deployed and were confirmed working on the user's phone. Fixed: an empty yellow banner showed online (`display:flex` overrode `hidden`; PR #96).
 - Added: per-row "Waiting to sync" mark (optimistic rows carry `pending`), and a "session expired, reload to sign in" banner when the probe or sync sees an Access redirect (`redirect:'manual'` fetch returns `opaqueredirect`) or 401/403; entries stay queued. Verified in the in-app browser against a mock API.
