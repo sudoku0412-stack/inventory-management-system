@@ -1,0 +1,642 @@
+# Design records
+
+This file was the original `ARCHITECTURE.md`. It keeps the detailed design decisions, API contracts and rollout notes for each feature, in the order they were designed. Some early sections describe plans that have since shipped or changed (for example, the offline queue and email notices now exist). For how the system works today, start at [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and the other documents in this folder; use this file for the reasoning behind a feature. Add a new section here when a significant design decision is made.
+
+## Product boundary
+
+The Inventory Management System is a responsive web application for managing stock of any kind (medicines, household goods or other supplies): batches, expiry dates, stock levels, locations, reminders, and optional packaging photos. It started as a medicine tracker, so infrastructure resources keep the `medicine-inventory` name. The product is protected by Cloudflare Access in production. User-facing language calls the shared space a **Shop**; existing database and API identifiers remain `household`-scoped for compatibility.
+
+## Runtime layout
+
+```text
+Browser (plain HTML, CSS, JavaScript)
+        |
+        | HTTPS + Cloudflare Access session
+        v
+Cloudflare Worker
+  |-- static assets from Workers Assets
+  |-- API and scheduled push delivery
+  |-- verifies Cloudflare Access JWT for production API calls
+  |-- D1: inventory, users, memberships, settings, invitations, receipts
+  |-- R2: packaging photos
+  `-- KV: web-push configuration
+
+Local development
+  `-- Node HTTP server + SQLite + local photo files
+```
+
+## Clients and presentation
+
+- Static client: `public/index.html`, `public/app.js`, `public/styles.css`; no client-side OAuth credentials are stored.
+- The browser calls same-origin APIs with the Cloudflare Access session and renders server-authorized data only.
+- Static HTML and bootstrap assets use fresh-cache policies so deploys do not leave an authenticated user on an old shell. Image assets use immutable caching.
+- The app has responsive inventory, reminder, profile, access-management, invitation-acceptance, and sign-out flows. The sign-out action sends the user to Cloudflare Access’s same-origin logout endpoint.
+
+## Identity and authorization
+
+- Production endpoints validate a Cloudflare Access JWT signature, issuer, audience, and expiry. Browser-supplied identity, role, and email fields are never authority.
+- A verified identity is bound to its provider and subject. Email may support invitation matching, but never account linking or ownership takeover.
+- D1 stores `users`, `identities`, `households`, `memberships`, `household_settings`, and a permanent singleton bootstrap marker.
+- Roles currently are `owner` and `member`. Owners manage invitations; members can use Shop inventory according to existing server checks.
+- Invitations are addressed to a normalized verified email, expire after seven days, and grant membership only through explicit acceptance by the matching authenticated identity.
+- Existing tables, routes, payload fields, DOM hooks, and migration names retain the internal `household` term. Do not rename them without a separately approved compatibility migration.
+
+## Data and sync model
+
+- Local mode is loopback-only and uses SQLite as a single-user Shop.
+- Cloud mode uses D1 as the source of truth. Inventory and push data are tenant-scoped by internal household ID.
+- Each cloud batch has a revision. Browser mutations carry an operation ID and base revision; duplicate operations replay safely and stale changes return a conflict for user review.
+- No offline mutation queue, background reconciliation, or cross-device conflict UI exists yet. An online pull feed is implemented (see below).
+- Packaging images live in R2. Optional Gemini suggestions are server-side, require a configured secret, and are never saved until the user confirms the medicine form.
+
+## Deployment and operations
+
+- Production target: `https://inventory-management.craftloop.ca` (previously `https://medicineinventory.craftloop.ca`).
+- The Worker configuration and deployment notes live in `deploy/cloudflare-workers.md`.
+- D1 migrations are additive and applied before a Worker that depends on them. Verify the migration ledger and production route after every deployment.
+- Secrets remain in Cloudflare/Wrangler or ignored local files. Never commit Access, Apple, Google, Gemini, VAPID, database, or photo credentials.
+- `HANDOVER.md` records delivery and deployment checkpoints; `docs/bugfix-plan.md` records the evidence-first triage process.
+
+## Planned: transactional email notices
+
+Email notices will be delivered as transactional messages through Resend's HTTP API. Resend is preferred for the first release because its free tier supports arbitrary invitee addresses and its API accepts a stable idempotency key. Cloudflare Email Service currently requires Workers Paid for arbitrary recipients. Email sending is disabled until a dedicated sending domain is authenticated and a send-only `RESEND_API_KEY` is stored as a Worker secret.
+
+Migration `0024_notification_outbox.sql` will add a D1 transactional outbox with one row per recipient. Invitation creation, Shop deletion scheduling, and ownership transfer will insert their email rows in the same D1 batch as the successful business mutation. Provider calls never run inside those request transactions, so an email outage cannot undo or delay the user action. Replays and rejected mutations must not create duplicate outbox rows.
+
+The existing 15-minute cron will lease a bounded number of due rows, render fixed plain-text and accessible escaped-HTML templates, and send them with a deterministic provider idempotency key. Transient failures retry with bounded backoff inside Resend's 24-hour idempotency window; permanent validation/authentication failures become terminal, and an ambiguous send older than that window becomes `uncertain` for manual review instead of risking a duplicate. Invitation notices are cancelled before dispatch when the invitation has been accepted, revoked, expired, or its Shop deleted. A restored Shop cancels a still-pending deletion notice. Transfer notices describe the committed event even if roles later change.
+
+Messages contain only the action, role or deletion deadline, and the canonical app URL. They never contain medicine, inventory, patient, member-list, JWT, or secret data; links contain no invitation bearer token. Invitation recipients must sign in with the invited address. Open and click tracking stay disabled. Sent/cancelled rows are pruned after a short operational retention period; failed/uncertain rows remain until reviewed.
+
+Implementation is deliberately split into small deployable chunks:
+
+1. Outbox schema, sender/lease/retry foundation, fixed templates, and Member invitation-created notices, shipped disabled until provider configuration is complete.
+2. Shop deletion and ownership-transfer notices using the same outbox.
+3. Direct Owner-role invitations, with role-specific email wording.
+
+### Planned: direct Owner-role invitations
+
+The invitation record remains the source of truth for the requested role. The owner-only invitation API and UI will accept an explicit allowlisted role of `member` or `owner`; the default remains `member`. Acceptance grants exactly the persisted role after the same verified-email, expiry, revocation, membership-limit, replay, and cross-Shop isolation checks used today. Client-supplied identity, user ID, or role outside this allowlist is never authority. The email outbox snapshots the persisted invitation role, so Owner invitations receive accurate wording without a second email system. This slice will include explicit confirmation copy because accepting an Owner invitation grants Shop-administration authority.
+
+## Additional Shop invitation joins — server/data deployed
+
+### Boundary and prerequisites
+
+An authenticated cloud user with at least one current Shop membership may explicitly accept a valid invitation to another Shop as a **Member**. The same internal `users.id` and verified `(provider, subject)` identity are reused; normalized verified JWT email is used only to match the invitation. Email never links two accounts or changes ownership. One person may own several independent Shops; each Shop has its own owners, members, inventory, settings, and audit trail. Joining Shop B grants no access to Shop A's owner controls or data beyond the user's existing role there. Existing no-membership enrollment remains supported.
+
+Keep the existing internal `household` routes and schema names. Prerequisites are deployed migrations 0010–0013, working pinned `X-Shop-Id` client requests, and the current `GET /api/household/invitations/pending` discovery route. Add one additive migration for durable acceptance receipts keyed by `(invitation_id, user_id)`, recording `household_id`, acceptance time, and the immutable invitation email used at acceptance. This is needed because acceptance deletes the invitation, so a lost response cannot otherwise be distinguished from expiry or revocation. Add a foreign key to the Shop and user, and an index for account lookup. Do not alter historical audit rows or widen its event CHECK: use existing `invite_accepted`. Verify ledger, foreign keys, and old audit rows before deployment.
+
+Pending discovery must return an explicit allowlisted JSON shape: `{ invitations: [{ id, household_name, role, expires_at }], nextCursor }`, with `role` fixed to `member`. Construct each object field by field after the verified-email query; never serialize database rows directly. In particular, never expose `household_id`, invitee email, creator id, created time, membership ids, receipt data, or other internal fields before membership. `id` is an opaque invitation identifier, and `household_name` is display-only text. Keep the existing `member` boolean only if needed for older clients; it reveals only the caller's own membership state. Add a route serialization test that checks the complete key sets and denies extra fields.
+
+Discovery uses keyset pagination ordered by `(expires_at,id)`, a fixed maximum of 20 invitations per response, and an untrusted continuation hint; query at most 21 rows to determine `nextCursor`. The base64url hint contains exactly an email hash, canonical ISO timestamp, and strict invitation UUID. It is not signed, confidential, or an authorization credential. The public email hash detects accidental cross-account reuse, not deliberate forgery. Reject malformed, noncanonical, oversized (over 512 characters), extra-field, or mismatched-email-hash hints with 400. A caller may recompute the hash or move the position, but can only skip/revisit its own currently valid invitations: every query independently applies the verified JWT email, Member role, expiry and LIMIT 21. This explicitly replaces the earlier implied cursor-integrity requirement without adding a deployment secret. The UI offers **Show more invitations** while a cursor exists. Add a durable per-verified-principal throttle for these pre-resolution routes: at most 30 pending reads and 10 acceptance attempts in a rolling minute, returning 429 with `Retry-After`; apply it before database discovery or acceptance work, including wrong ids and replays, and rate-limit unaffiliated callers too. Use a hashed provider/subject key (and a Cloudflare-controlled IP backstop) rather than raw email in throttle records; bound retention with expiry cleanup. A missing or failed limiter fails closed with 503. No automatic polling; refresh on opening Profile, explicit Retry/Show more, and after acceptance.
+
+### API and transaction
+
+Keep `POST /api/household/invitations/:id/accept` before `resolveTenant`: the route also serves new users. Order: verify Access JWT; apply migration read-only guard; validate UUID path, same-origin `Origin`, JSON content type, empty-object body/size, and reject cross-site fetch metadata; resolve the caller solely by verified provider/subject; check a matching receipt for safe replay; then perform one guarded D1 batch. This route ignores `X-Shop-Id` entirely, even if malformed or foreign. It never reads or writes `user_shop_preferences`, so joining cannot silently change the active Shop. Replays return the joined Shop id and Member role only while the caller still has that membership; a later removal must not resurrect access.
+
+For an existing user, the batch must recheck the identity binding, invitation id, normalized verified email, `role='member'`, unexpired timestamp, target Shop existence, absence of an existing membership in that *target* Shop, and the total-membership limit below. Insert one membership, one receipt, consume exactly that invitation, and append one `invite_accepted` audit row with actor user id, target Shop id, verified provider/subject identifier, server timestamp, and request correlation id. Each dependent statement must fail the transaction if its predecessor did not change exactly one row; do not infer success merely from an earlier membership in the Shop. A unique `(household_id,user_id)` membership and unique invitation receipt serialize duplicate tabs and requests. On a race, read the receipt after the transaction: a matching receipt plus current membership is a 200 replay even if now at the limit; otherwise give a safe 404 for unavailable/wrong-email invitations or 409 for already being a member of that target Shop or reaching the membership limit. No second audit entry. Preserve the current new-user path, with equivalent guards and atomicity; do not introduce automatic enrollment on discovery or page load.
+
+Cap each account at 50 total current Shop memberships across Member and Owner roles. This keeps `GET /api/shops` and the selector bounded, while allowing a person to own multiple independent Shops; the existing five-owned-Shop and creation-frequency limits remain separate. In the same slice, guard both invitation acceptance and `POST /api/shops` creation inside their serialized transactions against the 50-member cap; do not add a creation path that bypasses it. Existing accounts above 50 require an explicit migration/exception decision before rollout rather than silently truncating `GET /api/shops` or hiding access. Creation or joining at the cap returns 409 with clear copy; receipt replays do not consume another slot. Invitation lifetime and owner-only creation/revocation remain unchanged. Owner-role invitations and promotion are separate actions. Expired or revoked invitations never enroll; a concurrent revoke and accept has one serialized winner. Fail closed if the receipt or audit table is unavailable, and verify that batch rollback leaves no partial membership, receipt, invitation deletion, or audit event.
+
+### Experience and isolation
+
+For an already enrolled **cloud** user, show a **Shop invitations** card in Profile & settings near Current Shop/Create another Shop. It is visible to Owners and Members, independent of the active Shop and of Shop-access owner controls. Render it only after cloud context is confirmed; local single-Shop mode does not render or fetch it. A 404/unsupported discovery response leaves local flow unchanged and is harmless if a mixed-version client reaches it. Fetch pending invitations through the pre-resolution discovery endpoint; do not send the page's pinned `X-Shop-Id` on discovery or acceptance. Show Shop name, Member access, expiry, and an explicit **Join Shop** button per invitation; never display another Shop's roster or data. Provide empty, loading, retry, 429 with retry guidance, expiry/revocation, and offline/error states with a polite live status, native button focus, disabled in-flight action, 44px targets, and text-safe rendering. Keep the existing unaffiliated invitation gate.
+
+After confirmed acceptance, refresh `GET /api/shops` without a selector and confirm the new id appears, then update selector choices and pending invitations. Keep the current in-memory Shop and saved preference unchanged; offer **Switch to <Shop>** as a separate explicit action using the existing selector confirmation/reload path. If context refresh fails, retain the current pinned Shop and show **Joined. Reload to see your Shops.** A timeout/ambiguous response keeps a retry action for the same invitation; receipt replay resolves it. Another tab may change the saved preference, but this tab stays pinned to its displayed Shop until an explicit switch. Do not auto-open Shop B, clear Shop A's forms, or load Shop B data on acceptance. Accessible copy must distinguish “invited,” “joining,” “joined,” and “switched.”
+
+#### Profile UI implementation specification
+
+**Placement and disclosure.** Insert one cloud-only `Shop invitations` profile card after `Current Shop` and before `Create another Shop`; do not add navigation or place it inside the owner-only `Shop access` section. Its introduction is **Invitations sent to your signed-in account. Joining adds Member access and keeps your current Shop open.** Owners and Members receive the same card. Render it only after `/api/shops` has confirmed a non-local account with a valid `accountContextKey`; local mode hides it and never calls either invitation route. A discovery 404/405 is an older/local-server compatibility outcome: hide the card without changing the existing Profile. The unaffiliated invitation gate remains separate and unchanged.
+
+Fetch on the first transition into Profile for the confirmed account, on an explicit **Refresh invitations**, **Retry**, or **Show more invitations** action, and after a join outcome. Do not poll, fetch in the background on an interval, accept on load, or switch on acceptance. Returning to Profile after visiting another view performs a fresh first-page read but must not reload settings or overwrite dirty Profile controls.
+
+**Privacy-safe rows and pagination.** Each invited row contains only a text-rendered Shop name, **Member access**, `<time datetime>` with **Expires <localized date and time>**, and **Join Shop**. Never render or retain an invitee email, creator, internal Shop id, receipt/audit data, or another Shop's roster/data from discovery. Treat the invitation id as an opaque request key and the cursor as an opaque, in-memory continuation hint; never put either in the URL, visible copy, analytics, or logs.
+
+The deployed pending response root is exactly `{ invitations, nextCursor, member }`; reject missing or additional root keys. `invitations` is an array of at most 20 unique entries with exactly `id`, `household_name`, `role`, and `expires_at`; `role` is exactly `member`; `nextCursor` is null or a bounded string; and `member` is a boolean. The legacy `member` value exists for wire compatibility with unaffiliated enrollment only. The enrolled Profile controller must not render it, persist it, branch on it, or use it as identity/membership/card authority: the already-confirmed `/api/shops` account context is the sole authority for showing this card. A malformed page changes no existing rows and shows the safe load error below. Use the same exact-root decoder for the existing unaffiliated invitation gate without changing that gate's routing, copy, or explicit acceptance behavior; it consumes only the validated invitation list and preserves compatibility with the deployed payload.
+
+First-page success replaces the prior list. Later pages append and de-duplicate by invitation id while preserving server order. While a next page loads, preserve existing rows, set the list container `aria-busy="true"`, and disable only **Show more invitations**. A failed next page keeps those rows and the same cursor, with **We couldn't load more invitations. Try again.** and **Retry**. Stop pagination and show the same safe error if a cursor repeats or a page is malformed. Show **Show more invitations** only while a non-null cursor remains. Never automatically chase another page.
+
+**Card states and exact guidance.** Use one atomic polite card status plus visible inline content; changing state must not replace a focused control unless focus is deliberately moved as specified below.
+
+- Initial load: `aria-busy="true"`, **Loading Shop invitations…**, no stale account's rows or actions.
+- Empty: **No Shop invitations for this account.** with **Refresh invitations**. Empty means the bounded server result is empty, not that more pages were silently searched.
+- Offline/network/read 5xx: **We couldn't load Shop invitations. Check your connection and try again.** with **Retry**. A discovery 503 instead says **Shop invitations are temporarily unavailable. Try again later.**
+- Discovery 429: read and validate `Retry-After`, announce **Too many invitation checks. Try again in about <duration>.**, and disable Retry/Refresh/Show-more until that time. One timer may re-enable the control, but it must not issue a request. If the header is missing or invalid, say **Try again in a minute.**
+- An invitation whose displayed expiry has passed becomes non-actionable **Expired** in the current view. This client hint is not authority; the server still decides availability.
+- Acceptance 404: discard the saved retry intent, refresh the first page, and preserve a focusable result saying **This invitation expired, was revoked, or is no longer available.**
+- Acceptance 409 with exact server cap text: discard the intent and show **You can belong to up to 50 Shops. You can't join another Shop right now.** The invitation may remain visible but its Join action is disabled for this page. Other 409 responses refresh Shops and invitations and say **You already belong to this Shop.**; never infer a switch target by matching a possibly duplicated Shop name.
+- A received acceptance 429 has performed no acceptance work because throttling precedes the transaction. Retain the same intent, say **Too many join attempts. Retry joining in about <duration>.**, and re-enable **Retry joining** after the validated `Retry-After` without automatically sending it.
+- Acceptance 503 or any timeout, lost connection, 408, or other 5xx is ambiguous: say **We couldn't confirm whether you joined <Shop>. Retry joining to check the same invitation.** and retain the stable intent. A 400/401/403 is definitive: discard it, do not change membership presentation, and show **Shop joining isn't available for this account. Reload and try again.**
+- A strictly validated 200 response with `accepted:true` says **Joined <Shop> as a Member. Your current Shop is still <Current Shop>.** A receipt replay with `accepted:false` says **You already joined <Shop> as a Member. Your current Shop is still <Current Shop>.** These are both confirmed success and must never be sent again merely because the later read refresh fails.
+
+Expose `Retry-After` on the browser request error as a validated integer so the UI can implement the two 429 states. Preserve the server message for exact cap discrimination, but do not surface arbitrary server text in place of the safe copy above.
+
+**Explicit confirmation and durable ambiguous retry.** **Join Shop** opens one native `<dialog>` labelled **Join <Shop name>?**, described by visible **Access: Member** and **Your current Shop, <Current Shop>, will stay open. You can switch after joining.** The DOM/footer order is **Cancel**, then **Join Shop**; explicitly focus Cancel with `preventScroll`. Before submission, capture `{ accountContextKey, invitationId, householdName, role: 'member', expiresAt, currentShopId }` and synchronously persist it in a session-storage map keyed by `accountContextKey`. If safe storage fails, do not dispatch and say **Safe retry storage is unavailable. You haven't joined this Shop.** Never include a client-supplied email, role, Shop id, or operation id in the POST; its exact body remains `{}`.
+
+Allow only one join mutation for the current account at a time. Set the dialog form and matching row `aria-busy="true"`, disable all Join actions and the Shop selector/success switch actions, label the submit **Joining…**, and announce **Joining <Shop> as a Member…**. Duplicate clicks, dialog close/reopen, Profile navigation, and re-rendering cannot dispatch again while the request is in flight. Cancel/Escape before submission closes with no mutation and restores the row trigger. Dismissing after dispatch does not cancel the request; keep its row busy or retryable and explain this when an uncertain intent is explicitly discarded. An ambiguous response closes the dialog, changes the matching row action to **Retry joining**, and focuses it. Reopening the matching intent shows its current busy state or retry guidance; merely opening it never sends a request.
+
+On reload, first confirm `/api/shops`. For a matching account key, show a privacy-safe **Check previous join request** action that reopens the captured intent; never retry automatically. Do not expose the stored Shop name or invitation to a different signed-in account. Keep unmatched account intents dormant so signing back into the original account can resolve them. Remove only the matching intent after confirmed POST success or a definitive rejection. A retry resends the same invitation id and `{}`; the durable server receipt is the replay key. If `accountContextKey` changes, or a response no longer matches its captured account/current-page context, suppress all response-driven UI writes and never retarget the request. Re-enable only controls that still belong to the current context.
+
+**Acceptance response validation.** Treat HTTP 200 as confirmed only when the parsed JSON root contains exactly `{ householdId, role, accepted }`, with no missing or additional keys; `householdId` is a canonical lowercase UUID matching `^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`, `role` is exactly `member`, and `accepted` is a boolean. The response must also belong to the still-current in-flight closure for the captured invitation id and the same valid `accountContextKey`; the captured account/current-page context must still match when validation finishes. The payload does not echo invitation id or account key, so never infer either from Shop name or another mutable UI field. Validate before clearing storage or rendering any success.
+
+A malformed body, wrong type/value, extra key, noncanonical/non-UUID `householdId`, stale account response, or response delivered for a replaced invitation intent is a safe non-success. Keep the original retry intent and current Shop unchanged, close the dialog, focus **Retry joining**, and announce **We couldn't safely confirm whether you joined <Shop>. Retry joining to check the same invitation.** It must not refresh or change the selector, add a Shop, offer **Switch to <Shop>**, or clear the stored intent. Receipt-backed retry of the same invitation is the only mutation recovery path.
+
+**Confirmed join and optional switch.** Only after the POST 200 passes all acceptance validation may the controller clear the mutation intent, request `/api/shops` with no `X-Shop-Id`, and verify the same account key plus a returned membership whose id equals the accepted `householdId` and whose role is `member`. Refresh the first invitation page independently. Do not feed the response's possibly preference-derived `activeShopId` into the open page: merge only its membership list into the existing `shopContext`, keep this tab's captured current Shop selected and pinned, and do not call settings/inventory/access loaders. This prevents another tab's saved preference from switching this tab and preserves every unsaved Profile value.
+
+When that verification succeeds, update/reveal the native Current Shop selector and offer a 44px **Switch to <Shop>** action in the confirmed result. It must invoke the existing selector switch helper with the joined id; it is not a second switching implementation. The existing dirty-Profile confirmation, server confirmation, full reload, post-reload focus, and **Switched to <Shop>. Showing its inventory.** announcement remain authoritative. Cancel restores the prior selection, leaves dirty fields intact, and focuses the Switch action. Acceptance itself never sets the selector value to the joined Shop, writes a preference, reloads, or loads joined-Shop data.
+
+If the POST is confirmed but Shops verification fails, keep the current pinned Shop and dirty form, do not restore a mutation Retry, and show **Joined. Reload to see your Shops.** with a read-only **Reload Shops** action. That action repeats only GET reads. Focus it after the dialog closes. If Shops verification succeeds but the independent invitation refresh fails, still offer the verified Switch action and add **Joined, but invitations couldn't be refreshed.** with a read-only **Refresh invitations** action; never resend acceptance. After successful verification, focus **Switch to <Shop>**; if no safe switch target is available, focus the card result (`tabindex="-1"`).
+
+**Responsive and accessible behavior.** Use semantic headings and a `<ul>` of invitation rows. Shop names use `overflow-wrap:anywhere`; do not visually truncate information needed to distinguish invitations. Buttons/selects are native controls with a 44px minimum target and existing visible focus ring. At 760px and below each row becomes a one-column grid and actions fill the available width. At 320 CSS px and 200% zoom there is no horizontal scrolling; the confirmation dialog uses the existing bottom-sheet treatment, an independently scrolling body, and full-width stacked footer buttons without changing DOM/tab order. All dynamic names are assigned as text, never HTML.
+
+The native dialog owns focus containment and Escape behavior. Restore focus to the exact row trigger after cancellation, to **Retry joining** after an ambiguous result, to the card result after expiry/revocation, and to the Switch/Reload target after success. Use one polite, atomic live region for card changes and one polite dialog status while it is open; do not announce the same transition in both. **Invited**, **Joining**, **Joined**, and **Switched** remain distinct words/states. The existing reduced-motion rule suppresses dialog animation; no new essential motion, auto-scroll, toast-only status, or hover-only affordance is allowed.
+
+Implementation should isolate this behavior in `public/shop-invitations-client.js`, with injected request/context/render/storage/focus dependencies like the creation and promotion controllers. Add that module to the Worker's bootstrap-asset allowlist/cache policy, bind it from `app.js`, add only the card and one confirmation dialog to `index.html`, and keep its CSS scoped to those hooks. It may refactor the existing switch function into a reusable target-id helper; it must not change server contracts, unaffiliated enrollment, or owner access management.
+
+Client acceptance tests must cover card placement and Owner/Member visibility; local no-fetch and mixed-version 404/405 fallback; first-page loading/empty/malformed/error/503/429; validated `Retry-After`; 20-item append pagination, de-duplication, cursor retry/repetition, and no polling; privacy-safe keys/rendering; confirmation/cancel/Escape; storage-before-dispatch and storage failure; duplicate submission/close/reopen; stable retry and receipt replay; reload-in-flight; account A -> B -> A intent privacy; stale account/context response suppression; expiry/revocation, cap, already-member, and ambiguous outcomes; confirmed-read refresh failure; no `X-Shop-Id` on discovery/acceptance/verification; unchanged active selection/preferences and dirty Profile fields; first-membership-to-multi selector reveal; explicit switch through the existing dirty-confirmation/reload flow; deterministic focus/live announcements; keyboard-only use, reduced motion, long/duplicate names, 320px width, and 200% zoom.
+
+Decoder/controller tests must use real deployed payload fixtures, not simplified invented shapes: pending `{ invitations, nextCursor, member }` with `member:false` and `member:true`, fresh acceptance `{ householdId, role:'member', accepted:true }`, and replay `{ householdId, role:'member', accepted:false }`. For pending responses, reject every missing/extra root key, non-boolean `member`, malformed item, over-20 page, and invalid cursor while proving `member` never controls enrolled Profile rendering or state and the unaffiliated gate still renders/accepts the validated list. For acceptance responses, independently reject missing/extra keys, invalid/noncanonical UUIDs, wrong role, non-boolean accepted, stale account context, and replaced invitation intent; assert every rejection retains the retry intent/current selector and never offers Switch. Real-browser and screen-reader checks remain required before claiming deployed accessibility.
+
+### Verification, rollout, and deferrals
+
+Test owner/member identities already in one or several Shops, including an owner at the five-owned-Shop limit; wrong verified email, forged identity/body/header, malformed id, expiry, revocation, duplicate membership, missing receipt/audit/limiter table, and rollback. Verify exact pending JSON keys, 20-item pages/cursor boundaries, wrong-account and malformed cursors, no unbounded query/response, throttling/Retry-After, and no internal id leakage. Synchronize duplicate acceptance, join/create limit contention, and revoke/accept races at the transaction boundary; assert exactly one membership/receipt/audit and no preference-row change. Test 49-to-50 success, 50-to-51 conflict, replay at 50, pre-existing over-cap detection, receipt replay after a lost response, later loss of membership, multiple matching invitations, cross-Shop inventory/access isolation, and old unaffiliated acceptance. Client tests cover cloud-only card visibility for one/many Shops, local 404 fallback, empty/error/retry/pagination, duplicate clicks, focus/live announcements, multi-tab preference changes, refresh failure, and explicit switching. Check desktop/mobile at 320px and 200% zoom with keyboard and screen reader.
+
+Server/data status (2026-09-28): migration `0014_additional_shop_invitation_joins.sql`, bounded pending discovery, durable pre-resolution throttling, and receipt-backed existing-account acceptance/replay are deployed. The continuation hint has the explicit non-security contract above; forged-position/hash tests demonstrate unchanged verified-email scope and bounds. `POST /api/shops` shares the serialized 50-current-membership guard. Acceptance rechecks identity in its batch, forces zero-row dependent writes to roll back, and recognizes only specific constraint failures for fresh receipt/terminal-outcome resolution; unexplained database failures propagate. Revoke audits depend on a successful deletion, so a losing revoke cannot append a second event. PR #52 merged as `decc81d9defc30465d87d3269c20ab810caf0924`; production migration 0014 is applied with no pending migrations, and Worker version `39fb307f-3ade-4e69-a6cc-e6358b922655` is live behind the expected Cloudflare Access boundary. The Profile UI behavior is now finalized by the implementation specification above, but its code and authenticated end-to-end join verification remain pending as a separate UI chunk. An older Worker remains compatible, so rollback is a Worker/UI rollback without dropping the tables. Read-only preflight: `SELECT user_id, count(*) AS membership_count FROM memberships GROUP BY user_id HAVING count(*) > 50;` Resolve any returned accounts before enabling the cap; do not truncate existing access. Deferred: invitations conferring Owner, account linking by email, member removal/demotion, ownership transfer, bulk joins, email sending, a global invitation inbox,.
+
+Server verification: `npm test` passes 146/146, including 34 direct additional-join cases. Actual Worker requests and real SQLite transactional batches cover synchronized duplicate existing/new accounts, both revoke/accept and join/create commit orders, 49→50 and 50→51 boundaries, cap replay, over-cap detection, removed-member replay denial, aborting/suppressed membership/receipt/deletion/audit rollback, preference byte snapshots, exact response keys, keyset pagination and forged hints, principal/IP throttles with Retry-After, limiter failures and missing receipt/audit schema, strict browser request validation, migration lock, unsupported methods and local singleton compatibility. Worker/access/tenant/new-test syntax and diff checks pass. Wrangler dry-run: 113.13 KiB, gzip 23.84 KiB. These are local automated results, not production or browser acceptance evidence.
+
+## Finalized design: Shop terminology
+
+- UI, live-region, and returned error copy use **Shop**.
+- Internal compatibility contracts intentionally remain household-scoped.
+- No data migration was needed for the terminology release.
+
+## Deployed: active multi-Shop context
+
+- A caller may have memberships in more than one Shop. `GET /api/shops` returns only that caller's Shop ids, names, and roles, plus the resolved active Shop id; it never returns another member's information.
+- The Worker resolves a membership context for every authenticated Shop-scoped request. An `X-Shop-Id` selector is accepted only for a current membership and is persisted as the caller's last explicit selection in `user_shop_preferences` (migration `0011_user_shop_preferences.sql`).
+- With no selector, resolution uses a still-valid saved selection, then a deterministic `LOWER(name), id` membership fallback. A stale preference is ignored rather than granting access.
+- Inventory, settings, notifications, push subscriptions, photos, and Shop access routes use that resolved context, so an id from another Shop cannot be read or mutated. Context and Shop API responses use `Cache-Control: no-store`.
+- This slice deliberately does not add a browser switcher, role changes, ownership transfer, or a redesign of invitation enrollment.
+
+## Deployed: Shop selector
+
+### Placement and responsive presentation
+
+- Shop switching lives in **Profile & settings**, immediately before the existing profile form. This reuses the desktop sidebar Shop card and the mobile **Profile** navigation item as the entry point instead of adding another primary-navigation destination.
+- When the caller has two or more memberships, show a card headed **Current Shop** with the description **Choose the Shop whose inventory and settings you want to use.** Its native select is labelled **Shop**. Each option is rendered as `<Shop name> — Owner` or `<Shop name> — Member`, in the order returned by `GET /api/shops`. Below it, repeat the active role as static text: **Your role: Owner** or **Your role: Member**.
+- The desktop sidebar card continues to show the active Shop name. Its second line becomes **Owner · Switch in Profile** or **Member · Switch in Profile**, and its accessible name includes the full active Shop name and role. Long names truncate visually only. On screens up to 760px, the sidebar remains hidden and the selector card is full width with a minimum 44px select target; users reach it through the existing bottom **Profile** item.
+- With exactly one membership, do not render a selector or switching card. Keep the sidebar card as a Profile link, use **Owner** or **Member** as its second line, and show the same role as non-interactive text in the existing **Shop** profile card. Local single-Shop mode remains unchanged and does not invent an owner/member role.
+
+### Loading, empty, and error copy
+
+- After onboarding confirms a membership, resolve Shop context before loading any Shop-scoped settings, inventory, notifications, access, push, or photo data. While resolving, keep the existing access gate visible with **Opening your Shop** and **Loading your Shop access…**; do not reveal stale Shop data underneath it.
+- A successful response must contain the declared `activeShopId` in `shops`. A missing/empty list or unmatched active id is a blocking safe state: **No Shop access found** / **This signed-in account does not currently belong to a Shop. Ask a Shop owner for an invitation, then try again.** Actions are **Retry** and **Sign out**.
+- A load failure is also blocking: **We couldn’t load your Shops** / **Your inventory has not been opened because the active Shop could not be confirmed.** Actions are **Retry** and **Sign out**. A local `404` from `/api/shops` retains the existing local single-Shop flow rather than showing this cloud-only error.
+
+### Switching behavior and accessibility
+
+- Changing the select is an explicit switch. If Profile has unsaved changes, first ask **Switch Shops and discard your unsaved profile changes?** Cancel restores the active option and focus to the select without making a request.
+- During a switch, disable the select, set its container `aria-busy="true"`, and announce **Switching to <Shop name>…** in a dedicated polite status region. Send `GET /api/shops` with `X-Shop-Id: <selected id>`; the returned `activeShopId` must equal the selection before treating it as confirmed.
+- On confirmation, reload the application to clear every prior Shop's in-memory inventory, notification, settings, access, modal, filter, and mutation-intent state. Preserve the `#profile` destination. After reload, focus the Shop select and announce **Switched to <Shop name>. Showing its inventory.** A session-scoped, one-use marker may carry only the focus/announcement intent and Shop name; it is not authority for the active id.
+- If the switch cannot be confirmed, restore the prior option, re-enable and focus the select, and announce **We couldn’t confirm the switch. Retry, or reload to check your active Shop.** Do not claim that the server preference is unchanged after an ambiguous network failure.
+- After initial resolution, keep the resolved id in memory and add `X-Shop-Id` to every Shop-scoped API request for the life of that page. Do not add it to pre-membership onboarding or invitation-discovery requests. This pins an open tab to its displayed Shop even if another tab changes the saved preference.
+- Use the native select's keyboard and assistive-technology behavior; do not build a custom menu. The visible label, role text, busy state, status region, and focus behavior must work at 200% zoom and with reduced motion.
+
+### Implementation acceptance criteria
+
+1. One-Shop cloud users and local users see no switching control; multi-Shop users see only their server-returned memberships and a clear Owner/Member label.
+2. No Shop-scoped request starts until `/api/shops` establishes a valid active membership, and subsequent scoped requests carry that active `X-Shop-Id`.
+3. A confirmed switch persists through the deployed API contract, clears old-Shop client state by reloading, and opens the selected Shop's Profile with focus and a polite announcement.
+4. Unsaved Profile edits cannot be discarded without confirmation; cancel and all failure paths leave a usable, focused control with explicit status text.
+5. Loading, malformed/empty, authorization, network, and retry states never expose inventory from an unconfirmed Shop. Automated coverage verifies header propagation, single-versus-multiple rendering, role copy, switch success/failure, dirty-form cancellation, local fallback, and cross-Shop data isolation.
+6. Desktop and mobile browser checks cover long Shop names, 320px width, 200% zoom, keyboard-only operation, visible focus, and screen-reader announcements.
+
+This chunk does not create another Shop, promote an admin, change roles, transfer ownership, remove members, or redesign invitations.
+
+The implementation keeps the access gate visible until `GET /api/shops` validates that the declared active Shop is among the signed-in caller's memberships. It pins that id into subsequent page requests with `X-Shop-Id`; local `/api/shops` 404 responses retain the single-Shop local flow. Saved packaging photos are fetched through that pinned request path and displayed with revocable object URLs, so native image loads cannot resolve against a changed Shop context. A service-worker push is deliberately generic because it has no page-bound context and therefore must not issue an unpinned notification request.
+
+## Deployed: secure Shop administration onboarding
+
+- The current product has one active Shop bootstrap singleton; its internal `households`, `memberships`, and household-scoped routes remain compatibility contracts, not a permanent one-Shop-per-user restriction. The memberships model supports a future multi-Shop design without migrating existing identities or inventory.
+- Cloudflare Access JWT verification produces the only identity accepted by the Shop access layer. Ordinary membership resolution is read-only.
+- Before membership resolution, `GET /api/shop/onboarding-status` returns only the caller’s membership state, pending-invitation flag, and setup eligibility. It never returns the configured allowlist or an allowlisted email.
+- `POST /api/shop/onboarding` is the sole explicit, atomic, idempotent initial-owner claim. It accepts Shop and display names, binds only the verified provider/subject, checks the normalized configured initial-owner allowlist, claims/backfills the singleton, and is never invoked on page load.
+- Migration `0010_access_audit.sql` records append-only bootstrap, invitation creation, acceptance, and revocation events in the corresponding state-change transaction. Events include the internal Shop identifier, actor, target identifier, timestamp, and request correlation ID; they deliberately exclude JWTs and secrets.
+- The browser gates unaffiliated authenticated users before loading inventory or cache-backed views: eligible owners receive explicit setup, invitees receive acceptance, and other users receive lock, retry, and sign-out guidance. Members see the current application; only owners see Shop-access controls.
+- Recheck owner authorization and same-origin protections on every administration mutation. Coverage includes concurrent setup, forged identity input, invitation expiry/revocation, cross-Shop isolation, and audit rollback.
+
+## Finalized design, implemented locally but not deployed: create another Shop
+
+### Scope and authority
+
+The next lifecycle slice is explicit **Create another Shop** for an authenticated cloud user who already has at least one current membership. Both owners and members may create an independent Shop and become its sole owner; being a member elsewhere grants no authority over that Shop. This supplies a supported way to exercise the deployed multi-Shop selector without changing enrollment or role semantics. A user with no Shop continues through the existing initial-owner setup or invitation gate. This is deliberately a first expansion, not general self-service onboarding.
+
+Add `POST /api/shops` alongside the existing collection GET, routing it entirely before `resolveTenant`. The exact order is signed Access JWT verification → migration read-only guard → route-specific same-origin/content/body validation → account identity/current-membership check → receipt replay lookup → guarded atomic creation. Resolve the existing internal user solely by provider/subject. Do not invoke bootstrap, link accounts by email, trust client roles/user ids, or require ownership of the currently displayed Shop. Ignore `X-Shop-Id` entirely on this route, including malformed or foreign values; never call the preference-writing resolver or write `user_shop_preferences` on success, failure, or replay. Recheck membership inside the creation transaction; a preflight read alone is insufficient. Return 403 if the caller has no membership.
+
+Require `Content-Type: application/json`, an exact same-origin `Origin` matching the request URL, and reject `Sec-Fetch-Site: cross-site` when present. Missing or foreign Origin is 403 for this browser-only route. Keep the existing JSON size ceiling and validate an allowlist of `{ operationId, shopName, displayName }`; reject unexpected identity, role, household, or import fields. Require a UUID operation id, trim/collapse whitespace, and enforce the existing 1–80 Shop-name and 1–60 display-name limits. Render all names as text. Duplicate Shop names are allowed; ids provide identity and the selector should include a short id suffix only when names/roles would otherwise be indistinguishable.
+
+### Transaction, replay, and limits
+
+Add migration `0012_shop_creation.sql` containing an account-scoped `shop_creation_receipts` table: `user_id` FK, `operation_id`, canonical validated request payload, `household_id` FK, `created_at`; primary key `(user_id, operation_id)` and index `(user_id, created_at)`. Store the canonical non-secret names for exact replay comparison rather than relying on an unstable JSON serialization or unkeyed client input. Retain receipts indefinitely in this slice; they are small and bounded by creation limits. Existing tenant-scoped inventory receipts cannot represent creation because the destination tenant does not exist yet.
+
+In the same migration, rebuild `access_audit` with its existing columns, foreign keys, index, and event constraint extended by `shop_created`. Copy every existing row unchanged and replace the old table inside the migration transaction; verify counts and foreign-key integrity. Do not edit already-applied 0010. No role CHECK, existing tenant table, or legacy row needs a data rewrite.
+
+Use one D1 batch transaction with server-generated destination UUID, timestamp, and audit id. A conditional household insert must recheck verified identity-to-user binding, current membership, absence of this receipt, fewer than **five currently owned Shops**, and fewer than **one successful creation in the preceding rolling 24 hours**. Subsequent owner membership, fresh settings, creation receipt, and `shop_created` audit inserts must depend on that new household row. A zero-row eligibility insert must produce zero related writes; a failed statement rolls back all writes. Recheck outcomes, then resolve a concurrent winning receipt or report the current membership/limit failure. The unique receipt key is the replay lock: a concurrent duplicate that reaches the receipt insert must roll its whole losing transaction back. Concurrent different operation ids must still enforce both caps through the transaction's guarded insert, not application preflight counts. Demonstrate these behaviors against real SQLite-backed batch semantics before accepting implementation.
+
+Before a new transaction, look up the caller's receipt. The same operation and canonical payload returns the same `{ shop: { id, name, role: 'owner' }, created: false }` with 200; mismatched payload is 409. First success returns that shape with `created: true` and 201. Replay must verify current membership in the recorded destination and return 403 rather than exposing a Shop after future removal. Check replay before creation limits so a timeout retry remains valid. Validation is 400; owner cap is 409 with **You can own up to 5 Shops.**; rolling creation cap is 429 with **You can create one Shop every 24 hours. Try again later.** and `Retry-After`. Identity and membership failures expose no other account details. All responses are `no-store`.
+
+The new settings row uses only submitted names, default location **Medicine cabinet**, and `display_name_source='user'`. It has no batches, photos, notifications, push subscriptions, or invitations. Never copy current-Shop settings or legacy NULL-tenant records. Never touch `tenant_bootstrap`. The transaction appends exactly one `shop_created` event, with actor user id, new internal household id, verified provider/subject target, server timestamp, and request correlation id. Replays append no event. JWTs and secrets never enter receipts or audit rows. Security failures may use ordinary operational logs without creating a success audit event.
+
+These persistent caps bound successful resource creation per internal user; they are not an IP rate limiter or protection against a compromised allowlisted Access population. The existing Access gate remains the perimeter. Do not add global counters, a new service, or email-based quotas. A future transfer design must revisit owned-Shop caps and receipt retention. Fail closed if the receipt/audit schema is unavailable.
+
+### UI and context behavior
+
+Add a compact **Create another Shop** action to cloud Profile for both single- and multiple-membership users; hide it in local mode and the no-membership gate. It opens an accessible dialog with **Shop name**, **Your display name**, help **You’ll be the owner of a new, empty Shop. Your current Shop will stay open.**, and **Create Shop** / **Cancel**. Prefill display name from the currently visible profile as editable convenience only; require a new Shop name. Keep the existing Profile form and any unsaved edits intact.
+
+On submission disable duplicate submission and announce **Creating your Shop…**. Before dispatch, synchronously save `{ operationId, accountContextKey, payload }` to sessionStorage, where payload is the frozen canonical pair of submitted names. If that save fails, do not dispatch; explain that safe retry storage is unavailable. Keep the same operation id and payload through timeout, network, 429, and 5xx failures; **Retry creation** resends them. A definitive validation failure allows correction with a new operation id. An ambiguous failure says **We couldn’t confirm creation. Retry to check the same request.** Closing an uncertain dialog must preserve its saved pending intent. On reload, including reload while a request is in flight, first confirm authenticated `/api/shops` context; matching account keys offer explicit resume before allowing a new creation. Resume replays the saved request rather than assuming whether the original committed. Never automatically retry or create on page load.
+
+Use the existing stable opaque `users.id` as `accountContextKey` in GET `/api/shops`; it identifies the server-bound internal account, contains no PII, stays unchanged across Shop switches, and conveys no authority. Never accept this key as server identity or authorization input. If a different account signs in, its confirmed key must not match the saved intent: do not display the saved names, replay it, or attribute any old result to that account. Keep the unmatched intent dormant so signing back into the original account can resume it, and let the new account create its own separately keyed intent. Treat missing/malformed server keys or failed context resolution as blocking for creation/resume, with retry guidance. Ignore a stale in-flight response whose captured account key no longer matches confirmed context. Remove only the matching intent after confirmed success or a definitive rejected request. Explicitly discarding an uncertain intent must say it cannot cancel a request already received by the server.
+
+After confirmed creation, refresh `GET /api/shops` using the still-pinned current id, close the dialog, and announce **Created <Shop name>. Your current Shop is still open. Choose it under Current Shop when you’re ready.** A first creation from one membership now reveals the existing selector. Focus that selector without switching it. If refreshing the list fails, preserve confirmed creation and say **Your Shop was created. Reload to update your Shop list.** Never repeat the mutation merely to refresh. Creation does not write `user_shop_preferences`, clear old context, or load destination inventory; choosing the destination uses the deployed dirty-form confirmation and full reload. Use visible labels, polite status, focus restoration, 44px targets, and desktop/mobile/320px/200% zoom checks. Detailed visual treatment should receive the requested UI Designer pass during implementation.
+
+### Compatibility, rollout, and acceptance
+
+Keep GET `/api/shops`, existing household contracts, bootstrap allowlist, local server, invitation acceptance, and owner-only access controls compatible. Extend GET `/api/shops` additively with `accountContextKey: <verified caller's users.id>` for pending-intent scoping, obtained from the authenticated membership context; no new identifier schema is needed. Old clients ignore it. New clients require a valid non-empty opaque key for creation and tolerate older servers returning 404/405 for creation or omitting the key: show **Shop creation is not available yet.** without changing context. No new Access, DNS, or secret configuration is needed.
+
+Implementation order: apply and verify 0012 with copied audit counts/FK checks; deploy server and UI together; check migration ledger, API authentication boundary, existing onboarding/invitation/inventory tests, and local fallback. An older Worker remains compatible with the widened audit constraint and extra table, so Worker rollback does not require reversing the migration. Mark deployed only after authenticated creation/retry/switch verification with a real account; the production multi-membership selector check currently remains pending.
+
+Required automated coverage: forged JWT/role/user/email, no-member refusal, owner and member creation, current context retained, empty destination isolation, bootstrap unchanged, settings provenance, same-operation and different-payload replay, cross-user operation ids, ambiguous retry, concurrent duplicate and distinct-operation races at both limits, audit/receipt/membership failure rollback, migration preservation, removed-membership replay denial, foreign/missing Origin and content type/body validation, migration lock, unavailable schema, and all response cache policies. Assert current, foreign, and malformed `X-Shop-Id` are ignored and preferences remain byte-for-byte unchanged across creation success, validation failure, quota failure, and receipt replay. Assert the POST path never calls `resolveTenant`, and guard/validation order prevents later work on rejection. Browser coverage exercises single-to-many rendering, storage-before-dispatch and storage-failure refusal, reload-in-flight and matching-key explicit replay, account A → B → A switching, mismatched/missing/malformed key blocking, dormant intent privacy, stale-response suppression, duplicate submit prevention, refresh-after-success failure, unchanged dirty Profile form, eventual selector switch and photo/inventory isolation, keyboard/focus/status and responsive states.
+
+Explicit deferrals: self-service creation by users with no memberships; existing members accepting additional invitations (today's acceptance intentionally returns 409 for any existing membership); admin role/schema changes; role changes, transfer, removal, Shop deletion, import/copy, shared user profile redesign, email sending, stronger traffic rate limiting, and receipt cleanup. Each new Shop already has its sole owner and existing owner-only invitation management; admin management is a later designed slice. Do not imply those full lifecycle requirements are delivered by this chunk.
+
+## Implemented and deployed: online pull/change feed for inventory (migration 0015)
+
+### Problem and boundary
+
+Two people (or two devices) in one Shop only see each other's medicine changes after a manual reload, and a stale edit is discovered only when its write returns 409. This slice adds a **read-only, online, per-Shop pull feed** so open clients converge quickly. It deliberately excludes an offline mutation queue, background sync while the app is closed, merge UI, WebSocket/SSE/Durable Objects, and feeds for settings, notifications or Shop access. D1 stays the source of truth; existing `revision` + `operationId` mutation semantics are unchanged.
+
+### Data
+
+Additive migration `0015_batch_change_feed.sql`: `batch_changes(seq INTEGER PRIMARY KEY AUTOINCREMENT, household_id TEXT NOT NULL REFERENCES households(id), batch_id TEXT NOT NULL, revision INTEGER NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('upsert','remove')), created_at TEXT NOT NULL)` with index `(household_id, seq)`. Every batch mutation (create, update, consume to zero or not, discard, photo add/remove) appends exactly one row **inside the same D1 batch/transaction** as the mutation and its receipt, so a rolled-back mutation leaves no change and a committed one always has one. `kind='remove'` is used for discard and for consume-to-zero (the rows the list endpoint already hides). The feed stores identifiers only, never medicine data. SQLite serializes writers, so `seq` order equals commit order; gaps are allowed and meaningless.
+
+### API
+
+`GET /api/changes?after=<seq>&limit=<n>` is Shop-scoped (pinned `X-Shop-Id`, normal tenant resolution and membership check) and read-only. `after` is a non-negative integer; anything else is 400. `limit` defaults to 100 and is capped at 200. The query always filters `household_id = tenant`, so a forged or foreign cursor can only skip or repeat the caller's own Shop's changes; it is not an authorization credential. Response: `{ changes: [{ seq, id, kind, batch }], nextAfter, more, reset }`. Changes are collapsed to the latest row per batch within the page; `batch` is the current list-shaped row for `upsert` and null for `remove`, joined at read time so the payload is always the latest state. `nextAfter` is the last `seq` returned (or `after` if none). `more` is true when the page was full. `reset: true` (with no changes) means `after` predates retained history; the client must do a full `GET /api/batches` and adopt the new cursor.
+
+`GET /api/batches` additionally returns `changeCursor`: the household's max `seq` read **before** the list query. Applying a change is idempotent by revision (ignore an upsert whose `revision` is not greater than the local row), so a change already reflected in the list is harmless and none can be missed between the two reads. A missing `changeCursor` (older Worker) disables the feed for that session.
+
+Add a per-principal read limiter (60 requests/minute, 429 with `Retry-After`, fail closed with 503) reusing the durable throttle pattern from invitation routes, applied before the query.
+
+### Client behavior
+
+A new `public/change-feed-client.js` (injected request/context/render deps like the other controllers) polls only while the tab is visible and the user is on Dashboard or Inventory: once on becoming visible, focus or `online`, then every 60 seconds with jitter; never in a hidden tab, and never in local mode (no `changeCursor`). Errors back off exponentially to 5 minutes; a 429 waits for validated `Retry-After`; 404/405 disables the feed. Follow `more` immediately up to 5 pages per tick. Responses are dropped if the pinned Shop or account context changed while in flight. Applying changes updates the in-memory list and re-renders only the lists; it must not close dialogs, reset filters or search, or overwrite an open Add/Edit form. If the batch open in the detail or edit dialog changes, show a polite, non-blocking notice ("This medicine was updated elsewhere. Reopen it to see the latest version.") and let the existing base-revision check produce the 409 if the user saves stale data. A `remove` for the open batch shows "This medicine was removed elsewhere." A full reload of the list every 10 minutes is a safety net for gaps and rollbacks. Announce nothing visually intrusive; one polite status message at most per tick.
+
+### Retention and rollout
+
+The 15-minute cron deletes `batch_changes` older than 30 days and `mutation_receipts` older than 30 days (closing the open receipt-retention item; client operation intents live in memory only, so replay beyond that window is not needed). A client whose cursor is older than the oldest retained row gets `reset`. Deploy order: apply 0015, deploy the Worker (starts writing changes), then serve the client. Rolling back to an older Worker stops appending changes while the table remains; the 10-minute full reload bounds staleness, and the migration is never dropped. Existing rows have no history, so first use always starts from `changeCursor`.
+
+### Verification
+
+Tests: same-transaction append with rollback (no change row on aborted mutation/receipt), one row per mutation kind including discard and consume-to-zero, exact response keys, collapse-to-latest, page/`more`/`nextAfter` boundaries, `reset` after pruning, malformed `after`/`limit`, tenant isolation (Shop B never sees Shop A ids), non-member 403, limiter and Retry-After, read-before-list `changeCursor` ordering, idempotent revision apply. Client tests: visibility/online triggers, no polling when hidden or local, backoff and 429 handling, Shop-switch response suppression, dialogs and dirty forms untouched, open-batch notices, safety-net reload. Real two-device browser verification and a screen-reader check of the notices are required before calling it accepted.
+
+### Deferred
+
+WebSocket/SSE or Durable Object push (revisit if polling cost or latency matters), settings/notification/roster feeds, offline queue and reconciliation, and per-field merge.
+
+## Implemented: remove a member (migration 0016)
+
+### Smallest slice
+
+An Owner can **Remove** another accepted **Member** of the displayed Shop. Nothing else changes: no removing Owners (demotion is a separate, later design), no self-leave, no ownership transfer, no email or identity lookups. Removal deletes exactly one `memberships` row. The person's identity, user row, other Shops, and the Shop's medicines are untouched. Re-inviting them later uses the existing invitation flow.
+
+### API and authorization
+
+`POST /api/household/members/:userId/remove` with exact body `{ operationId }` (UUID); returns 200 `{ removed: <boolean> }`. It follows the promotion route's rules: dispatched before the preference-writing `resolveTenant`, mandatory pinned `X-Shop-Id` (400 missing/malformed, 403 foreign), verified Access JWT, JSON content type, exact same-origin Origin, cross-site Fetch Metadata rejected, unknown fields rejected, no-store responses, and a fresh owner check inside the state-change batch. Members and non-members get 403 before any target lookup. A missing or foreign target returns the same 404. Targeting an Owner (including yourself) is 409 **Owners can't be removed.**; the UI shows no Remove action on Owner rows. Because only Members can be removed, every removal preserves the owner count, so the last-owner invariant holds without a count check. A guarded `DELETE ... WHERE role='member'` inside the batch makes a concurrent promotion of the same person lose or win cleanly: if promotion commits first the delete affects zero rows and the request is 409.
+
+### Atomicity, replay and audit
+
+One D1 batch commits the guarded membership delete, one receipt, and one `member_removed` audit event (`target_identifier = 'user:' + <id>`), or none. Migration `0016_shop_member_removal.sql` adds `shop_member_removal_receipts (household_id, actor_user_id, operation_id, target_user_id, created_at, PRIMARY KEY (household_id, actor_user_id, operation_id))` and rebuilds `access_audit` with the 0012/0013 copy/count/FK guard pattern to widen its CHECK with `member_removed`. Replay of the same operation and target returns `removed:false` with no write after fresh owner authorization; the same key for another target is 409. Removing someone already gone with a new operation is 404 (same as any missing target) with no receipt or audit; the UI treats 404 as "no longer a member" and refreshes.
+
+### Effects on the removed person
+
+- **Access:** every API resolves membership per request, so the next request from that person gets 403 for this Shop. Their open tab keeps showing the last data until its next request; the change-feed poll turns that into a 403, which the client must handle by refreshing Shop context (falls back to another Shop they belong to, or the invitation gate if none). That client handling is part of this slice.
+- **Preferences:** if `user_shop_preferences` points at this Shop, the same batch deletes that row so the fallback ordering applies. Preference is not authority, so this is tidiness, not security.
+- **Push subscriptions (required, not tidiness):** `push_subscriptions` rows carry `household_id` and `user_id`, and delivery sends to every subscription of the Shop. Without cleanup a removed person would keep receiving this Shop's medicine alerts. The same batch therefore runs `DELETE FROM push_subscriptions WHERE household_id=? AND user_id=?` for the target, and a test asserts no send reaches them afterward. Their subscriptions for other Shops are untouched.
+- **Their contributions:** medicines, mutation receipts, and audit history stay; the audit record keeps `user:<id>`.
+- **Invitations:** pending invitations addressed to their email are unaffected.
+- **Pending invitations they created:** stay valid; `created_by_user_id` keeps its FK because the user row is kept.
+
+### UI
+
+In the Owner roster, each Member row gets a **Remove** button (no action on Owner rows or on yourself). It opens a native confirmation dialog: **Remove <email> from <Shop>?** with the consequence line "They lose access to this Shop immediately. You can invite them again later." Busy state disables duplicate submits; 403/404/409 refresh the roster; success shows a toast and reloads the roster. Follow the promotion dialog's focus and accessibility behavior.
+
+### Verification
+
+Real SQLite-backed D1 batches: authorization matrix (Owner, Member, foreign Owner, no auth), target matrix (Member, Owner, self, missing, foreign), replay/conflict, atomicity with a blocking audit trigger, promotion-versus-removal race, preference cleanup, removed user's next request 403 across every route, other Shops unaffected, change-feed 403 client handling, migration preserving audit rows. Roll out with 0016 before the Worker.
+
+## Implemented: owner demotion and leaving a Shop (migration 0017)
+
+### Smallest slice
+
+Two actions, both reusing the removal pattern (pinned `X-Shop-Id`, route before `resolveTenant`, same-origin JSON, exact body `{ operationId }`, no-store, fresh authorization inside the batch, receipt plus audit, 503 when schema is missing):
+
+- **Demote** an Owner to Member: `POST /api/household/members/:userId/demote`. Actor is an Owner acting on a *different* Owner. Self-demotion is not offered; a person who wants out uses Leave.
+- **Leave**: `POST /api/household/leave`. The actor deletes their own membership. Members may always leave. An Owner may leave only while another Owner remains.
+
+Ownership transfer is the composition promote-then-leave and needs no separate action. Shop deletion stays out of scope, so a Shop's sole Owner cannot leave until they promote someone.
+
+### Last-owner invariant
+
+Every state change carries the guard `(SELECT count(*) FROM memberships WHERE household_id=? AND role='owner') >= 2` inside its own `UPDATE`/`DELETE` predicate. D1 batches are serialized, so two Owners demoting each other, or an Owner leaving while being demoted, cannot both pass: the loser affects zero rows, the following audit insert receives a NULL target and aborts the batch, and the API answers 409 **A Shop must keep at least one owner.** The receipt guard trigger repeats the actor-is-Owner and target-eligibility checks (target Owner for demote; actor's own membership for leave) so a receipt never exists without its transition.
+
+### Effects
+
+- **Demote:** only the role changes. Push subscriptions, preference and data stay, because the person is still a Member. The five-owned-Shops cap frees a slot.
+- **Leave:** same same-batch cleanup as removal: delete the leaver's membership, their push subscriptions for this Shop, and their preference if it points here. Their user and identity rows, other Shops and the Shop's data are untouched.
+- **Removal route** keeps refusing Owners (409); demote first, then remove.
+- **Sessions:** the next request from a demoted Owner sees Member permissions (403 on owner-only routes); the roster and Shop context refresh on 403. A leaver's tab handles it like removal: the change feed sees 403, shows a toast, and reloads into another Shop or the invitation gate. The leave action itself switches immediately (reload) after a confirmed response.
+
+### Data and audit
+
+Migration `0017_shop_demotion_leave.sql`: `shop_owner_demotion_receipts (household_id, actor_user_id, operation_id, target_user_id, created_at)` and `shop_member_leave_receipts (household_id, user_id, operation_id, created_at)` with primary keys scoped to the acting user, guard triggers as above, and an `access_audit` rebuild (0016 copy/count/FK guard pattern) adding `member_demoted` and `member_left`. Audit target is `user:<id>`; for leave the actor and target are the same user.
+
+Replay: same key and target returns the no-op result (`changed:false` / `left:false`) after fresh authorization and confirming the end state still holds; same key for another target is 409; replay after the person was re-promoted or re-added is 409, never a second write.
+
+### UI
+
+- Owner roster: other Owner rows get **Make member** (confirmation: "<email> will lose owner access but stay in the Shop."). Your own row and members show nothing new.
+- Current Shop card: **Leave this Shop** opens a confirmation ("You lose access immediately. You can be invited again."). For the last Owner the button is disabled with the visible reason "Make another member an owner before leaving." Follow the promotion/removal dialog focus, busy and retry behavior.
+
+### Verification
+
+Real SQLite-backed D1 batches: authorization matrix; last-owner guard including mutual demotion and demote-versus-leave races; leaver cleanup scoped to this Shop; replay and conflict; atomicity via a blocking audit trigger; removed-role effects on the next request; migration preserving audit rows; change-feed 403 path reused; UI states. Roll out with 0017 before the Worker.
+
+## Implemented: company-only platform admin console, read-only v1 (migration 0018)
+
+_Superseded in part: v1 writes shipped afterwards (see the admin write actions section). The read-only rules below still hold for every GET route._
+
+### Scope and principles
+
+A separate console for company staff at `/admin`. Version 1 is **read-only and metadata-only**: staff can see Shops, members and roles, counts, health and audit history. They cannot see medicine names, strengths, notes, photos, push endpoints or any other customer inventory content, and they cannot change anything. Write actions are later slices, each with its own design, and will call the existing store/access functions (same validation and audit), never raw SQL. Every admin request is audited.
+
+### Authentication and authorization
+
+- A **second Cloudflare Access application** protects `/admin*` with its own policy allowing only company emails (initially `kaushik.majumder@craftloop.ca`). It is a separate application with its own AUD, so a customer-app token can never satisfy admin routes and an admin token can never satisfy customer routes; the existing customer check (`aud` must equal `ACCESS_AUD`) already rejects it.
+- The Worker adds config `ADMIN_ACCESS_AUD` (var or secret) and `ADMIN_EMAILS` (secret, comma-separated). Admin routes verify the Access JWT against `ADMIN_ACCESS_AUD` using the same team domain and signature verification, then require the token's `email` (lower-cased) to be in `ADMIN_EMAILS`. Defence in depth: policy and Worker allowlist must both agree. Missing config, or a failing JWKS fetch, fails closed (503, never open).
+- Admin dispatch runs **before** the customer `ensureAccess`/`resolveTenant` and before static assets. Admin files live outside `publicAssetPaths` and are served through `env.ASSETS` only after admin authorization (`run_worker_first = true` guarantees the Worker sees every request). Customer identities, memberships and Shop headers are irrelevant to admin routes and are never consulted.
+- Cookie caveat to verify during setup: two Access applications on one hostname distinguished by path. If sign-in loops or the wrong token reaches the Worker, fall back to a dedicated hostname (for example a second custom domain routed to the same Worker); the Worker logic is unchanged because it verifies AUD and email, not the path.
+
+### Read API (all `GET`, `HEAD` allowed, everything else 405)
+
+Responses are `no-store`, JSON, no CORS, with explicit column allow-lists (never `SELECT *`).
+
+- `GET /admin/api/overview`: totals of Shops, users, memberships, pending invitations, medicines (a count only), change-feed rows, audit events in the last 24 hours, applied migration count, and the migration-run state.
+- `GET /admin/api/shops?cursor=`: keyset-paginated `{ id, name, created_at, owner_count, member_count, medicine_count, last_audit_at }`.
+- `GET /admin/api/shops/:id`: Shop metadata, members (`user_id`, email, role, joined date), pending invitation count and expiry dates, and that Shop's last 50 audit events. Not medicines, not photos.
+- `GET /admin/api/audit?cursor=&shop=`: customer `access_audit` events across Shops, paginated.
+- `GET /admin/api/admin-audit?cursor=`: the admin audit log itself.
+
+### Admin audit
+
+Migration `0018_admin_audit.sql` adds `admin_audit (id, admin_email, action, target, request_id, created_at)` with an index on `created_at`. Each authorized admin request inserts one row (`action` such as `overview.view`, `shops.list`, `shop.view`, `audit.view`; `target` a Shop id where relevant) **before** data is returned; if the insert fails the request fails (fail closed). Rejected attempts (wrong AUD or email not allowed) are not written to D1, to avoid unauthenticated write amplification; they appear in Worker logs. There is no route that edits or deletes `admin_audit`.
+
+### UI
+
+A small static page `public/admin/index.html` with `admin.js` (no third-party scripts, no inline script) served after admin auth with a strict CSP (`default-src 'self'`). Tabs: Overview, Shops (list to detail), Audit, Admin log. Clear "Read-only" banner and the signed-in admin email. Accessible tables and keyboard navigation.
+
+### Verification
+
+JWT matrix (customer AUD rejected on admin routes and admin AUD rejected on customer routes, listed vs unlisted email, expired, wrong issuer, missing config 503); admin assets not served to unauthenticated or customer tokens; non-GET methods 405; leak tests asserting no fixture medicine name, note, photo path or push endpoint ever appears in any admin response; exactly one `admin_audit` row per authorized request and fail-closed when the insert is blocked; pagination and isolation; migration test.
+
+### Rollout
+
+1. Apply `0018` to remote D1.
+2. Create the Access application for `/admin*` (owner action, see HANDOVER.md) and read its AUD.
+3. Set `ADMIN_ACCESS_AUD` and `ADMIN_EMAILS` with `wrangler secret put`.
+4. Deploy the Worker; verify signed in as the admin email, and that a customer-only login gets 403 or the Access denial.
+
+## Implemented and deployed: ownership transfer between Owners and Members (migration 0019)
+
+_Status (2026-09-29): built as designed and live. Decisions taken: atomic transfer, the actor becomes a Member, the target must already be a Member, immediate (no acceptance step), five-owned-Shops cap kept. The page reloads after success so roles and owner-only cards refresh. There is no server capability flag: UI and Worker ship together. `test/ownership-transfer.test.js`._
+
+### Problem and smallest slice
+
+Today transfer is the composition promote, then demote or leave (0017). That works but is three owner-count states and three receipts for one intent, and it cannot express "hand this Shop to Sam and step down" as one auditable fact. The smallest slice is one atomic action, **Transfer ownership**: the acting Owner makes a Member an Owner and becomes a Member in the same batch. It never removes anyone, deletes a Shop, or touches other memberships. Migration numbers below are the next free numbers when built; this is planned as `0019_shop_ownership_transfer.sql`.
+
+### API and authorization
+
+`POST /api/household/members/:userId/transfer` with exact body `{ operationId }`, returning 200 `{ transferred: <boolean> }`. Every rule of the promotion/removal routes applies unchanged: dispatched before `resolveTenant`, mandatory pinned `X-Shop-Id`, verified Access JWT, same-origin JSON, cross-site Fetch Metadata rejected, unknown fields rejected, no-store, Members and non-members 403 before any target lookup, missing or foreign target the same 404, fresh owner check inside the batch, 503 when the schema is missing. Target eligibility: currently a plain Member of this exact Shop who owns fewer than five Shops (same cap, same 409 **This member already owns 5 Shops.**). Targeting an existing Owner or yourself is 409 **Use Make member to step down.**; the transfer never has a no-op-on-success shape except replay.
+
+### Last-owner safety, receipts and replay
+
+The owner count is unchanged (+1 target, -1 actor), so the invariant holds by construction, but do not rely on that alone: the demote statement keeps the 0017 guard `count(owners) >= 2` evaluated after the target's promotion in the same batch, and the receipt trigger repeats actor-is-Owner and target-is-Member. Sequence: guarded receipt INSERT, then Member-to-Owner UPDATE for the target (dependent on the receipt), then Owner-to-Member UPDATE for the actor (dependent on the target now being Owner), then audit INSERT dependent on both (zero rows gives a NULL target and aborts the batch, as in 0013/0017). Races: a concurrent demotion of the actor, removal of the target, or another transfer loses cleanly with 409 and no partial state. Table `shop_ownership_transfer_receipts (household_id, actor_user_id, operation_id, target_user_id, created_at, PRIMARY KEY (household_id, actor_user_id, operation_id))`. Replay of the same key and target after fresh authorization returns `transferred:false` if the target is still Owner (the actor may now be a Member, so fresh authorization for replay is "was the receipt actor, is still a member"); the same key for another target is 409; replay after the target was demoted is 409, never a second grant.
+
+### Audit and effects
+
+One `ownership_transferred` event per success (`actor_user_id` = former owner, `target_identifier = 'user:' + <target id>`), added by an `access_audit` rebuild using the 0016/0017 copy/count/FK guard pattern. Push subscriptions, preferences, data and the five-owned-Shops slot of the actor (freed) follow demotion semantics. Scheduled push already dedupes by Shop, so no change. The former Owner's next owner-only request gets 403 and the client refreshes roster and Shop context, reusing the demotion path.
+
+### UI
+
+In the Owner roster each Member row gets a secondary **Transfer ownership** action next to **Make owner** and **Remove**. Confirmation dialog: **Transfer ownership of <Shop> to <email>?** with "<email> becomes an owner and you become a member. Only they can make you an owner again." Default focus Cancel; the primary requires typing nothing (the trust is in the copy), busy, ambiguous-retry and focus behavior follow the promotion dialog. Success message **<email> is now an owner. You are now a member.**, then refresh roster and Shop context in place (owner-only cards disappear).
+
+### Tests
+
+Authorization and target matrix (Member, Owner, self, missing, foreign, cap at five); last-owner guard with concurrent mutual transfer, transfer-versus-demote/leave/remove races on real serialized SQLite-backed D1 batches; receipt, transition and audit atomicity via a blocking audit trigger; replay/key-mismatch/replay-after-change; preference and push neutrality; migration preserving audit rows; owner-only routes 403 for the ex-owner; UI dialog, retry and focus tests.
+
+### Rollout order
+
+Apply 0019, deploy Worker plus UI together (the UI checks a server capability flag in the roster response so an older Worker hides the action). Old Workers tolerate the widened CHECK and unused table; roll back the Worker only.
+
+### Open decisions
+
+1. **Atomic transfer (recommended)** versus keeping promote-then-demote as the only path (no new code, but no single audit fact and the actor must act twice).
+2. Actor becomes **Member (recommended)** versus **leaves the Shop** in the same batch (more final, closer to selling a Shop, but strands the actor if it was their only Shop).
+3. Target may be an existing Member only **(recommended)** versus also accepting a pending invitee (needs invitation redemption design; deferred).
+4. Require the target to **accept** the transfer (two-step, needs a pending-state table and expiry) versus immediate (recommended; targets are already trusted Members and they can leave).
+5. Keep the five-owned-Shops cap for the target (recommended) versus exempting transfers.
+
+## Implemented and deployed: Shop deletion by an Owner (migration 0020)
+
+_Status (2026-09-29): built and live with `SHOP_DELETION_ENABLED` and `SHOP_PURGE_ENABLED` on. Differences from the text below: (1) deletion state lives in a `household_deletions` side table (`household_id`, `deleted_at`, `purge_after`, `deleted_by_user_id`, `purged_at`), not columns on `households`, and every reader uses the `active_memberships` view (writes keep using `memberships`), so positional inserts and old readers stay valid; (2) the Owner chooses the keep period, `keepDays` 7 to 30 (default 14), in `POST /api/household/delete`; (3) the purge runs in the 15-minute cron, dry-run unless `SHOP_PURGE_ENABLED=true`, photos first and rows kept if a photo delete fails; (4) restore and deadline extension are admin actions (next section); there is no owner self-service undelete. Tests: `test/shop-deletion.test.js`._
+
+### Problem and boundary
+
+There is no way to end a Shop's data lifecycle; 0016/0017 deliberately left the sole Owner unable to leave. Deletion is destructive across D1 rows, R2 photos and other people's access, so it is designed as **soft delete with a grace period, then an automated purge**, never an immediate hard delete. Out of scope: export before delete, account deletion, per-medicine bulk delete, email notice (no email channel exists).
+
+### Data and states
+
+Planned migration `0020_shop_deletion.sql` (renumber if 0019 ships later): `ALTER TABLE households ADD COLUMN deleted_at TEXT`, `ADD COLUMN purge_after TEXT`, `ADD COLUMN deleted_by_user_id TEXT REFERENCES users(id)`; receipt table `shop_deletion_receipts (household_id, actor_user_id, operation_id, created_at, PRIMARY KEY (household_id, actor_user_id, operation_id))`; audit events `shop_deleted`, `shop_restored`, `shop_purged` (0016/0017 rebuild pattern). States: **active** (deleted_at NULL), **pending deletion** (deleted_at set, within grace), **purged** (tombstone row). Every Shop-resolving query treats a non-NULL `deleted_at` as "no such Shop": tenant resolution, `GET /api/shops`, preference fallback, invitation acceptance, the change-feed route, owner-cap and creation-limit counts (deleted Shops free the cap slot; creation receipts stay so create-delete cycling cannot bypass the rolling limit), and the scheduled push enumeration. This filter is the main risk: enumerate every `memberships`/`households` reader and cover each with a test.
+
+### API and authorization
+
+`POST /api/household/delete` with exact body `{ operationId, confirmName }`; `confirmName` must equal the Shop's current name (case-sensitive, trimmed) or 400. Same pinned-Shop, same-origin, owner-in-batch, receipt-plus-audit pattern as removal. Any Owner may delete (equal owners). Guarded batch: receipt INSERT (actor is Owner, Shop active), `UPDATE households SET deleted_at, purge_after, deleted_by_user_id WHERE deleted_at IS NULL`, then immediate same-batch cleanup of **pending invitations** (deleted, so nobody can join a doomed Shop) and **all push subscriptions** for the Shop (deleted, so alerts stop at once; not restorable), then the audit INSERT dependent on the UPDATE. Replay returns `deleted:false` if still deleted by the same receipt; a new operation on an already-deleted Shop is 404.
+
+### Effects on people, data and feed
+
+- **Other members:** memberships and roles are kept during grace so a restore recovers exact access; their next request gets 403, the change feed 403 path (from 0016) refreshes Shop context and falls back to another Shop or the invitation gate. `user_shop_preferences` pointing here are ignored by the fallback rule and deleted at purge.
+- **Change feed and receipts:** `batch_changes` and `mutation_receipts` are kept during grace and deleted at purge. Creation receipts and audit rows are kept forever.
+- **Audit that survives:** the `households` row is never deleted; purge replaces `name` with a fixed placeholder and keeps id, created_at, deleted_at, purged_at, so `access_audit` and creation receipts keep valid FKs with no rebuild. Audit rows keep `user:<id>` identifiers and contain no medicine data.
+
+### Purge
+
+The existing 15-minute cron processes at most N Shops with `purge_after < now`, in bounded pages: (1) list `photo_path` for the Shop's batches and delete the R2 objects (idempotent; missing object is success), (2) delete `batch_changes`, receipts, batches, notifications, settings, memberships, preferences, in FK order in D1 batches, (3) set `purged_at` and write `shop_purged`. R2 is not transactional with D1, so photos go first: a crash after step 1 leaves rows without photos (retryable and harmless), never photos without rows. A purge is irreversible; there is no undelete after `purged_at`.
+
+### UI
+
+Profile, owner-only **Danger zone** card on the current Shop: **Delete this Shop**. Native dialog: **Delete <Shop>?** listing consequences ("Everyone loses access now. Medicines and photos are permanently deleted after 14 days. Invitations and notifications stop immediately."), a text field to type the Shop name, a disabled destructive primary until it matches, default focus Cancel, and busy/retry per the removal dialog. Success switches to another Shop or the invitation gate. If it is the actor's only Shop, see decision 4.
+
+### Tests
+
+Authorization and name-confirm matrix; batch atomicity with blocking audit trigger; every Shop reader hidden after deletion; cap and creation-limit accounting; invitation acceptance refused; no push sends after deletion (subscriptions gone); other members' 403 and fallback; purge idempotence and crash points (R2 before rows, R2 failure keeps rows, rerun completes); tombstone keeps audit and receipts valid under `pragma_foreign_key_check`; restore before purge; migration preservation.
+
+### Rollout order
+
+Apply 0020, deploy the Worker with all readers filtering `deleted_at` **before** the delete route is enabled (route behind a flag `SHOP_DELETION_ENABLED`, default off), then enable the UI. Deploy the purge cron last, initially in dry-run logging mode for one week.
+
+### Open decisions
+
+1. **Soft delete with 14-day grace then purge (recommended)** versus immediate hard delete (simplest, no filter risk, no recovery) versus 30 days (longer safety, longer retention of data the owner wanted gone).
+2. **Tombstone the `households` row (recommended)** versus deleting it and rebuilding `access_audit` and receipts without FK (loses referential integrity, needs a heavier migration).
+3. **Any Owner may delete (recommended, equal owners)** versus requiring all Owners or a sole Owner.
+4. Deleting a user's **only** Shop: **block with 409 until they have another Shop (recommended, they otherwise land on an unrecoverable invitation gate)** versus allow.
+5. Restore: **platform admin only in v1 (recommended, see admin write actions)** versus owner self-service "Recently deleted" list in Profile.
+6. Push subscriptions and invitations deleted at soft-delete time (recommended, fail safe, not restored) versus kept and filtered.
+
+## Implemented and deployed: admin write actions v1 for the /admin console (migrations 0021, 0022)
+
+_Status (2026-09-29): built and live with `ADMIN_WRITES_ENABLED` on. Shipped actions: revoke a pending invitation, restore a Shop inside its grace period, and **extend a pending Shop's purge deadline** (`POST /admin/api/shops/:id/extend` with `keepDays` 7 to 30, later only, counted from now; not in the original design). Migration 0021 adds `admin_audit.reason` and `operation_id`; 0022 adds the `shop_extended` history event, so each action also leaves a Shop-history row without the admin identity. Writes are throttled to 30 per minute per admin. Tests: `test/admin-console.test.js`._
+
+### Scope and principles
+
+The console is read-only (0018). Version 1 writes add the smallest audited set where staff intervention is otherwise impossible without SQL: **revoke a pending invitation** and **restore a soft-deleted Shop** (the latter ships only after Shop deletion exists). Explicitly not in v1: role changes, removing members, transfer, purge-now, user or identity edits, medicine data, bulk actions. Each action calls a shared store function, never raw SQL from the admin layer, so validation and customer audit stay identical.
+
+### Authorization, CSRF and dispatch
+
+Unchanged admin check: verified Access JWT against `ADMIN_ACCESS_AUD` plus lower-cased email in `ADMIN_EMAILS`, fail closed 503. Dispatch stays before customer routes. The admin router moves from "everything but GET is 405" to a per-route method allowlist; unlisted routes stay 405. Write routes are `POST /admin/api/invitations/:id/revoke` and `POST /admin/api/shops/:id/restore`, each with exact body `{ operationId, reason }`, JSON content type, exact same-origin Origin, cross-site Fetch Metadata rejected, no CORS, no-store, and a required custom header `X-Admin-Action: 1` (cookie-authenticated, so CSRF defence is layered). A durable throttle limits writes per admin (30/minute). A kill switch `ADMIN_WRITES_ENABLED` (default off) returns 403 for every write route so the console stays read-only until enabled.
+
+### Store integration
+
+`revokeHouseholdInvitation` currently authorizes via an Owner tenant. Refactor its body into an actor-neutral core taking `{ householdId, invitationId, actor }`, called by the customer wrapper (after `ownerHousehold`) and by the admin wrapper (after the admin check and Shop/invitation lookup). Restore is a new store function that only clears `deleted_at`/`purge_after` where `purged_at IS NULL` and `purge_after > now`. No admin path may bypass the core function's guards or write the customer tables directly.
+
+### Audit, receipts and reason
+
+Migration (`0021_admin_writes.sql`, renumber when built): `ALTER TABLE admin_audit ADD COLUMN reason TEXT` and `ADD COLUMN operation_id TEXT`, unique partial index on `(admin_email, operation_id) WHERE operation_id IS NOT NULL`, and audit CHECK-free `action` values `invitation.revoke`, `shop.restore`. `reason` is required for writes, trimmed, 10 to 500 characters, plain text, never rendered as HTML. **The admin_audit write is in the same D1 batch as the mutation**, dependent on it (`WHERE changes()=1` or a NULL-forcing guard), so a mutation without its admin row, or a row without its mutation, cannot commit. The customer-side audit event (`invite_revoked` with `actor_user_id` NULL, or `shop_restored`) is written in that same batch with `target_identifier` naming the admin action, so the Shop's own history shows staff involvement without the admin email. The existing read-request audit row is not written twice for writes.
+
+### Replay safety
+
+The unique `(admin_email, operation_id)` index is the receipt: the same key and target replays to `changed:false` with no writes; the same key for another target or action is 409; an already-revoked invitation or already-active Shop with a new operation is 404/409 with no audit row (nothing changed). Ambiguous failures keep the same operation id for retry, as in the customer dialogs.
+
+### UI
+
+Actions live on the Shop detail view only: **Revoke** beside each pending invitation, **Restore Shop** on a pending-deletion Shop. A native dialog states the target and effect, requires the reason field (visible label, character counter) and for restore also typing the Shop name; primary is disabled until valid, default focus Cancel. The banner changes from "Read-only" to "Changes are audited" only when writes are enabled (server-provided flag). Results append to the Admin log tab.
+
+### Tests
+
+Authorization matrix (customer AUD, unlisted email, missing config, writes disabled); CSRF matrix (missing header, foreign Origin, cross-site); reason validation; audit-in-batch atomicity via blocking trigger both ways; replay and key mismatch; throttle; revoke by admin leaves the Shop's other invitations untouched and shows in that Shop's audit; restore only inside grace; no medicine or push data ever in responses; GET routes unaffected.
+
+### Rollout
+
+Apply migration; deploy Worker with `ADMIN_WRITES_ENABLED` unset; verify GET behavior unchanged; set the flag, exercise revoke on a test invitation, confirm both audit rows; enable restore after Shop deletion ships.
+
+### Open decisions
+
+1. **Revoke invitation plus restore Shop (recommended)** versus revoke only until deletion exists, versus adding "force remove member" (higher risk).
+2. Reason: **free text 10 to 500 characters (recommended)** versus a fixed category list plus optional note.
+3. Second-person approval for restore: **no, single admin with audit (recommended for a one-admin company)** versus two-person control.
+4. Customer visibility: **history row without admin identity (recommended)** versus naming the admin or no customer-side row.
+5. Kill switch as a **var default-off (recommended)** versus always on once deployed.
+
+## Implemented and deployed: per-Shop feature flags (migration 0023)
+
+Staff can switch a flag for one Shop from `/admin` in real time. `lib/feature-flags.js` holds a registry: `shop_deletion` (owner delete, global default `SHOP_DELETION_ENABLED`) and `shop_purge` (permanent purge, global default `SHOP_PURGE_ENABLED`). Table `shop_feature_flags (household_id, flag, enabled, updated_at, updated_by)`: no row means follow the global secret; a row (on or off) always wins. Overrides are read on every request, so a change applies to the next call with no cache and no deploy. Delete route and `GET /api/household/access` (`shop_deletion`) use `effectiveFlag`; the purge job checks `shop_purge` per Shop (off holds the Shop, on purges it even while the global default is a dry run). Write: `POST /admin/api/shops/:id/flags` with `{ operationId, reason, flag, value }` where `value` is `true`, `false` or `null` (follow global). It is gated by `ADMIN_WRITES_ENABLED`, throttled and replay-safe like the other admin writes, and writes the flag change, a `shop_flag_changed` history event (no admin identity) and the `admin_audit` row in one batch. `ADMIN_WRITES_ENABLED` is deliberately not a per-Shop flag. Adding a flag means adding one registry entry and reading it with `effectiveFlag`. Tests: `test/admin-console.test.js`, `test/shop-deletion.test.js`.
+
+## Implemented and deployed: owner self-service restore ("Recently deleted Shops")
+
+Deleted Shops are hidden from every ordinary Shop lookup, so recovery is account-scoped and never uses `X-Shop-Id`: `GET /api/shops/deleted` lists Shops the caller owns that are inside their keep period and not purged (`lib/deleted-shops.js`, read from the `memberships` table itself, Owners only), and `POST /api/shops/:id/restore` with exact body `{ operationId }` restores one. Both run before tenant resolution. Restore is state-idempotent (an already-active Shop the caller owns answers `restored:false`), returns 404 for non-owners and unknown Shops so nothing is revealed, 409 past the keep period or when the caller already owns five Shops, and checks ownership again inside the batch. It writes a `shop_restored` history row with the caller as actor. It is not gated by the `shop_deletion` flag (recovery must always work). Invitations and push subscriptions removed at deletion are not restored. UI: an owner-only Profile card (`public/deleted-shops-client.js`) with a confirmation dialog; success reloads the page.
+
+## Implemented and deployed: receipt retention cleanup
+
+`lib/retention.js` prunes idempotency receipts in the 15-minute cron: Shop creation, owner promotion, demotion, removal, leave, ownership transfer and Shop deletion receipts, plus invitation acceptance receipts, once they are older than 90 days (`RECEIPT_RETENTION_DAYS` may raise this; values under 30 or invalid fall back to 90). A run deletes at most 500 rows per table, oldest first, and a missing or failing table never stops the others. Mutation receipts and the change feed keep their own 30-day prune (`pruneBatchChanges`). Never pruned: `access_audit`, `admin_audit`, `household_deletions` tombstones and `shop_feature_flags`. The rolling one-Shop-per-24-hours limit only looks 24 hours back, so 90-day pruning cannot bypass it. `test/receipt-retention.test.js`.
+
+## Implemented and deployed: inventory CSV export
+
+`GET /api/household/export` (pinned Shop via `X-Shop-Id`, no preference write, cross-site Fetch Metadata rejected) returns a CSV, for any member of the Shop (Owner or Member), built by `lib/export.js`: every batch of the Shop including discarded ones, columns name, strength, form, quantity, unit, expiry_date, location, notes, low_stock_threshold, status (`active`/`discarded`), has_photo (`yes`/`no`), created_at, updated_at, discarded_at, ordered by case-insensitive name then expiry (unknown last). RFC 4180 quoting, CRLF line ends, a UTF-8 BOM for Excel, and any cell starting with `=`, `+`, `-`, `@`, tab or CR gets a leading apostrophe against formula injection. The role is read from the live `active_memberships` row (an outsider or a deleted Shop is 403); more than 50,000 rows is 413. Response headers: `text/csv`, `attachment`, `no-store`, `nosniff`. Photos and photo paths are not exported. There is no audit row for exports (the audit CHECK has no event and none was added). UI: an **Export inventory (CSV)** button for every member in Current Shop (`public/inventory-export-client.js`) fetches the blob with the active Shop header and saves `<shop>-inventory-<date>.csv`. `test/inventory-export.test.js`.
+
+## Deferred architecture work
+
+- Offline synchronization reconciliation (offline mutation queue, conflict UI, background reconciliation). The online pull/change feed is implemented and deployed; see its section above.
+- Native mobile clients.
+- Photo export, account deletion, configurable reminder windows, a separate in-Shop admin role, a company-only platform admin beyond the read-only console designed below, and non-owner roster or pending-invitation visibility. Owner promotion is the finalized slice below.
+
+## Implemented and deployed: make an existing member an owner
+
+### Smallest slice and prerequisites
+
+Support multiple equal **Owners** using the existing `owner` / `member` membership roles. An Owner is the Shop administrator; do not introduce an `admin` role or imply a lesser permission tier. The sole new action is **Make owner** for an already accepted Member of the displayed Shop. It adds an owner without replacing the actor. A user may own several isolated Shops through separate membership rows. No role CHECK or identity migration is required; `tenant_bootstrap.owner_user_id` is historical provenance, never the exclusive current owner or authorization source.
+
+The target must already have a `memberships` row in this exact Shop. Pending, expired, revoked, or unaccepted invitations cannot be promoted. Invitation creation/acceptance remains member-only; the existing acceptance limitation (409 when the identity has any membership) remains explicit. This slice therefore supports promoting a new invitee who has accepted into this Shop, or a member already present here; it does not enable an already enrolled user to join another owner's Shop. Additional invitation joins need their own bounded design. Never resolve targets by email or create/link identities during promotion.
+
+### API, authorization, and isolation
+
+Add `POST /api/household/members/:userId/promote` with exact body `{ operationId }`, a UUID, and return 200 `{ member: { user_id, role: 'owner' }, changed: <boolean> }`. Add `user_id` to each existing owner-only access-roster member entry so the UI addresses a stable server identifier; preserve all old fields and hide the roster from Members. The identifier conveys no authority. Validate target UUID, reject unknown fields (including email, role, actor, and Shop), use the existing JSON size ceiling, require JSON content type, exact same-origin Origin, and reject cross-site Fetch Metadata. Missing/foreign Origin is 403. Every response is no-store; local mode has no new endpoint or fabricated roles.
+
+Dispatch the promotion route before the preference-writing `resolveTenant`. Exact route order: verified Access JWT → migration read-only guard → strict route/header/body validation → read-only verified identity/membership join for mandatory valid `X-Shop-Id` → fresh owner authorization → receipt/replay → guarded batch. Missing/malformed Shop header is 400, foreign/nonmember Shop is 403, and no default-Shop fallback is permitted. Never call `resolveTenant` or write `user_shop_preferences` on this route: success, no-op, replay and every failure leave all preferences byte-for-byte unchanged. Capture this pinned Shop for the whole action and ignore saved-preference or other-tab context changes; browser context changes invalidate presentation of an old response, never retarget its mutation. Bind the actor only from verified provider/subject. An owner of A who is only a Member of B cannot promote in B. For authorized actors, missing/foreign target returns the same 404; never reveal which other Shops the target belongs to. Members/unauthorized actors receive 403 before target lookup. Recheck actor owner membership and identity binding within the state-change batch, not only at preflight.
+
+Self promotion is a harmless 200 `changed:false` because an authorized actor already is an Owner; the UI shows **You · Owner** with no action. Another existing Owner similarly returns `changed:false`, with no audit event. No endpoint accepts `member` as a desired role, removes a membership, resigns, or transfers ownership. Thus every successful mutation increases or preserves owner count and cannot violate the invariant **each live Shop has at least one owner**. Fail closed with 409 if an inconsistent ownerless Shop is encountered; recovery is an operational repair, not a client takeover.
+
+Preserve the existing five-currently-owned-Shops cap: a new promotion is allowed only when the target owns fewer than five Shops, checked in the transaction across that user's membership rows. At the cap return 409 **This member already owns 5 Shops.** Existing-owner no-op/replay remains allowed. The rolling 24-hour limit is for creation only, so promotion neither applies it nor creates a creation receipt. Concurrent creation and promotion must serialize their guarded counts to prevent a sixth ownership. This cap is an explicit resource-policy choice; revisit it before transfer or generalized enrollment.
+
+### Atomic receipts and audit
+
+Implement migration `0013_shop_owner_promotion.sql` only when building this slice. Add `shop_owner_promotion_receipts` with household FK, actor-user FK, UUID operation id, target-user FK, server timestamp, and primary key `(household_id, actor_user_id, operation_id)`. Its canonical request is the target id (route) plus fixed promotion action, not arbitrary JSON. Retain receipts indefinitely initially. Rebuild `access_audit` using 0012's transactional copy/count/FK guard pattern, preserving every existing column/row/index/event and widening the CHECK with `member_promoted`. Do not edit deployed 0010/0012. For this new event use `target_identifier = 'user:' + <internal target id>`; this deliberately extends the earlier email/provider-subject convention with a stable internal identifier rather than choosing one of a user's identities. No JWT, secret, or email is needed.
+
+A single D1 batch must commit the membership transition, one receipt, and exactly one `member_promoted` event, or none. A viable sequence is guarded receipt INSERT (only absent receipt, freshly authorized actor, target currently Member in this Shop, target below ownership cap), guarded Member→Owner UPDATE dependent on that newly inserted receipt and the same actor predicates, then audit INSERT dependent on that transition. Prove receipt/transition gating against real SQLite-backed D1 batches; a receipt cannot exist without its corresponding transition/event. Use aborting constraints/guards if a dependent statement cannot complete; do not rely on a post-commit check to undo partial success. Audit or receipt failure rolls back the role. A concurrent duplicate receipt uniqueness failure rolls back the losing batch and resolves the committed receipt. Never append an audit merely because a post-transaction SELECT finds an Owner.
+
+Same actor/Shop/operation and target replay returns `changed:false` without another write/event after fresh authorization and confirming target still is an Owner of this Shop. Reusing that key for another target is 409. Check receipts before caps. A new operation for an already Owner is also a no-op; it needs no receipt because it has no side effect. Different owners concurrently promoting the same Member yield one transition/event and one no-op. Different operations promoting different members produce one event each, subject to current caps. If a concurrent authorized promotion wins before this guarded insert, report that observed Owner as no-op. If actor permission or target membership disappears, deny rather than manufacturing success. Schema unavailable or active migration fails closed (503); unexpected database failures are retryable 5xx.
+
+Future removal/demotion/transfer must enforce last-owner protection inside their own serialized transaction and repeat actor authorization there. Two Owners simultaneously demoting/removing one another must never leave zero owners; promotion does not justify adding these destructive actions now. Future role-changing work must define replay after target demotion (409; never replay the historic promotion by granting again), stale roster/version handling, cap effects, and transactional guards for existing invitation mutations that currently authorize at preflight. This slice must not claim comprehensive lifecycle concurrency safety beyond additive promotion.
+
+### Required scheduled-push compatibility fix
+
+The deployed scheduler enumerates owner membership rows and runs Shop-wide `deliverPushes` for each; a second Owner would multiply sends. Include this necessary compatibility fix in the promotion slice before enabling it. Enumerate distinct Shops with an Owner exactly once per scheduled invocation, selecting `MIN(user_id)` from that Shop's owner memberships as a stable server context for the existing store constructor. Group by household id; never deduplicate only after delivery or filter recipients to that selected Owner. Delivery continues to read all subscriptions for the Shop, independently of owner count. For each notification/Shop, each eligible subscription receives at most one send in that invocation; several recipients still each receive their own send. Preserve subscription-owner-based expired-endpoint cleanup (404/410) and all existing notification/expiry/delivery behavior. No new scheduling service or cross-invocation exactly-once guarantee is introduced. Test two and three Owners, multiple subscriptions and distinct Shops, asserting one Shop delivery and at most one send per notification/subscription/Shop, stable context and correct expired subscription cleanup including a subscription belonging to a nonselected Owner or Member.
+
+### UI and verification
+
+Within cloud Profile's existing owner-only Shop access list, show **Make owner** beside other Members, with an accessible name including their displayed email. Keep Owner labels and existing invite controls. Confirmation dialog: **Make <email> an owner?**; help **They’ll be able to manage this Shop’s access, including inviting people and making other members owners. You’ll stay an owner. Only promote someone you trust.** Actions **Make owner** / **Cancel**; default focus Cancel. Identify the current Shop by name in the dialog. Render all dynamic strings as text.
+
+Capture actor accountContextKey, Shop id, target id, and UUID before submission; pin that exact Shop header for retry. Disable duplicate submit and switching during the in-flight action; announce **Making <email> an owner…**. Keep the same operation/target after ambiguous timeout/network/5xx: **We couldn’t confirm the change. Retry, or reload Shop access to check their role.** Explicit retry only, never automatic page-load mutation. A reload can safely discard an in-memory intent because the refreshed roster determines whether promotion is still needed and new promotion of an Owner is a no-op. Closing the dialog cannot cancel a received request; retain its intent for a same-page retry. Suppress responses after account/Shop changes and never reuse intents under another context. 403/404/409 refresh the roster with permission/availability/cap guidance; do not optimistically change roles. Confirmed success says **<email> is now an owner of <Shop name>.** No-op says **<email> is already an owner.** Refresh access and caller Shop context without reloading dirty Profile fields; refresh failure preserves confirmed success and offers **Reload Shop access**. Cancel restores focus to the triggering row action; after success, focus its Owner label or access heading because the button disappears. Use a polite status region, visible labels/focus, 44px targets, native dialog keyboard/Escape behavior, 320px/200% zoom checks and a UI Designer implementation pass.
+
+#### UI implementation specification
+
+- Preserve the current Shop-access card and two-list layout. A Member row contains the wrapping email/meta block, the existing **Member** pill, and one secondary **Make owner** button whose accessible name is **Make <email> an owner**. An Owner row has no action; render **You · Owner** for the caller and **Owner** for other owners. Make the post-success Owner label programmatically focusable (`tabindex="-1"`) without adding it to the normal tab order.
+- Use one native confirmation dialog labelled by the dynamic title **Make <email> an owner?** and described by both a visible **Shop: <Shop name>** line and the trust help above. The footer order is **Cancel**, then primary **Make owner**. On open, explicitly focus Cancel with `preventScroll`; Cancel, Escape, and pre-submit backdrop dismissal close without mutation and restore focus to the exact row trigger. Do not interpolate email or Shop name through HTML.
+- On submit, retain the captured intent even if the dialog is dismissed, set the dialog form `aria-busy="true"`, disable the submit and Shop selector, change the submit label to **Making owner…**, and publish **Making <email> an owner…** to the dialog's polite status region. Reopening the same target while its request is in flight shows that busy state and cannot dispatch again. A context mismatch suppresses all UI writes and releases only controls that still belong to the captured context.
+- Treat timeout, network failure, 408, 429, and 5xx as ambiguous. Keep the same operation id, target, actor key, and Shop id; show the specified unconfirmed-change message and replace the primary action with **Retry**. Retry is the only action that resends. Cancel/Escape may close the dialog, but the matching row action becomes **Retry making owner** and reopens the retained intent. Never retry on load or merely on reopen.
+- A confirmed changed response closes the dialog, announces **<email> is now an owner of <Shop name>.**, and refreshes access plus caller Shop context in place. A confirmed no-op uses **<email> is already an owner.** After a successful refresh, focus the row's Owner label; if the row is gone, focus the **Shop access** heading. If that refresh fails, the confirmed result remains final: render the row as Owner, keep dirty Profile fields untouched, add a 44px **Reload Shop access** action beside the persistent result, and focus that action. Reload performs reads only.
+- Treat 403, 404, and 409 as definitive and discard the intent. Refresh the roster before presenting guidance: **You no longer have permission to manage this Shop.** for 403; **<email> is no longer a member of this Shop.** for 404; the exact **This member already owns 5 Shops.** for the ownership-cap 409; otherwise **This change can’t be completed right now. Reload Shop access and try again.** Do not change a role before a confirmed response. After refresh, close the dialog and focus the surviving trigger, or the Shop-access heading when it no longer exists. For a malformed/unsupported request response, use **Owner promotion is not available. Reload Shop access and try again.** and the same safe refresh/focus path.
+- Keep the existing visible focus ring and 44px minimum targets. At the existing mobile breakpoint, each access row becomes a small grid: email/meta spans the available width, the role pill stays adjacent when it fits, and the action moves to its own full-width row when needed. Emails use `overflow-wrap:anywhere`; controls and dialog text never require horizontal scrolling. At 320px and at 200% zoom, the dialog is a bottom sheet no wider than the viewport, its body scrolls independently, and footer buttons stack full width while preserving DOM/tab order. Reduced motion continues to suppress dialog animation.
+
+Required tests: migration preservation/FK failure; forged identity/body/role/Shop/target; strict headers/JSON/body/UUID/Origin; owner versus Member, A-owner/B-member isolation and target-other-Shop 404; pending-invite refusal; self/existing-owner no-op; promotion preserves actor and all unrelated memberships/settings/inventory/photos/preferences; replay/key mismatch/cross-actor/cross-Shop keys; permission loss replay denial; cap and concurrent create/promotion at five; same-target and duplicate-operation races; audit/receipt/update failure full rollback; migration lock/schema absence/cache policies. Assert the POST route never calls `resolveTenant`; snapshot all preference rows byte-for-byte across success, no-op, replay, validation, authorization, missing-target, quota and database failures, and verify pinned context survives concurrent preference changes. Include scheduled-push coverage above. Execute real serialized SQLite-backed batches with concurrent preflight barriers, rather than mocks alone. Browser coverage exercises confirmation/cancel, duplicate submission, ambiguous retry, role refresh failure, context-change/stale responses, intact dirty Profile, Owner/Member visibility and responsive keyboard/live-region behavior. Check an authenticated two-owner cloud Shop and isolated second Shop before claiming deployed.
+
+Implementation status (2026-09-27): migration `0013_shop_owner_promotion.sql`, strict pinned owner-promotion route, stable roster `user_id`, confirmation/retry controller, and once-per-distinct-Shop scheduled delivery are implemented and deployed. The transition depends on its inserted receipt; identity/owner/cap guards execute in the transaction, and a zero-row UPDATE forces the audit NOT NULL constraint to abort the whole batch. Unexpected database failures remain retryable after rollback. Confirmed UI results survive either access or caller-context refresh failure, offer a read-only reload, preserve dirty Profile fields, and restore focus to a programmatically focusable Owner label or access heading.
+
+Verification checkpoint: all 111 automated tests pass, including serialized real SQLite-backed D1 batches for migration preservation/FK failure, receipt/update/audit rollback, zero-row guard failures, stale authorization, duplicate and same-target races, separate target mutations, scoped receipts, and creation/promotion cap contention. Worker route tests check authentication, provenance, strict selectors/body, authorization/isolation, schema/migration 503s, no-store and preference neutrality. The real scheduled handler uses the default store and signed test VAPID keys to prove delivery once per Shop endpoint with three Owners and multiple recipients, isolated second-Shop/ownerless controls, correct pushed rows and only the 410 subscription removed. DOM/controller tests cover durable results, read-only refresh retries, busy close/reopen, stale contexts, dirty Profile and focus; 320px/200% reflow has CSS-contract coverage. Syntax checks, diff whitespace checks and the Wrangler dry-run build pass. PR #47 merged as `67ceb71773d9fa6d8accf5ca675ff61e779e1ec4`; production migration 0013 is applied with no pending migrations, and Worker version `074bd9da-aa0f-42ff-97a2-02df9a689c04` is live behind the expected Cloudflare Access boundary. Real-browser responsive, keyboard/screen-reader and authenticated two-owner/second-Shop checks remain open as acceptance verification.
+
+Rollout: apply/verify 0013 before Worker; deploy server plus compatible UI; check ledger, authentication boundary and existing creation/onboarding/invitation/inventory/local tests; perform authenticated promotion/retry/isolation/access verification. Old Workers remain compatible with the widened audit CHECK/new receipt table; rollback Worker without reversing the migration. No Access/DNS/secrets change. Explicitly deferred: separate admin tier, demotion/resignation/removal/transfer, last-owner destructive flows, additional invitation joins, owner-role invitations, Shop deletion, notifications/email, audit viewer, account merging, ownership-cap redesign.
+
+## Create another Shop implementation status (deployed 2026-09-27)
+
+- Migration `0012_shop_creation.sql` adds account-scoped creation receipts and safely rebuilds `access_audit` with the additive `shop_created` event while preserving its columns, relationships, and index. The migration is intentionally forward-only; it does not alter the deployed 0010 file.
+- `POST /api/shops` now executes before tenant resolution. It verifies the Access JWT, checks the migration lock, requires same-origin JSON, ignores every `X-Shop-Id`, resolves the verified provider/subject to an existing member, and performs replay/creation independently of the active-Shop preference.
+- The guarded D1 batch creates only an empty destination Shop, owner membership, user-sourced settings, receipt, and one audit event. It preserves the old Shop selection and enforces the documented ownership and rolling-creation limits.
+- `GET /api/shops` additively returns the authenticated internal `users.id` as `accountContextKey`. The Profile dialog persists an account-scoped intent before mutation, exposes an explicit retry/resume path only to that same key, and never switches Shop context after success.
+- `bindShopCreation` owns the actual app dialog bindings, persistence, in-flight guard, retry and success/refetch sequence. A confirmed success clears its intent; failed or mismatched context refresh leaves the current Shop intact, shows a persistent status and restores focus to the creation action. Tests execute that controller with DOM event/service doubles, preserving unsaved Profile fields; native modal/mobile semantics are checked separately against markup and CSS.
+- Concurrency coverage uses a two-caller barrier before SQLite-backed D1-style atomic batches, covering duplicate replay and distinct-operation owner/rolling caps. Missing receipt schema fails closed, eligible audit failure rolls back, and route preference snapshots are byte-for-byte invariant. Full automated suite: 85 passing. PR #44 (`52d12ff`) is deployed as Worker version `9b86f23f-ba08-4d96-8dc6-f7d9b5b72f2c` after successful production migration `0012_shop_creation.sql`; authenticated real-browser responsive/accessibility verification remains outstanding.
+
+### Change feed: as-built deviations from the design above
+
+- No SQL triggers: D1 `meta.changes` counts trigger rows, which breaks the store's exact-change checks. Each mutation batch appends a `batch_changes` row explicitly via `feed()` (`WHERE changes()=1`) in the same D1 batch.
+- Bootstrap is `GET /api/changes` without `after` (returns the current cursor), read before the list load; `/api/batches` is unchanged.
+- Migration 0015 also rebuilds the invitation-route throttle table to allow route `changes` (60/min per account).
+- Rollout order: apply migration 0015 first, then deploy the Worker/UI. Rolling back the Worker leaves the tables harmlessly unused.
+- New browser modules must be added to both `publicAssetPaths` (lib/shared.js) and `bootstrapAssetPaths` (worker/index.js).
