@@ -344,8 +344,9 @@ test('the dialog lists each type with its Shop count, and delete is off while Sh
   await types.refresh();
   const blocks = nodes['#shopTypesList'].children;
   assert.equal(blocks.length, 2);
-  assert.match(blocks[0].children[0].textContent, /Pantry · 0 Shops/);
-  assert.match(blocks[1].children[0].textContent, /Busy · 2 Shops/);
+  const summary = block => block.children[0].children.map(node => node.textContent).join(' | ');
+  assert.match(summary(blocks[0]), /Pantry \| Not used by any Shop yet/);
+  assert.match(summary(blocks[1]), /Busy \| Used by 2 Shops/);
   const deleteButton = block => block.children.at(-1);
   assert.equal(deleteButton(blocks[0]).disabled, false);
   assert.equal(deleteButton(blocks[1]).disabled, true);
@@ -378,4 +379,20 @@ test('the Strength suggestions editor shows only for types that show Strength', 
   };
   assert.ok(!(await headings([pantry])).includes('Strength suggestions'));
   assert.ok((await headings([{ ...pantry, usesStrength: true }])).includes('Strength suggestions'));
+});
+
+test('creating a type pops a message and each type summarises itself in plain words', async () => {
+  const { document, nodes } = clientDom();
+  const toasts = [];
+  const api = async () => ({ builtin: [], custom: [{ ...pantry, shopCount: 2 }] });
+  bindShopTypes({ document, api, getContext: ownerContext, getCurrentKey: () => 'medicine', toast: message => toasts.push(message) });
+  const form = nodes['#newShopTypeForm'];
+  form.elements.name.value = 'Pantry';
+  await form.listeners.submit({ preventDefault() {} });
+  assert.deepEqual(toasts, ['Pantry created. Find it under Profile → Shop type.']);
+  const texts = [];
+  const walk = node => { if (node?.textContent) texts.push(node.textContent); (node?.children || []).forEach(walk); };
+  nodes['#shopTypesList'].children.forEach(walk);
+  assert.ok(texts.includes('Used by 2 Shops · Strength hidden · Form is called “Category”'));
+  assert.ok(texts.includes('Edit') && texts.includes('Dropdown choices'));
 });
