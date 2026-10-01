@@ -1,6 +1,7 @@
 // Owner-defined Shop types: a dialog to create, edit and delete them, plus the Shop type selects (Profile and Create Shop).
 // Types are private to the Owner who made them. Built-in types (Medicine, General goods) are always offered.
 const LIST_LABELS = { form: 'Form / category', unit: 'Unit', location: 'Storage location', strength: 'Strength suggestions' };
+const LIST_HELP = { form: 'Choices in the Form or Category dropdown when adding an item.', unit: 'Choices in the Unit dropdown, such as kg or box.', location: 'Places you keep items. A new Shop starts with the first one.', strength: 'Quick suggestions under the Strength field.' };
 const BUILTIN = [{ key: 'medicine', name: 'Medicine' }, { key: 'goods', name: 'General goods' }, { key: 'blank', name: 'Blank (one starter per list)' }];
 const LABEL_SUGGESTIONS = ['Form', 'Category', 'Type', 'Kind', 'Group'];
 
@@ -40,7 +41,7 @@ export function bindShopTypes({ document, api, getContext, getCurrentKey, toast 
   }
 
   function listEditor(type, list) {
-    const block = make('div', { className: 'options-list' }, make('h4', { textContent: LIST_LABELS[list] }));
+    const block = make('div', { className: 'options-list' }, make('h4', { textContent: LIST_LABELS[list] }), make('p', { className: 'access-meta', textContent: LIST_HELP[list] }));
     const chips = make('ul', { className: 'options-chips' });
     for (const value of type.lists[list]) {
       const remove = make('button', { type: 'button', className: 'text-button', textContent: 'Remove' });
@@ -58,7 +59,10 @@ export function bindShopTypes({ document, api, getContext, getCurrentKey, toast 
 
   function typeBlock(type) {
     const details = make('details', { className: 'shop-type' });
-    details.append(make('summary', { textContent: `${type.name} · ${type.shopCount} ${type.shopCount === 1 ? 'Shop' : 'Shops'}` }));
+    details.dataset.id = type.id;
+    const used = type.shopCount ? `Used by ${type.shopCount} ${type.shopCount === 1 ? 'Shop' : 'Shops'}` : 'Not used by any Shop yet';
+    const facts = `${used} · Strength ${type.usesStrength ? 'shown' : 'hidden'} · Form is called “${type.formLabel}”`;
+    details.append(make('summary', {}, make('strong', { textContent: type.name }), make('small', { textContent: facts }), make('span', { className: 'shop-type-edit', textContent: 'Edit' })));
     const name = make('input', { type: 'text', maxLength: 40, value: type.name, required: true });
     name.setAttribute('aria-label', `Name of ${type.name}`);
     const strength = make('input', { type: 'checkbox', checked: type.usesStrength });
@@ -69,18 +73,18 @@ export function bindShopTypes({ document, api, getContext, getCurrentKey, toast 
       make('label', { className: 'form-field' }, make('span', { textContent: 'Name' }), name),
       make('label', { className: 'check-row' }, strength, make('span', { textContent: 'Show the Strength field' })),
       make('label', { className: 'form-field' }, make('span', { textContent: 'Label for Form' }), label), save);
-    settings.addEventListener('submit', event => { event.preventDefault(); change('/api/shop-types/update', { id: type.id, name: name.value, usesStrength: strength.checked, formLabel: label.value }); });
+    settings.addEventListener('submit', event => { event.preventDefault(); change('/api/shop-types/update', { id: type.id, name: name.value, usesStrength: strength.checked, formLabel: label.value }, `${name.value.trim() || type.name} saved.`); });
     const remove = make('button', { type: 'button', className: 'button secondary danger-button', textContent: 'Delete type', disabled: type.shopCount > 0 });
     remove.setAttribute('aria-label', `Delete ${type.name}`);
-    remove.addEventListener('click', () => change('/api/shop-types/delete', { id: type.id }));
+    remove.addEventListener('click', () => change('/api/shop-types/delete', { id: type.id }, `${type.name} deleted.`));
     const note = make('p', { className: 'access-meta', textContent: type.shopCount ? 'Move its Shops to another type before deleting it.' : 'Deleting a type never changes saved items.' });
-    details.append(settings, ...['form', 'unit', 'location', 'strength'].filter(list => list !== 'strength' || type.usesStrength).map(list => listEditor(type, list)), note, remove);
+    details.append(make('h4', { textContent: 'Settings' }), settings, make('h4', { className: 'shop-type-lists-title', textContent: 'Dropdown choices' }), make('p', { className: 'access-meta', textContent: 'These are the choices a Shop of this type starts with. Owners can still change them later in each Shop.' }), ...['form', 'unit', 'location', 'strength'].filter(list => list !== 'strength' || type.usesStrength).map(list => listEditor(type, list)), note, remove);
     return details;
   }
 
   function render() {
     if (!listHost) return;
-    listHost.replaceChildren(...(data.custom.length ? data.custom.map(typeBlock) : [make('p', { className: 'access-meta', textContent: 'You have no Shop types of your own yet. Create one above.' })]));
+    listHost.replaceChildren(...(data.custom.length ? data.custom.map(typeBlock) : [make('p', { className: 'access-meta', textContent: 'You have not made any Shop types yet. Medicine and General goods are always available. Make your own, such as Pantry or Workshop, with the form above.' })]));
     renderSelects();
   }
 
@@ -101,13 +105,13 @@ export function bindShopTypes({ document, api, getContext, getCurrentKey, toast 
     } catch { return null; }
   }
 
-  async function change(path, body) {
+  async function change(path, body, message) {
     try {
-      const open = new Set([...listHost.querySelectorAll('details[open] summary')].map(node => node.textContent.split(' · ')[0]));
+      const open = new Set([...listHost.querySelectorAll('details[open]')].map(node => node.dataset.id));
       data = await api(path, { method: 'POST', body: JSON.stringify(body) });
       render();
-      for (const node of listHost.querySelectorAll('details')) if (open.has(node.firstChild?.textContent?.split(' · ')[0])) node.open = true;
-      say('Saved.');
+      for (const node of listHost.querySelectorAll('details')) if (open.has(node.dataset.id)) node.open = true;
+      say('Saved.'); if (message) toast?.(message);
       return true;
     } catch (error) {
       say(errorText(error), true); toast?.(errorText(error));
@@ -119,7 +123,7 @@ export function bindShopTypes({ document, api, getContext, getCurrentKey, toast 
     event.preventDefault();
     const name = form.elements.name.value.trim();
     if (!name) { say('Enter a name for the Shop type.', true); return; }
-    const ok = await change('/api/shop-types', { name, startFrom: form.elements.startFrom.value, usesStrength: form.elements.usesStrength.checked, formLabel: form.elements.formLabel.value });
+    const ok = await change('/api/shop-types', { name, startFrom: form.elements.startFrom.value, usesStrength: form.elements.usesStrength.checked, formLabel: form.elements.formLabel.value }, `${name} created. Find it under Profile → Shop type.`);
     if (ok) { form.elements.name.value = ''; say(`${name} created. Choose it under Profile → Shop, or when creating a Shop.`); }
   });
   // Starting from another type copies how it behaves; the choices stay editable.
