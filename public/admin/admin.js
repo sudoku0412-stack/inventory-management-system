@@ -109,7 +109,7 @@ const views = {
     const data = await get(`/admin/api/shops${after ? `?cursor=${encodeURIComponent(after)}` : ''}`);
     const view = table('Shops', [
       { label: 'Name', render: row => { const link = el('a', { href: `#shop/${row.id}` }, text(row.name)); return link; } },
-      { label: 'Owners', key: 'owner_count' }, { label: 'Members', key: 'member_count' }, { label: 'Medicines', key: 'medicine_count' },
+      { label: 'Type', key: 'shop_type' }, { label: 'Owners', key: 'owner_count' }, { label: 'Members', key: 'member_count' }, { label: 'Items', key: 'medicine_count' },
       { label: 'Created', render: row => when(row.created_at) }, { label: 'Last audit', render: row => when(row.last_audit_at) }, { label: 'State', render: row => row.deleted_at ? 'Pending deletion' : 'Active' }
     ], data.shops);
     after ? content.append(view) : content.replaceChildren(view);
@@ -144,6 +144,8 @@ const views = {
     content.replaceChildren(
       el('h2', {}, text(data.shop.name)),
       el('p', {}, `ID ${data.shop.id} · created ${when(data.shop.created_at)} · ${data.shop.medicine_count} items (count only)`),
+      el('p', {}, `Shop type: ${data.shopType.name}${data.shopType.custom ? ` (made by ${data.shopType.ownerEmail || 'a former Owner'})` : ''} · Strength ${data.shopType.usesStrength ? 'shown' : 'hidden'} · Form labelled ${data.shopType.formLabel}`),
+      el('p', { class: 'note' }, ['form', 'unit', 'location', 'strength'].map(list => `${{ form: 'Form / category', unit: 'Unit', location: 'Storage location', strength: 'Strength' }[list]}: ${data.shopType.lists[list].length ? data.shopType.lists[list].join(', ') : '—'}`).join(' · ')),
       ...(data.deletion ? [el('p', { class: 'note' }, data.deletion.purged_at ? `Purged ${when(data.deletion.purged_at)}.` : `Pending deletion since ${when(data.deletion.deleted_at)}; permanently purged after ${when(data.deletion.purge_after)}.`)] : []),
       ...(restoreButton ? [restoreButton, extendButton] : []),
       ...(writesEnabled || data.flags?.length ? [el('h2', {}, 'Feature flags for this Shop'), el('p', { class: 'note' }, 'A change applies on the next request. Follow global uses the Worker secret.'), table('Feature flags', [
@@ -164,6 +166,19 @@ const views = {
   async audit(after) {
     const data = await get(`/admin/api/audit${after ? `?cursor=${encodeURIComponent(after)}` : ''}`);
     const view = table('Audit events', auditColumns, data.events);
+    after ? content.append(view) : content.replaceChildren(view);
+    return data.nextCursor;
+  },
+  async types(after) {
+    const data = await get(`/admin/api/shop-types${after ? `?cursor=${encodeURIComponent(after)}` : ''}`);
+    const names = { form: 'Form / category', unit: 'Unit', location: 'Storage location', strength: 'Strength' };
+    const lists = row => el('div', {}, ...Object.keys(names).map(list => el('p', {}, el('strong', {}, `${names[list]}: `), text(row.lists[list].length ? row.lists[list].join(', ') : '—'))));
+    const view = el('div', {}, el('p', { class: 'note' }, 'Read-only. Shop types Owners created for their own Shops: configuration only, never item contents. Built-in types are under Lists.'),
+      table('Shop types made by Owners', [
+        { label: 'Name', key: 'name' }, { label: 'Owner', key: 'owner_email' }, { label: 'Started as', render: row => row.base_type === 'goods' ? 'General goods' : 'Medicine' },
+        { label: 'Strength', render: row => row.uses_strength ? 'Shown' : 'Hidden' }, { label: 'Form label', key: 'form_label' }, { label: 'Shops', key: 'shop_count' },
+        { label: 'Created', render: row => when(row.created_at) }, { label: 'Lists', render: lists }
+      ], data.types));
     after ? content.append(view) : content.replaceChildren(view);
     return data.nextCursor;
   },

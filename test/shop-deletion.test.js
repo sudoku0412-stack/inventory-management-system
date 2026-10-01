@@ -208,3 +208,20 @@ test('purge honours the per-Shop shop_purge flag: off holds a Shop, on purges it
   assert.equal((await purgeDeletedShops(forced.db, photos, { now: late, dryRun: true })).purged, 1, 'purged though the global default is a dry run');
   assert.equal(forced.rows(`SELECT count(*) AS n FROM batches WHERE household_id='${shop}'`)[0].n, 0);
 });
+
+test('purge also removes the Shop\'s type, list overrides and remembered barcode names, and only for that Shop', async () => {
+  const f = fixture();
+  for (const id of [shop, other]) {
+    f.sqlite.prepare("INSERT INTO shop_types (household_id,shop_type) VALUES (?,'goods')").run(id);
+    f.sqlite.prepare("INSERT INTO shop_options (household_id,list,value,hidden,is_custom,created_at) VALUES (?,'unit','crate',0,1,'before')").run(id);
+    f.sqlite.prepare("INSERT INTO batch_barcodes (household_id,barcode,name,strength,form,unit,location,updated_at) VALUES (?,'012345678905','Secret item','','General','piece','Shelf','before')").run(id);
+  }
+  await f.del();
+  const photos = { delete: async () => {} };
+  assert.equal((await purgeDeletedShops(f.db, photos, { now: () => '2026-10-14T00:00:00.000Z', dryRun: false })).purged, 1);
+  for (const table of ['shop_types', 'shop_options', 'batch_barcodes']) {
+    assert.equal(f.rows(`SELECT count(*) AS n FROM ${table} WHERE household_id='${shop}'`)[0].n, 0, `${table} purged`);
+    assert.equal(f.rows(`SELECT count(*) AS n FROM ${table} WHERE household_id='${other}'`)[0].n, 1, `${table} of another Shop kept`);
+  }
+  assert.deepEqual(f.rows('PRAGMA foreign_key_check'), []);
+});

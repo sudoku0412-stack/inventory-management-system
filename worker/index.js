@@ -8,7 +8,7 @@ import {
   visionConfig
 } from '../lib/shared.js';
 import { createD1Store, loadVapid } from '../lib/store-d1.js';
-import { adminActivity, adminAudit, adminEmailOutbox, adminOverview, adminShopDetail, adminShops, adminExtendShop, adminRestoreShop, adminRevokeInvitation, adminSetShopFlag, authorizeAdmin, writeAdminAudit } from '../lib/admin.js';
+import { adminShopTypes, adminActivity, adminAudit, adminEmailOutbox, adminOverview, adminShopDetail, adminShops, adminExtendShop, adminRestoreShop, adminRevokeInvitation, adminSetShopFlag, authorizeAdmin, writeAdminAudit } from '../lib/admin.js';
 import { listBatchChanges, parseChangeQuery, pruneBatchChanges } from '../lib/batch-changes.js';
 import { purgeDeletedShops } from '../lib/shop-purge.js';
 import { effectiveFlag } from '../lib/feature-flags.js';
@@ -133,6 +133,7 @@ async function handleAdmin(request, env, url) {
       if (url.pathname === '/admin/api/shops') return await audited('shops.list', null, () => adminShops(db, params));
       const detail = url.pathname.match(/^\/admin\/api\/shops\/([^/]+)$/);
       if (detail) return await audited('shop.view', detail[1], async () => ({ ...await adminShopDetail(db, detail[1], undefined, env), writesEnabled }));
+      if (url.pathname === '/admin/api/shop-types') return await audited('shop-types.view', null, () => adminShopTypes(db, params));
       if (url.pathname === '/admin/api/audit') return await audited('audit.view', params.get('shop'), () => adminAudit(db, params));
       if (url.pathname === '/admin/api/option-defaults') return await audited('option-defaults.view', null, async () => ({ ...await listDefaultOptions(db), writesEnabled }));
       if (url.pathname === '/admin/api/email-outbox') return await audited('email-outbox.view', null, () => adminEmailOutbox(db, params));
