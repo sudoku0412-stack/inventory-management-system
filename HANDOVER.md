@@ -1,5 +1,11 @@
 # Inventory Management System — handover
 
+## New domain and repo name (2026-10-02)
+- Repo renamed to `sudoku0412-stack/inventory-management-system` (GitHub redirects the old URL; the local `origin` was updated). The npm package name, Worker, D1 database and R2 bucket keep `medicine-inventory`.
+- New hostname `inventory-management.craftloop.ca` is added to `wrangler.toml` routes NEXT TO the old `medicineinventory.craftloop.ca`. `APP_URL` is still the OLD host on purpose: until Cloudflare Access covers the new host, emails must keep linking to the working one.
+- Owner steps in the Cloudflare dashboard (the agent cannot edit Access): Zero Trust → Access → Applications → add `inventory-management.craftloop.ca` as a destination of BOTH the customer application and the `/admin*` application (same applications, so `ACCESS_AUD` and `ADMIN_ACCESS_AUD` do not change).
+- Next, after the owner confirms the new URL signs in: set `APP_URL` to the new host, update README, ARCHITECTURE, deploy docs and the Open Facts user agent, and redirect the old host to the new one (sessions are per host, so people sign in once more). The craftloop.ca website is handled in a separate repo.
+
 ## Admin sees Shop types; purge now removes list and barcode data (2026-10-02)
 - Admin console (read-only, metadata only): Shops list has a **Type** column; Shop detail shows the type name, who made it (custom types), Strength shown or hidden, Form label and the lists the Shop currently offers; new **Shop types** tab (`GET /admin/api/shop-types`, audited as `shop-types.view`) lists every Owner-made type with owner email, started-as, Shop count and lists. No admin editing of types.
 - Fixes the purge gap found in review: `lib/shop-purge.js` now also deletes `batch_barcodes`, `shop_options` and `shop_types` rows for the purged Shop (other Shops untouched). Shops purged BEFORE this deploy may still have such rows; not backfilled. Tests in `test/admin-console.test.js` and `test/shop-deletion.test.js` (suite 426).
@@ -252,7 +258,7 @@
 ## Current state
 
 - Product: Inventory Management System (responsive web) for any kind of stock; it began as a household medicine inventory. Long-term: optional native clients; not a commercial store product.
-- Repository: https://github.com/sudoku0412-stack/medicine-inventory-tracker (public).
+- Repository: https://github.com/sudoku0412-stack/inventory-management-system (public; renamed from medicine-inventory-tracker on 2026-10-02, GitHub redirects the old URL).
 - **Production:** https://medicineinventory.craftloop.ca — Cloudflare Worker + D1 + R2 + KV, protected by **Cloudflare Access**. Deploy: `deploy/cloudflare-workers.md`, `npm run deploy`.
 - **Local dev:** Node 26+, `npm start` → http://127.0.0.1:3000, SQLite under `data/`. Static UI in `public/`. Run `npm test`.
 - **Secrets (never commit):** local `data/gemini.key`, `data/vapid.json`, `.env`; cloud Wrangler secrets (`GEMINI_API_KEY`, optional `ACCESS_*`).
