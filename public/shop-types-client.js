@@ -74,7 +74,7 @@ export function bindShopTypes({ document, api, getContext, getCurrentKey, toast 
     remove.setAttribute('aria-label', `Delete ${type.name}`);
     remove.addEventListener('click', () => change('/api/shop-types/delete', { id: type.id }));
     const note = make('p', { className: 'access-meta', textContent: type.shopCount ? 'Move its Shops to another type before deleting it.' : 'Deleting a type never changes saved items.' });
-    details.append(settings, ...['form', 'unit', 'location', 'strength'].map(list => listEditor(type, list)), note, remove);
+    details.append(settings, ...['form', 'unit', 'location', 'strength'].filter(list => list !== 'strength' || type.usesStrength).map(list => listEditor(type, list)), note, remove);
     return details;
   }
 

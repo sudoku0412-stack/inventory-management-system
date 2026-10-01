@@ -368,3 +368,14 @@ test('a Blank type starts with one value per list and a free-text Form label', a
   assert.deepEqual(byName(grown, 'Craft').lists.form, ['General', 'Paint']);
   await assert.rejects(createShopType(db, u1, { name: 'Bad', formLabel: ' ' }), /1–20/);
 });
+
+test('the Strength suggestions editor shows only for types that show Strength', async () => {
+  const headings = custom => {
+    const { document, nodes } = clientDom();
+    const found = [];
+    const walk = node => { if (node?.tagName === 'h4') found.push(node.textContent); (node?.children || []).forEach(walk); };
+    return bindShopTypes({ document, api: async () => ({ builtin: [], custom }), getContext: ownerContext, getCurrentKey: () => 'medicine' }).refresh().then(() => { nodes['#shopTypesList'].children.forEach(walk); return found; });
+  };
+  assert.ok(!(await headings([pantry])).includes('Strength suggestions'));
+  assert.ok((await headings([{ ...pantry, usesStrength: true }])).includes('Strength suggestions'));
+});
