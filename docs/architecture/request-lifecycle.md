@@ -62,7 +62,7 @@ flowchart TD
 
 ## 4. Shop-scoped handlers
 
-After resolution, every query filters by `tenant.householdId`. Write routes first check `migration_runs`: if that table exists with `state = 'active'`, writes return 503. No migration creates the table; it is an operator switch.
+After resolution, every query filters by `tenant.householdId`. Write routes first check `migration_runs`: if that table exists with `state = 'active'`, writes return 503. No migration creates the table on purpose: it is an operator switch, and the commands to turn it on and off are in [`docs/deployment.md`](../deployment.md#maintenance-switch-optional-during-risky-migrations).
 
 These write routes also require `Content-Type: application/json` and a same-origin request (`Origin` equals the site and `Sec-Fetch-Site` is not `cross-site`): Shop creation, invitation acceptance, email preferences, Shop types, own restore, promote, remove, demote, transfer, delete, leave, and the Shop list edits under `/api/options`. The CSV exports reject `Sec-Fetch-Site: cross-site`. Other routes (for example batch writes and invitation creation) rely on the Access session and tenant checks. Errors are returned as `{ error }` JSON with the status from the thrown error, plus `current` on a 409 revision conflict and `Retry-After` on a 429.
 

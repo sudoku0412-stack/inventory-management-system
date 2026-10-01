@@ -1,6 +1,8 @@
 // App shell cache. Network first so a deploy is picked up immediately; the cached copy is only used when the network fails.
 // API, admin and Cloudflare Access paths and every non-GET request are never touched. Redirected responses (an Access login) are never cached.
-const SHELL_CACHE = 'medicine-shell-v1';
+const SHELL_CACHE = 'inventory-shell-v1';
+// Caches from before the rename are removed on activation too.
+const CACHE_PREFIXES = ['medicine-shell-', 'inventory-shell-'];
 const PRECACHE = ['/', '/index.html', '/app.js', '/greeting.js', '/shop-client.js', '/shop-creation-client.js', '/owner-promotion-client.js', '/member-removal-client.js', '/owner-demotion-client.js', '/ownership-transfer-client.js', '/shop-leave-client.js', '/shop-deletion-client.js', '/deleted-shops-client.js', '/email-preferences-client.js', '/inventory-export-client.js', '/options-client.js', '/overview-client.js', '/barcode-client.js', '/info-tips.js', '/profile-tabs.js', '/shop-types-client.js', '/zxing-detector.js', '/shop-invitations-client.js', '/change-feed-client.js', '/offline-store.js', '/offline-queue.js', '/restock-client.js', '/styles.css'];
 const STATIC_FILE = /\.(?:js|css|png|svg|ico|webmanifest|json)$/;
 
@@ -14,7 +16,7 @@ self.addEventListener('install', event => {
 
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
-    for (const name of await caches.keys()) if (name.startsWith('medicine-shell-') && name !== SHELL_CACHE) await caches.delete(name);
+    for (const name of await caches.keys()) if (CACHE_PREFIXES.some(prefix => name.startsWith(prefix)) && name !== SHELL_CACHE) await caches.delete(name);
     await self.clients.claim();
   })());
 });

@@ -78,7 +78,7 @@ Configuration lives in `wrangler.toml` (names, bindings, routes, cron, plain var
 | Flag secret | `SHOP_DELETION_ENABLED`, `SHOP_PURGE_ENABLED` | Global defaults; a per-Shop override in `shop_feature_flags` wins |
 | Optional | `RECEIPT_RETENTION_DAYS` | Receipt retention (default 90, minimum 30) |
 
-Step-by-step setup and deploy commands are in [`deploy/cloudflare-workers.md`](../../deploy/cloudflare-workers.md).
+Step-by-step setup and deploy commands are in [`docs/deployment.md`](../deployment.md).
 
 ## Scheduled work (cron, every 15 minutes)
 
