@@ -94,7 +94,7 @@ test('overview, shops, detail and audit return only allow-listed metadata, never
   assert.equal(overview.shops, 3); assert.equal(overview.users, 3); assert.equal(overview.medicines, 1); assert.equal(overview.owners, 3); assert.equal(overview.pendingInvitations, 1); assert.equal(overview.admin, EMAIL);
   const shops = await read('/admin/api/shops');
   assert.deepEqual(shops.shops.map(s => [s.name, s.owner_count, s.member_count, s.medicine_count]), [['Shop 1', 1, 1, 1], ['Shop 2', 1, 1, 0], ['Shop 3', 1, 1, 0]]);
-  assert.deepEqual(Object.keys(shops.shops[0]), ['id', 'name', 'created_at', 'owner_count', 'member_count', 'medicine_count', 'last_audit_at', 'deleted_at']);
+  assert.deepEqual(Object.keys(shops.shops[0]), ['id', 'name', 'created_at', 'owner_count', 'member_count', 'medicine_count', 'shop_type', 'last_audit_at', 'deleted_at']);
   const detail = await read(`/admin/api/shops/${uuid(11)}`);
   assert.deepEqual(detail.members.map(m => [m.email, m.role]), [['owner1@example.test', 'owner']]);
   assert.deepEqual(detail.invitations.map(i => [i.email, i.pending]), [['invitee@example.test', true]]);
@@ -407,4 +407,53 @@ test('the console lists per-Shop flags with on, off and follow-global actions', 
   assert.match(js, /Feature flags for this Shop/);
   assert.match(js, /Follow global/);
   assert.match(js, /extra: \{ flag: row\.flag, value \}/);
+});
+
+const typeId = '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d';
+function withCustomType(f) {
+  f.sqlite.prepare("INSERT INTO custom_shop_types (id,owner_user_id,name,base_type,uses_strength,form_label,created_at) VALUES (?,?,?,?,?,?,?)").run(typeId, uuid(21), 'Pantry', 'goods', 0, 'Category', '2026-02-01T00:00:00.000Z');
+  for (const [list, value, order] of [['form', 'Dry goods', 1], ['unit', 'tin', 1], ['unit', 'jar', 2], ['location', 'Larder', 1]]) f.sqlite.prepare('INSERT INTO custom_type_options VALUES (?,?,?,?)').run(typeId, list, value, order);
+  f.sqlite.prepare("INSERT INTO shop_types (household_id,shop_type,custom_type_id) VALUES (?,?,?)").run(uuid(11), 'goods', typeId);
+  f.sqlite.prepare("INSERT INTO shop_types (household_id,shop_type) VALUES (?,'goods')").run(uuid(12));
+}
+
+test('admin can see each Shop\'s type, and a Shop\'s type details, read-only', () => withFetch(async () => {
+  const f = fixture(); withCustomType(f);
+  const shops = await (await f.call('/admin/api/shops')).json();
+  assert.deepEqual(shops.shops.map(s => [s.name, s.shop_type]), [['Shop 1', 'Pantry'], ['Shop 2', 'General goods'], ['Shop 3', 'Medicine']]);
+  const detail = await (await f.call(`/admin/api/shops/${uuid(11)}`)).json();
+  assert.equal(detail.shopType.name, 'Pantry');
+  assert.equal(detail.shopType.custom, true);
+  assert.equal(detail.shopType.base, 'goods');
+  assert.equal(detail.shopType.usesStrength, false);
+  assert.equal(detail.shopType.formLabel, 'Category');
+  assert.equal(detail.shopType.ownerEmail, 'owner1@example.test');
+  assert.deepEqual(detail.shopType.lists.unit, ['tin', 'jar']);
+  const builtin = await (await f.call(`/admin/api/shops/${uuid(13)}`)).json();
+  assert.deepEqual([builtin.shopType.name, builtin.shopType.custom, builtin.shopType.ownerEmail, builtin.shopType.usesStrength], ['Medicine', false, null, true]);
+  assert.ok(builtin.shopType.lists.form.includes('Tablets'));
+  assert.ok(f.audit().some(row => row.action === 'shop.view'));
+}));
+
+test('the Shop types tab lists Owner-made types with owner, behaviour, Shop count and lists, and is audited', () => withFetch(async () => {
+  const f = fixture(); withCustomType(f);
+  const response = await f.call('/admin/api/shop-types');
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.types.length, 1);
+  assert.deepEqual({ ...data.types[0], created_at: undefined }, { id: typeId, name: 'Pantry', base_type: 'goods', uses_strength: false, form_label: 'Category', created_at: undefined, owner_email: 'owner1@example.test', shop_count: 1, lists: { form: ['Dry goods'], unit: ['tin', 'jar'], location: ['Larder'], strength: [] } });
+  assert.deepEqual(f.audit().filter(row => row.action === 'shop-types.view').map(row => row.admin_email), [EMAIL]);
+  assert.equal((await f.call('/admin/api/shop-types?cursor=bogus')).status, 400);
+  assert.equal((await f.call('/admin/api/shop-types', { method: 'POST', headers: {}, body: {} })).status === 200, false);
+  assert.equal((await f.call('/admin/api/shop-types', { token: jwt({ email: 'stranger@example.test' }) })).status, 403);
+  assert.equal((await f.call('/admin/api/shop-types', { token: null })).status, 401);
+}));
+
+test('the admin pages have a Shop types tab and show the type on the Shops list and detail', () => {
+  const html = readFileSync(new URL('../public/admin/index.html', import.meta.url), 'utf8');
+  const js = readFileSync(new URL('../public/admin/admin.js', import.meta.url), 'utf8');
+  assert.match(html, /data-tab="types">Shop types</);
+  assert.match(js, /async types\(after\)/);
+  assert.match(js, /\{ label: 'Type', key: 'shop_type' \}/);
+  assert.match(js, /Shop type: \$\{data\.shopType\.name\}/);
 });

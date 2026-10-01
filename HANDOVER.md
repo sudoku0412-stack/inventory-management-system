@@ -1,5 +1,9 @@
 # Inventory Management System — handover
 
+## Admin sees Shop types; purge now removes list and barcode data (2026-10-02)
+- Admin console (read-only, metadata only): Shops list has a **Type** column; Shop detail shows the type name, who made it (custom types), Strength shown or hidden, Form label and the lists the Shop currently offers; new **Shop types** tab (`GET /admin/api/shop-types`, audited as `shop-types.view`) lists every Owner-made type with owner email, started-as, Shop count and lists. No admin editing of types.
+- Fixes the purge gap found in review: `lib/shop-purge.js` now also deletes `batch_barcodes`, `shop_options` and `shop_types` rows for the purged Shop (other Shops untouched). Shops purged BEFORE this deploy may still have such rows; not backfilled. Tests in `test/admin-console.test.js` and `test/shop-deletion.test.js` (suite 426).
+
 ## Custom Shop types (2026-10-02)
 - Migration `0032_custom_shop_types.sql` (NOT yet applied to production): `custom_shop_types` (owner, name unique per owner, base type, `uses_strength`, `form_label`), `custom_type_options` (the four lists per type), and `shop_types.custom_type_id`. `shop_types.shop_type` still holds the BASE type ('medicine' or 'goods') for every Shop, so old code paths work; `custom_type_id` overrides lists and labels.
 - An Owner makes types privately (max 10, names unique per Owner and never a built-in name). A new type copies the lists, Strength and Form label of Medicine, General goods or one of their own types, all editable. Types are only usable for the creator's own Shops. A type in use cannot be deleted. Shop-level add/hide (Manage lists) still layers on top of a type's lists.
