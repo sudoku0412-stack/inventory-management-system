@@ -102,10 +102,10 @@ export function bindOptions({ document, api, getRole, getShopId, toast, storage 
   }
 
   function renderManager(manage, shopType) {
-    const card = $('#optionsCard'), host = $('#optionsLists');
-    if (!card || !host) return;
+    const opener = $('#openOptions'), host = $('#optionsLists');
+    if (!opener || !host) return;
     const owner = getRole() === 'owner';
-    card.hidden = !owner;
+    opener.hidden = !owner;
     if (!owner) return;
     host.replaceChildren();
     for (const list of Object.keys(LIST_LABELS)) {
@@ -157,6 +157,8 @@ export function bindOptions({ document, api, getRole, getShopId, toast, storage 
       toast?.(error.message);
     }
   }
+
+  $('#openOptions')?.addEventListener('click', () => { const modal = $('#optionsModal'); if (modal && !modal.open) modal.showModal(); });
 
   let currentDefault;
   function show(next, defaultLocation) {

@@ -88,7 +88,7 @@ test('migration 0031 keeps every existing list row and Shop choice', () => {
 
 function fakeDom() {
   const make = () => ({ children: [], closest: () => null, querySelector: () => null, replaceChildren(...items) { this.children = items; }, append(item) { this.children.push(item); }, dataset: {}, addEventListener() {}, classList: { toggle() {} } });
-  const nodes = { '#strengthOptions': make(), '#strengthChips': make(), '#addMedicineForm': { elements: { form: { name: 'form', ...make() }, unit: { name: 'unit', ...make() }, location: { name: 'location', ...make() }, strength: { value: '', closest: () => null, dispatchEvent(event) { this.fired = event.type; } } } }, '#defaultStorageLocation': { name: 'location', ...make() }, '#optionsCard': { hidden: false }, '#optionsLists': make() };
+  const nodes = { '#strengthOptions': make(), '#strengthChips': make(), '#addMedicineForm': { elements: { form: { name: 'form', ...make() }, unit: { name: 'unit', ...make() }, location: { name: 'location', ...make() }, strength: { value: '', closest: () => null, dispatchEvent(event) { this.fired = event.type; } } } }, '#defaultStorageLocation': { name: 'location', ...make() }, '#openOptions': { hidden: true, addEventListener(type, handler) { this.handler = handler; } }, '#optionsModal': { open: false, showModal() { this.open = true; } }, '#optionsLists': make() };
   const document = { documentElement: { dataset: {} }, querySelector: selector => nodes[selector] || null, querySelectorAll: () => [], createElement: () => { const node = { ...make(), setAttribute() {} }; node.addEventListener = (type, handler) => { node.handler = handler; }; return node; } };
   return { document, nodes };
 }
@@ -120,6 +120,29 @@ test('with no suggestions the chip row stays hidden', async () => {
   const client = bindOptions({ document, api: async () => ({ shopType: 'goods', lists: { ...lists, strength: [] }, manage }), getRole: () => 'owner', toast() {}, storage: null, observe: false });
   await client.load({});
   assert.equal(nodes['#strengthChips'].hidden, true);
+});
+
+test('Manage lists is offered to Owners only and opens the lists dialog', async () => {
+  const check = async role => {
+    const { document, nodes } = fakeDom();
+    const client = bindOptions({ document, api: async () => ({ shopType: 'medicine', lists, manage }), getRole: () => role, toast() {}, storage: null, observe: false });
+    await client.load({});
+    return nodes;
+  };
+  const owner = await check('owner');
+  assert.equal(owner['#openOptions'].hidden, false);
+  owner['#openOptions'].handler();
+  assert.equal(owner['#optionsModal'].open, true);
+  assert.equal((await check('member'))['#openOptions'].hidden, true);
+});
+
+test('the dropdown lists live in a dialog opened from Inventory, not on the Profile page', () => {
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const profile = html.slice(html.indexOf('id="profileView"'), html.indexOf('</main>'));
+  assert.ok(!profile.includes('optionsLists') && !profile.includes('optionsCard'));
+  assert.match(html, /<dialog[^>]*id="optionsModal"[\s\S]*id="optionsLists"/);
+  const inventory = html.slice(html.indexOf('id="inventoryView"'), html.indexOf('id="overviewView"'));
+  assert.match(inventory, /id="openOptions"[^>]*hidden/);
 });
 
 test('the Owner list editor shows strength for medicine Shops and hides it for goods Shops', async () => {

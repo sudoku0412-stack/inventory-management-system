@@ -143,7 +143,7 @@
         <section class="view" id="inventoryView" data-view-panel="inventory" hidden>
           <div class="page-heading inventory-heading">
             <div data-wording><p class="eyebrow">YOUR MEDICINE CABINET</p><h1>Inventory</h1><p>Search, review and update every medicine in your home.</p></div>
-            <div class="header-actions"><button class="button secondary scan-barcode-trigger" type="button">Scan barcode</button><button class="button primary add-medicine-trigger" type="button" data-wording><span aria-hidden="true">＋</span> Add medicine</button></div>
+            <div class="header-actions"><button class="button secondary" id="openOptions" type="button" hidden>Manage lists</button><button class="button secondary scan-barcode-trigger" type="button">Scan barcode</button><button class="button primary add-medicine-trigger" type="button" data-wording><span aria-hidden="true">＋</span> Add medicine</button></div>
           </div>
 
           <div class="inventory-toolbar">
@@ -310,11 +310,6 @@
             </section>
             <div class="profile-save-row"><p id="profileSaveStatus" role="status" aria-live="polite"></p><button class="button primary" id="saveProfileSettings" type="submit" disabled>Save changes</button></div>
           </form>
-          <section class="profile-card" id="optionsCard" aria-labelledby="optionsTitle" hidden>
-            <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">≡</span><div><h2 id="optionsTitle">Dropdown lists</h2><p>Choose what appears in Form, Unit and Storage location when adding an item. Only this Shop changes; saved items are not changed.</p></div></div>
-            <div id="optionsLists"></div>
-            <p class="access-status" id="optionsStatus" role="status" aria-live="polite"></p>
-          </section>
           <section class="household-access" id="householdAccess" aria-labelledby="householdAccessTitle">
             <div class="section-heading"><div><h2 id="householdAccessTitle" tabindex="-1">Shop access</h2><p id="householdAccessIntro">Loading Shop access…</p></div></div>
             <p id="householdAccessStatus" class="access-status" role="status" aria-live="polite"></p>
@@ -350,6 +345,14 @@
         <ul class="access-list" id="restockList"></ul>
       </div>
       <div class="modal-footer"><button class="button secondary" id="restockCopy" type="button">Copy list</button><button class="button secondary" id="restockShare" type="button" hidden>Share</button><button class="button primary" type="button" data-close-modal>Done</button></div>
+    </dialog>
+
+    <dialog class="modal" id="optionsModal" aria-labelledby="optionsTitle">
+      <div class="modal-header"><div><span class="overline">THIS SHOP</span><h2 id="optionsTitle">Dropdown lists</h2><p>Choose what appears in Form, Unit, Storage location and Strength suggestions when adding an item. Only this Shop changes; saved items are not changed.</p></div><button class="modal-close" type="button" data-close-modal aria-label="Close dropdown lists">×</button></div>
+      <div class="modal-body">
+        <div id="optionsLists"></div>
+        <p class="access-status" id="optionsStatus" role="status" aria-live="polite"></p>
+      </div>
     </dialog>
 
     <dialog class="modal" id="scanModal" aria-labelledby="scanTitle">
