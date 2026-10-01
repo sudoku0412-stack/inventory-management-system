@@ -170,11 +170,12 @@ const views = {
   async lists() {
     const data = await get('/admin/api/option-defaults');
     setWrites(data.writesEnabled);
-    const names = { medicine: 'Medicine Shops', goods: 'General goods Shops' }, listNames = { form: 'Form / category', unit: 'Unit', location: 'Storage location' };
+    const names = { medicine: 'Medicine Shops', goods: 'General goods Shops' }, listNames = { form: 'Form / category', unit: 'Unit', location: 'Storage location', strength: 'Strength suggestions' };
     const wrap = el('div', {}, el('p', { class: 'note' }, 'Defaults for new and existing Shops of each type. Shop Owners can still add or hide options in their own Shop. Removing a default never changes saved items.'));
     for (const type of ['medicine', 'goods']) {
       wrap.append(el('h2', {}, names[type]));
-      for (const list of ['form', 'unit', 'location']) {
+      for (const list of ['form', 'unit', 'location', 'strength']) {
+        if (list === 'strength' && type === 'goods') continue;
         const row = el('p', {}, el('strong', {}, `${listNames[list]}: `));
         for (const value of data[type][list]) {
           const remove = el('button', { type: 'button', class: 'danger', 'aria-label': `Remove ${value} from ${names[type]} ${listNames[list]}` }, `${value} ×`);
