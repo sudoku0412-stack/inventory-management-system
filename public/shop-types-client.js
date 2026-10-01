@@ -1,7 +1,8 @@
 // Owner-defined Shop types: a dialog to create, edit and delete them, plus the Shop type selects (Profile and Create Shop).
 // Types are private to the Owner who made them. Built-in types (Medicine, General goods) are always offered.
 const LIST_LABELS = { form: 'Form / category', unit: 'Unit', location: 'Storage location', strength: 'Strength suggestions' };
-const BUILTIN = [{ key: 'medicine', name: 'Medicine' }, { key: 'goods', name: 'General goods' }];
+const BUILTIN = [{ key: 'medicine', name: 'Medicine' }, { key: 'goods', name: 'General goods' }, { key: 'blank', name: 'Blank (one starter per list)' }];
+const LABEL_SUGGESTIONS = ['Form', 'Category', 'Type', 'Kind', 'Group'];
 
 export function bindShopTypes({ document, api, getContext, getCurrentKey, toast }) {
   const $ = id => document.querySelector(`#${id}`);
@@ -61,8 +62,8 @@ export function bindShopTypes({ document, api, getContext, getCurrentKey, toast 
     const name = make('input', { type: 'text', maxLength: 40, value: type.name, required: true });
     name.setAttribute('aria-label', `Name of ${type.name}`);
     const strength = make('input', { type: 'checkbox', checked: type.usesStrength });
-    const label = make('select', {}, make('option', { value: 'Form', textContent: 'Form' }), make('option', { value: 'Category', textContent: 'Category' }));
-    label.value = type.formLabel;
+    const label = make('input', { type: 'text', maxLength: 20, value: type.formLabel, required: true });
+    label.setAttribute('list', 'formLabelOptions');
     const save = make('button', { type: 'submit', className: 'button secondary', textContent: 'Save type' });
     const settings = make('form', { className: 'shop-type-settings' },
       make('label', { className: 'form-field' }, make('span', { textContent: 'Name' }), name),
@@ -125,9 +126,16 @@ export function bindShopTypes({ document, api, getContext, getCurrentKey, toast 
   $('newShopTypeStart')?.addEventListener('change', event => {
     const source = data.custom.find(type => type.key === event.target.value);
     const usesStrength = source ? source.usesStrength : event.target.value === 'medicine';
-    const formLabel = source ? source.formLabel : event.target.value === 'goods' ? 'Category' : 'Form';
+    const formLabel = source ? source.formLabel : event.target.value === 'medicine' ? 'Form' : 'Category';
     form.elements.usesStrength.checked = usesStrength; form.elements.formLabel.value = formLabel;
   });
+  // Tap-to-fill suggestions for the label; the field stays free text.
+  const chips = $('formLabelChips');
+  if (chips) chips.replaceChildren(...LABEL_SUGGESTIONS.map(value => {
+    const chip = make('button', { type: 'button', className: 'suggest-chip', textContent: value });
+    chip.addEventListener('click', () => { form.elements.formLabel.value = value; });
+    return chip;
+  }));
   $('openShopTypes')?.addEventListener('click', async () => { say(''); await load(); if (modal && !modal.open) modal.showModal(); });
 
   return { refresh: load, renderSelects, get types() { return data; } };

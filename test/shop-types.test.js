@@ -109,7 +109,10 @@ test('a type can be renamed and its Strength and Form label changed', async () =
   await createShopType(db, u1, { name: 'Other' });
   await assert.rejects(updateShopType(db, u1, { id: type.id, name: 'other' }), /already have/);
   await assert.rejects(updateShopType(db, u1, { id: type.id, name: 'Medicine' }), /built-in/);
-  await assert.rejects(updateShopType(db, u1, { id: type.id, formLabel: 'Kind' }), /Form or Category/);
+  await assert.rejects(updateShopType(db, u1, { id: type.id, formLabel: '   ' }), /1–20/);
+  await assert.rejects(updateShopType(db, u1, { id: type.id, formLabel: 'x'.repeat(21) }), /1–20/);
+  types = await updateShopType(db, u1, { id: type.id, formLabel: 'Kind' });
+  assert.equal(byName(types, 'Chemist').formLabel, 'Kind');
   types = await updateShopType(db, u1, { id: type.id, name: 'Chemist' });
   assert.equal(byName(types, 'Chemist').usesStrength, false);
 });
@@ -283,7 +286,7 @@ test('Owners get the Shop types card and their types appear in both Shop type se
   assert.equal(nodes['#shopTypesCard'].hidden, false);
   assert.equal(nodes['#openShopTypes'].hidden, false);
   for (const id of ['#shopTypeSelect', '#createShopType']) assert.deepEqual(nodes[id].options.map(option => option.value), ['medicine', 'goods', 'custom:p1']);
-  assert.deepEqual(nodes['#newShopTypeStart'].options.map(option => option.value), ['medicine', 'goods', 'custom:p1']);
+  assert.deepEqual(nodes['#newShopTypeStart'].options.map(option => option.value), ['medicine', 'goods', 'blank', 'custom:p1']);
 });
 
 test('the Shop\'s current type stays selected, even when it is not one of your own types', async () => {
@@ -352,4 +355,16 @@ test('the page has the Shop types card in the Shop tab and the dialog with its c
   const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
   assert.match(html, /<section[^>]*id="shopTypesCard" data-tabs="shop"/);
   assert.match(html, /<dialog[^>]*id="shopTypesModal"[\s\S]*id="newShopTypeForm"[\s\S]*id="shopTypesList"/);
+});
+
+test('a Blank type starts with one value per list and a free-text Form label', async () => {
+  const { db } = fixture();
+  const types = await createShopType(db, u1, { name: 'Craft', startFrom: 'blank', formLabel: 'Kind' });
+  const type = byName(types, 'Craft');
+  assert.deepEqual(type.lists, { form: ['General'], unit: ['pcs'], location: ['Main shelf'], strength: [] });
+  assert.equal(type.formLabel, 'Kind');
+  assert.equal(type.usesStrength, false);
+  const grown = await changeTypeOption(db, u1, { id: type.id, list: 'form', value: 'Paint', action: 'add' });
+  assert.deepEqual(byName(grown, 'Craft').lists.form, ['General', 'Paint']);
+  await assert.rejects(createShopType(db, u1, { name: 'Bad', formLabel: ' ' }), /1–20/);
 });

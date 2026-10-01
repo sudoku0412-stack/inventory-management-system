@@ -362,9 +362,9 @@
         <form id="newShopTypeForm" class="shop-type-new" novalidate>
           <h3>New Shop type</h3>
           <div class="form-field"><label for="newShopTypeName">Name</label><input id="newShopTypeName" name="name" type="text" maxlength="40" autocomplete="off" placeholder="e.g. Pantry" /></div>
-          <div class="form-field"><label for="newShopTypeStart">Start from</label><select id="newShopTypeStart" name="startFrom"><option value="medicine">Medicine</option><option value="goods">General goods</option></select><small>Copies that type's lists. You can change them afterwards.</small></div>
+          <div class="form-field"><label for="newShopTypeStart">Start from</label><select id="newShopTypeStart" name="startFrom"><option value="medicine">Medicine</option><option value="goods">General goods</option><option value="blank">Blank (one starter per list)</option></select><small>Copies that type's lists, or starts nearly empty. You add your own options afterwards.</small></div>
           <label class="check-row"><input type="checkbox" name="usesStrength" checked /> <span>Show the Strength field</span></label>
-          <div class="form-field"><label for="newShopTypeLabel">Label for Form</label><select id="newShopTypeLabel" name="formLabel"><option value="Form">Form</option><option value="Category">Category</option></select></div>
+          <div class="form-field"><label for="newShopTypeLabel">Label for Form</label><input id="newShopTypeLabel" name="formLabel" type="text" maxlength="20" list="formLabelOptions" value="Form" autocomplete="off" /><datalist id="formLabelOptions"><option value="Form"></option><option value="Category"></option><option value="Type"></option><option value="Kind"></option><option value="Group"></option></datalist><span class="suggest-chips" id="formLabelChips"></span></div>
           <button class="button primary" type="submit">Create type</button>
         </form>
         <p class="access-status" id="shopTypesStatus" role="status" aria-live="polite"></p>
