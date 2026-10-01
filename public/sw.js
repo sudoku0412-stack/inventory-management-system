@@ -44,7 +44,7 @@ self.addEventListener('push', event => {
   event.waitUntil((async () => {
     // A service worker has no page-bound active Shop context. Keep its push
     // generic so it cannot make an unpinned cross-Shop notification request.
-    await self.registration.showNotification('Medicine expiry reminder', { body: 'Open Medicine Tracker to review items due in the next 30 days.', data: { url: '/#notifications' } });
+    await self.registration.showNotification('Expiry reminder', { body: 'Open the Inventory Management System to review items due in the next 30 days.', data: { url: '/#notifications' } });
   })());
 });
 

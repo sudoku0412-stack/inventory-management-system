@@ -31,7 +31,7 @@ crons = ["*/15 * * * *"]
 
 [vars]
 PUSH_CONTACT = "mailto:household@craftloop.ca"
-EMAIL_FROM = "Medicine Inventory <notify@craftloop.ca>"
+EMAIL_FROM = "Inventory Management System <notify@craftloop.ca>"
 APP_URL = "https://medicineinventory.craftloop.ca"
 
 # Required production secrets: ACCESS_TEAM_DOMAIN, ACCESS_AUD, INITIAL_OWNER_EMAILS.

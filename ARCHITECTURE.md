@@ -1,10 +1,10 @@
-# Medicine Inventory Tracker architecture
+# Inventory Management System architecture
 
 This document is the durable technical map of the deployed system. It records decisions that are already in use and clearly separates them from planned work. Update it when an architectural decision is finalized or a planned design becomes deployed.
 
 ## Product boundary
 
-Medicine Inventory Tracker is a responsive web application for managing medicine batches, expiry dates, stock levels, locations, reminders, and optional packaging photos. The product is protected by Cloudflare Access in production. User-facing language calls the shared space a **Shop**; existing database and API identifiers remain `household`-scoped for compatibility.
+The Inventory Management System is a responsive web application for managing stock of any kind (medicines, household goods or other supplies): batches, expiry dates, stock levels, locations, reminders, and optional packaging photos. It started as a medicine tracker, so infrastructure resources keep the `medicine-inventory` name. The product is protected by Cloudflare Access in production. User-facing language calls the shared space a **Shop**; existing database and API identifiers remain `household`-scoped for compatibility.
 
 ## Runtime layout
 

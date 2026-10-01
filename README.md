@@ -1,6 +1,18 @@
-# Medicine Inventory Tracker
+# Inventory Management System
 
-A responsive household medicine inventory application. It tracks medicine batches, calculates expiry and low-stock status, and shows persistent 30-day expiry reminders. It runs two ways: a single-household local app on SQLite (`npm start`), and the production cloud app on Cloudflare Workers with D1, R2 and KV, where people share one or more Shops under Cloudflare Access.
+A responsive web application for managing stock of any kind: medicines, household goods, pantry items, supplies or anything else you keep on hand. It tracks quantities and expiry dates, calculates expiry and low-stock status, and shows persistent 30-day expiry reminders. It runs two ways: a single-household local app on SQLite (`npm start`), and the production cloud app on Cloudflare Workers with D1, R2 and KV, where people share one or more Shops under Cloudflare Access.
+
+The app began as a medicine cabinet tracker, so some resource names (the Worker, D1 database and R2 bucket are called `medicine-inventory`) and the repository keep the original name. Renaming them would mean migrating live data, so they are left as they are.
+
+## What it does
+
+- **Shops:** a Shop is a shared space with its own inventory, members and settings. Each Shop has a type, **Medicine** or **General goods**, which sets the wording (Form becomes Category, Strength is hidden) and the starting lists.
+- **Inventory:** items with quantity, unit, expiry date, storage location, notes and an optional packaging photo. Each item has its own low-stock alert number, shown in the lists.
+- **Dropdown lists:** Owners edit the Form/Category, Unit, Storage location and Strength suggestion lists for their Shop (Inventory → **Manage lists**). Platform defaults are managed in `/admin`.
+- **Barcode scanning:** scan with the live camera (built-in detector, or a bundled zxing-wasm reader on Safari and Firefox) or type a code. Lookups use the Shop's own saved codes, then free public databases (openFDA, Open Food/Beauty/Products Facts) and, for Canadian medicines, Health Canada's Drug Product Database by DIN.
+- **Restock list:** items that are expired, expiring within 30 days or low, biggest shortfall first, shareable as text.
+- **Owner overview:** stock across every Shop you own, with a printable report and a combined CSV.
+- **Weekly summary email, expiry alerts, offline reading and queued edits, field help tips.**
 
 Project documents: `ARCHITECTURE.md` (designs and as-built decisions), `HANDOVER.md` (current status, release log, open work), `deploy/cloudflare-workers.md` (deployment steps).
 
@@ -28,13 +40,13 @@ Binding `HOST` to a non-loopback address exposes an unauthenticated application 
 
 ## Profile and household settings
 
-Profile & settings stores one local household profile: display name, household name, and the default storage location for new medicine batches. The defaults are **Kaushik**, **Kaushik’s home**, and **Medicine cabinet**. Settings are stored alongside the inventory in SQLite locally and in D1 in production; updating them never changes existing medicine records. On Cloudflare, apply the D1 migrations before deploying the Worker.
+Profile & settings (tabs: Account, Shop, People) stores one local household profile: display name, Shop name and type, and the default storage location for new items. The defaults are **Kaushik**, **Kaushik’s home**, and **Medicine cabinet**. Settings are stored alongside the inventory in SQLite locally and in D1 in production; updating them never changes existing item records. On Cloudflare, apply the D1 migrations before deploying the Worker.
 
 ## Packaging photos
 
 Add or edit a batch with an optional JPEG, PNG, or WebP photo (2 MB max). Take photo opens the device camera in the browser on localhost or HTTPS (Chrome will ask for permission). Desktop Chrome does not open the camera from a file-picker `capture` attribute, so this uses a live preview instead. Upload photo still uses the file picker. The photo is kept only after you save the batch. Manual name, quantity, and expiry entry always remain available.
 
-If `GEMINI_API_KEY` or `VISION_API_KEY` is set, or `data/gemini.key` exists, one Gemini vision request can suggest a medicine name and a complete `YYYY-MM-DD` expiry. Incomplete or unreadable dates are left blank so you type them. Suggestions never create a batch on their own; saving the form is the confirmation step.
+If `GEMINI_API_KEY` or `VISION_API_KEY` is set, or `data/gemini.key` exists, one Gemini vision request can suggest an item name and a complete `YYYY-MM-DD` expiry. Incomplete or unreadable dates are left blank so you type them. Suggestions never create a batch on their own; saving the form is the confirmation step.
 
 Put the Gemini key in `data/gemini.key` (gitignored) or in the environment. Do not commit the key.
 
@@ -74,8 +86,8 @@ Cloud data is isolated by server-side **Shop** membership; the browser pins a Sh
 - **Roles:** Owners manage a Shop's access; Members use its inventory. A Shop always keeps at least one Owner.
 - **Invitations:** Owners invite people by email in Profile. The invitee accepts after signing in through Access, either on first visit or from the **Shop invitations** card in Profile if they already belong to another Shop.
 - **Owner actions:** make a Member an Owner, make another Owner a Member, transfer ownership to a Member (you become a Member), or remove a Member. Anyone can leave a Shop (the last Owner cannot). Each change is atomic and recorded in an audit table.
-- **Export:** Owners and Members can download the current Shop's inventory as a CSV from **Current Shop** in Profile (every medicine including discarded ones; photos are not included; spreadsheet formulas in cells are neutralized).
-- **Deleting a Shop:** an Owner can delete a Shop (never their only one) by typing its name and choosing how many days to keep it (7 to 30, default 14). Everyone loses access at once; medicines and photos are permanently purged after that period. Owners see it under **Recently deleted Shops** in Profile and can restore it themselves until then; company staff can also restore or extend it from `/admin`.
+- **Export:** Owners and Members can download the current Shop's inventory as a CSV from **Current Shop** in Profile (every item including discarded ones; photos are not included; spreadsheet formulas in cells are neutralized).
+- **Deleting a Shop:** an Owner can delete a Shop (never their only one) by typing its name and choosing how many days to keep it (7 to 30, default 14). Everyone loses access at once; items and photos are permanently purged after that period. Owners see it under **Recently deleted Shops** in Profile and can restore it themselves until then; company staff can also restore or extend it from `/admin`.
 - **Another Shop:** users can create additional empty Shops (capped at five owned Shops).
 - **Live updates:** while a tab is open on Dashboard or Inventory, the app polls a per-Shop change feed about once a minute and applies changes made on other devices.
 
@@ -83,7 +95,7 @@ Initial setup: set `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` and `INITIAL_OWNER_EMAILS`
 
 ## Admin console (company use only)
 
-`/admin` is a separate console for company staff. It shows totals, Shops with members and roles, audit events and an admin activity log. It never shows medicine names, notes, photos or push details. With `ADMIN_WRITES_ENABLED=true` it can also revoke a pending invitation, restore a deleted Shop and extend its purge deadline; each needs a written reason and is audited. Without the flag it is read-only. The header has a **Sign out** link.
+`/admin` is a separate console for company staff. It shows totals, Shops with members and roles, audit events and an admin activity log. It never shows item names, notes, photos or push details. With `ADMIN_WRITES_ENABLED=true` it can also revoke a pending invitation, restore a deleted Shop and extend its purge deadline; each needs a written reason and is audited. Without the flag it is read-only. The header has a **Sign out** link.
 
 - It sits behind its own Cloudflare Access application for `/admin*`, separate from the customer application.
 - The Worker also checks that token's audience (`ADMIN_ACCESS_AUD`) and that the email is in `ADMIN_EMAILS` (comma-separated Worker secret). If either is missing the console returns 503.
@@ -102,7 +114,7 @@ Feature flags (Worker secrets whose value is `true`; unset means off): `ADMIN_WR
 **Per-Shop flags:** `SHOP_DELETION_ENABLED` and `SHOP_PURGE_ENABLED` are only the global defaults. In `/admin`, open a Shop and use **Feature flags for this Shop** to force a flag on, force it off, or make the Shop follow the global secret again. Changes need a written reason, are audited (admin log plus the Shop's own history) and apply on the very next request, with no deploy. A per-Shop override always beats the global secret, so **Automatic purge: off** holds one Shop's data while purging continues elsewhere. `ADMIN_WRITES_ENABLED` stays global because it guards `/admin` itself.
 
 1. Run the tests: `npm test`.
-2. Apply new D1 migrations first: `npm run cf:migrate` (migrations `0001` to `0023` live in `migrations/`; list pending ones with `npx wrangler d1 migrations list medicine-inventory --remote`).
+2. Apply new D1 migrations first: `npm run cf:migrate` (migrations `0001` to `0031` live in `migrations/`; list pending ones with `npx wrangler d1 migrations list medicine-inventory --remote`).
 3. Deploy the Worker and UI: `npm run deploy`.
 
 Always migrate before deploying. Any new browser module under `public/` must be added to both `publicAssetPaths` (`lib/shared.js`) and `bootstrapAssetPaths` (`worker/index.js`), or it returns 404 in production; a test enforces this. Admin files under `public/admin/` are deliberately not in the public list.
