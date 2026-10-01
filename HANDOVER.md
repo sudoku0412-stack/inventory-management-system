@@ -1,4 +1,8 @@
-# Medicine Inventory Tracker — handover
+# Inventory Management System — handover
+
+## Renamed to Inventory Management System (2026-10-02)
+- User-facing name only: page title, header brand, admin title, push notification text, invitation, deletion, ownership and weekly emails (`lib/email-outbox.js`), `EMAIL_FROM`, server log, README and ARCHITECTURE. Infrastructure names are deliberately unchanged (Worker, D1 database and R2 bucket `medicine-inventory`, repo, `package.json` name, production URL), because renaming them means migrating live data.
+- The weekly email now reads "weekly inventory check". Medicine Shops still use medicine wording inside the app (`data-wording` handling); only the product name is generic.
 
 ## Fix: Overview "Show items" showed nothing on phones (2026-10-02)
 - Cause: the Overview item list reuses `.table-wrap`, which the phone stylesheet hides (Inventory has a separate card list there). The filter worked; the list was invisible. Client-only, no migration.
@@ -231,7 +235,7 @@
 
 ## Current state
 
-- Product: household medicine inventory (responsive web). Long-term: optional native clients; not a commercial store product.
+- Product: Inventory Management System (responsive web) for any kind of stock; it began as a household medicine inventory. Long-term: optional native clients; not a commercial store product.
 - Repository: https://github.com/sudoku0412-stack/medicine-inventory-tracker (public).
 - **Production:** https://medicineinventory.craftloop.ca — Cloudflare Worker + D1 + R2 + KV, protected by **Cloudflare Access**. Deploy: `deploy/cloudflare-workers.md`, `npm run deploy`.
 - **Local dev:** Node 26+, `npm start` → http://127.0.0.1:3000, SQLite under `data/`. Static UI in `public/`. Run `npm test`.

@@ -25,7 +25,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 .app-shell { min-height: 100vh; }
 .sidebar { position: fixed; inset: 0 auto 0 0; z-index: 10; width: 248px; padding: 28px 20px 22px; display: flex; flex-direction: column; background: var(--deep); color: #fff; }
-.brand { display: flex; gap: 12px; align-items: center; padding: 4px 9px 31px; color: #fff; font-family: "Manrope", sans-serif; font-size: 1.25rem; text-decoration: none; letter-spacing: -.02em; }
+.brand { display: flex; gap: 12px; align-items: center; padding: 4px 9px 31px; color: #fff; font-family: "Manrope", sans-serif; font-size: .95rem; line-height: 1.25; text-decoration: none; letter-spacing: -.02em; }
 .brand-mark { position: relative; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; background: #dbf4e7; }
 .brand-mark span { position: absolute; width: 16px; height: 5px; border-radius: 3px; background: var(--deep); }
 .brand-mark span:last-child { transform: rotate(90deg); }

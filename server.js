@@ -362,7 +362,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const server = app(store);
   const tick = () => store.deliverPushes().catch(err => console.error('Push delivery failed:', err.message));
   server.listen(port, host, () => {
-    console.log(`Medicine Tracker on http://${host}:${port}`);
+    console.log(`Inventory Management System on http://${host}:${port}`);
     const access = accessConfig();
     if (access) console.log(`Cloudflare Access required (${access.issuer})`);
     else if (host !== '127.0.0.1' && host !== 'localhost') console.warn('No login is enabled. Set ACCESS_TEAM_DOMAIN and ACCESS_AUD before publishing this app.');
