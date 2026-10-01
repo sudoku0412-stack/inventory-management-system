@@ -1,5 +1,9 @@
 # Inventory Management System — handover
 
+## Admin console is responsive (2026-10-02)
+- Client-only (`public/admin/admin.css`, `admin.js`, `index.html`), no migration, no behaviour change. On phones (<=720px) each table row is a labelled card (`data-label` on every cell, `td::before`); wide screens keep a table with sticky headers inside `.scroll`. Tabs are one scrolling, sticky row with pill styling, and the active tab scrolls into view. Header: title and Sign out on one row, then the notice and the signed-in email. Controls are 44px tall; Load more and action buttons go full width on phones.
+- Empty tables now say "Nothing to show yet." Shop detail shows its type in a small box. The static notice says "item contents". Checked every tab at 375px (no horizontal scroll) and the Shops tab at desktop width against a mock; real admin data was not viewed. Tests in `test/admin-responsive.test.js` (suite 440).
+
 ## Old host redirects to the new one (2026-10-02)
 - `legacyRedirect` in `worker/index.js` runs first in `handleRequest`: requests for `LEGACY_HOST` (`medicineinventory.craftloop.ca`, set in `wrangler.toml`) get a 301 (308 for non-GET/HEAD) to `APP_URL` with the same path and query, cached for a day. The target host comes only from `APP_URL`. No `LEGACY_HOST` means no redirect (local runs, tests). Tests in `test/legacy-redirect.test.js` (suite 433).
 - The old host is still listed in the Access applications, so a signed-out visitor sees the Access login for the old host before the redirect. Remove the old host from both Access applications and from `routes` in `wrangler.toml` only once nobody uses it any more; the redirect then stops working for it.
