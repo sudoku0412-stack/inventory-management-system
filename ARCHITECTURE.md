@@ -27,4 +27,4 @@ flowchart LR
 | [How to add a feature](docs/architecture/adding-a-feature.md) | Checklist: routes, migrations, the three asset lists, tests, documents |
 | [Design records](docs/architecture/design-records.md) | Detailed per-feature designs and decisions (the former contents of this file) |
 
-The pages above describe the system as built. When they and the design records disagree, the code and the pages above are current. Deployment steps are in [`deploy/cloudflare-workers.md`](deploy/cloudflare-workers.md); project status is in [`HANDOVER.md`](HANDOVER.md).
+The pages above describe the system as built. When they and the design records disagree, the code and the pages above are current. Deployment steps are in [`docs/deployment.md`](docs/deployment.md); project status is in [`HANDOVER.md`](HANDOVER.md).

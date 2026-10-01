@@ -14,7 +14,7 @@ The app began as a medicine cabinet tracker, so some resource names (the Worker,
 - **Owner overview:** stock across every Shop you own, with a printable report and a combined CSV.
 - **Weekly summary email, expiry alerts, offline reading and queued edits, field help tips.**
 
-Project documents: `ARCHITECTURE.md` (architecture overview and links to `docs/architecture/`), `HANDOVER.md` (current status, release log, open work), `deploy/cloudflare-workers.md` (deployment steps). `docs/README.md` lists every document.
+Project documents: `ARCHITECTURE.md` (architecture overview and links to `docs/architecture/`), `HANDOVER.md` (current status, release log, open work), `docs/deployment.md` (deployment steps). `docs/README.md` lists every document.
 
 ## Repository layout
 
@@ -27,7 +27,6 @@ Project documents: `ARCHITECTURE.md` (architecture overview and links to `docs/a
 | `migrations/` | D1 migrations, applied in order |
 | `test/` | `node --test` suites |
 | `tools/` | `export-local-to-d1.js`, an offline local-to-D1 import helper |
-| `deploy/` | Cloudflare deployment guide |
 | `docs/` | Architecture, bug process and history documents |
 
 ## Run
@@ -89,7 +88,7 @@ This is not email. Alerts require this computer’s Node process and a browser t
 
 Production URL: **https://inventory-management.craftloop.ca** (the old address medicineinventory.craftloop.ca still works while people move over)
 
-Deploy with **Cloudflare Workers + D1 + R2** (always on). No tunnel and no `npm start` on your laptop for phone use. Step-by-step: **`deploy/cloudflare-workers.md`**.
+Deploy with **Cloudflare Workers + D1 + R2** (always on). No tunnel and no `npm start` on your laptop for phone use. Step-by-step: **`docs/deployment.md`**.
 
 Requires **Cloudflare Access** on that hostname and `GEMINI_API_KEY` as a Worker secret. The production Worker validates the signed Access JWT (issuer, audience, expiry, and signature) itself; it never treats an incoming email header as proof of identity. Local dev remains a loopback-only, single-household SQLite workflow at `npm start` → http://127.0.0.1:3000.
 

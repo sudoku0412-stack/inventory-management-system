@@ -77,6 +77,20 @@ npm run deploy
 
 Open **https://inventory-management.craftloop.ca** on your phone, sign in with Access, then **Add item → Take photo**.
 
+## Maintenance switch (optional, during risky migrations)
+
+The Worker has a read-only switch for the moments when a migration must not race with writes. It is deliberately **not** created by a migration: if the table `migration_runs` does not exist, the app behaves normally. When the table exists and its single row has `state = 'active'`, every write route answers 503 ("Inventory is temporarily read-only while a migration is in progress") and the admin Overview shows the state. Reads keep working.
+
+```sh
+# Turn read-only mode ON before the migration
+npx wrangler d1 execute DB --remote --command "CREATE TABLE IF NOT EXISTS migration_runs (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), state TEXT NOT NULL); INSERT OR REPLACE INTO migration_runs (singleton, state) VALUES (1, 'active');"
+
+# Turn it OFF after the migration and the deploy
+npx wrangler d1 execute DB --remote --command "DROP TABLE IF EXISTS migration_runs;"
+```
+
+Do not leave it on: nobody can save changes while it is active. The additive migrations used so far (new tables and columns) did not need it.
+
 ## What runs where
 
 | Piece | Cloudflare | Your Mac |

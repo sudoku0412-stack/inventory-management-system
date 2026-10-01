@@ -11,7 +11,7 @@
 | `migrations/` | D1 SQL migrations, applied in file-name order (there is no `0002`) |
 | `test/` | `node --test` suites (`*.test.js`) plus the shared fixture `deletion-stub.js` |
 | `tools/export-local-to-d1.js` | Offline converter from a local SQLite database to a D1 import |
-| `deploy/cloudflare-workers.md` | Production setup and deploy steps |
+| `docs/deployment.md` | Production setup and deploy steps |
 | `docs/` | Architecture, process and history documents (see [`docs/README.md`](../README.md)) |
 | `wrangler.toml` | Worker name, bindings, routes, cron and plain variables |
 
