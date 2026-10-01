@@ -51,7 +51,7 @@ Local development
 
 ## Deployment and operations
 
-- Production target: `https://medicineinventory.craftloop.ca`.
+- Production target: `https://inventory-management.craftloop.ca` (previously `https://medicineinventory.craftloop.ca`).
 - The Worker configuration and deployment notes live in `deploy/cloudflare-workers.md`.
 - D1 migrations are additive and applied before a Worker that depends on them. Verify the migration ledger and production route after every deployment.
 - Secrets remain in Cloudflare/Wrangler or ignored local files. Never commit Access, Apple, Google, Gemini, VAPID, database, or photo credentials.

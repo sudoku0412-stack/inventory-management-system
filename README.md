@@ -73,7 +73,7 @@ This is not email. Alerts require this computer’s Node process and a browser t
 
 ## Phone access on your domain (Cloudflare, no Mac)
 
-Production URL: **https://medicineinventory.craftloop.ca**
+Production URL: **https://inventory-management.craftloop.ca** (the old address medicineinventory.craftloop.ca still works while people move over)
 
 Deploy with **Cloudflare Workers + D1 + R2** (always on). No tunnel and no `npm start` on your laptop for phone use. Step-by-step: **`deploy/cloudflare-workers.md`**.
 

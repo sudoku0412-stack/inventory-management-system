@@ -34,7 +34,7 @@ crons = ["*/15 * * * *"]
 [vars]
 PUSH_CONTACT = "mailto:household@craftloop.ca"
 EMAIL_FROM = "Inventory Management System <notify@craftloop.ca>"
-APP_URL = "https://medicineinventory.craftloop.ca"
+APP_URL = "https://inventory-management.craftloop.ca"
 
 # Required production secrets: ACCESS_TEAM_DOMAIN, ACCESS_AUD, INITIAL_OWNER_EMAILS.
 # INITIAL_OWNER_EMAILS is a comma-separated, one-time bootstrap allowlist; never
