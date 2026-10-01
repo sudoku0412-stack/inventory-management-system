@@ -13,12 +13,12 @@ export const FIELD_TIPS = [
   ['#addMedicineForm [name=notes]', 'Anything worth remembering, such as dosage or who it is for.'],
   ['#displayName', 'Your name, shown in the greeting and on your avatar.'],
   ['#householdName', 'The Shop’s name, shown in the sidebar and to everyone who shares it.'],
-  ['#shopTypeSelect', 'Medicine or General goods. It changes wording and default lists, never your saved items.'],
+  ['#shopTypeSelect', 'Sets the starting lists and field labels. Saved items never change.'],
   ['#defaultStorageLocation', 'The location pre-selected when you add a new item.'],
   ['#householdInviteEmail', 'The email address this person signs in with.'],
   ['#householdInviteRole', 'Members update stock. Owners also manage people and Shop settings.'],
   ['#createShopName', 'The name of the new Shop. You can change it later in Profile.'],
-  ['#createShopType', 'Medicine or General goods. It sets the wording and default lists.'],
+  ['#createShopType', 'Pick the kind of Shop. It sets the starting lists and field labels.'],
   ['#createDisplayName', 'Your name inside the new Shop.']
 ];
 
