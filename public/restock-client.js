@@ -21,11 +21,21 @@ export function restockItems(list, today = new Date()) {
     const worst = ranked.reduce((a, b) => RANK[b.status] < RANK[a.status] ? b : a);
     const quantity = batches.reduce((sum, batch) => sum + Number(batch.quantity || 0), 0);
     const days = worst.expiry_date ? dayNumber(worst.expiry_date) - todayNumber : null;
-    const reason = worst.status === 'expired' ? 'Expired' : worst.status === 'expiring' ? (days === 0 ? 'Expires today' : `Expires in ${days} day${days === 1 ? '' : 's'}`) : `Low: ${quantity} left`;
-    items.push({ status: worst.status, reason, name: worst.name, strength: worst.strength || '', form: worst.form, unit: worst.unit, location: worst.location || '', expiry_date: worst.expiry_date || null, quantity });
+    const threshold = Number.isInteger(worst.low_stock_threshold) ? worst.low_stock_threshold : null;
+    const reason = worst.status === 'expired' ? 'Expired' : worst.status === 'expiring' ? (days === 0 ? 'Expires today' : `Expires in ${days} day${days === 1 ? '' : 's'}`) : `Low: ${quantity} left${threshold === null ? '' : ` (alert at ${threshold})`}`;
+    // gap: how far below its alert number a low item is. Only low items have one.
+    const gap = worst.status === 'low' && threshold !== null ? threshold - quantity : 0;
+    items.push({ status: worst.status, reason, name: worst.name, strength: worst.strength || '', form: worst.form, unit: worst.unit, location: worst.location || '', expiry_date: worst.expiry_date || null, quantity, threshold, gap });
   }
-  return items.sort((a, b) => RANK[a.status] - RANK[b.status] || String(a.expiry_date || '').localeCompare(String(b.expiry_date || '')) || a.name.localeCompare(b.name));
+  // Low items: biggest shortfall first. Expired and expiring items: soonest expiry first.
+  return items.sort((a, b) => RANK[a.status] - RANK[b.status] || b.gap - a.gap || String(a.expiry_date || '').localeCompare(String(b.expiry_date || '')) || a.name.localeCompare(b.name));
 }
+
+/** Short note for lists: the quantity at which the low-stock alert starts. */
+export const alertNote = batch => {
+  const value = batch?.low_stock_threshold;
+  return value !== undefined && value !== null && value !== '' && Number.isInteger(Number(value)) ? `Alert at ${Number(value)}` : '';
+};
 
 export const itemLabel = item => `${item.name}${item.strength ? ` ${item.strength}` : ''} ${String(item.form || '').toLowerCase()}`.trim();
 

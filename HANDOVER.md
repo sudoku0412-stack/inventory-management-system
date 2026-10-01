@@ -1,5 +1,11 @@
 # Medicine Inventory Tracker — handover
 
+## Strength suggestions and visible low-stock alert (2026-10-01)
+- Migration `0031_strength_suggestions.sql` (NOT yet applied to production): rebuilds `option_defaults` and `shop_options` so `list` accepts `strength`, copies all rows, seeds six medicine defaults (100/200/250/500/1000 mg, 5 mg/5 mL). Goods Shops have none.
+- Strength is a fourth list in `OPTION_LISTS` but stays FREE TEXT: it only feeds a `<datalist id="strengthOptions">` on the Add/Edit field. It is not validated, and `OPTIONAL_LISTS` in `lib/options.js` lets it be emptied (the other lists must keep one option). The Owner list editor and admin Lists tab show it for medicine Shops only.
+- The per-item low-stock alert already existed (`low_stock_threshold`, default 4). It now shows in lists: the desktop quantity cell ("Alert at 4"), the mobile row ("8 tablets · alert at 4"). Restock reasons read "Low: 1 left (alert at 10)" and low items sort by shortfall (threshold minus quantity), biggest first. Expired and expiring items still come first. Helper `alertNote` in `public/restock-client.js`.
+- Tests in `test/stock-alert-strength.test.js` (suite 370). Not done: a Shop-wide default threshold (new items still start at 4).
+
 ## Field info tips (2026-09-30)
 - Client-only, no migration. `public/info-tips.js` adds a small "i" button to 18 fields (Add/Edit item form, Profile, Create Shop, Invite). Hover, focus or tap shows a one-line tip; tap pins it, Escape or a tap elsewhere closes. All tip text is in `FIELD_TIPS` in that file (one place to edit). The tip opens inside the open dialog (so it is not hidden behind it) and is placed by measuring where `left:0/top:0` lands, because the mobile dialog is a containing block for fixed elements. Tips avoid the word "medicine" so they fit General goods Shops.
 - `options-client.js` renames the Form label to Category by changing only the label text node (a `textContent` assignment wiped the info button).

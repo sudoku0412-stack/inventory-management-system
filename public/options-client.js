@@ -1,6 +1,6 @@
 // Shop-specific dropdown lists (Form, Unit, Storage location), the Shop type wording, and the Owner list editor.
 // The static <option>s in index.html stay as the offline fallback until the Shop's lists load.
-const LIST_LABELS = { form: 'Form / category', unit: 'Unit', location: 'Storage location' };
+const LIST_LABELS = { form: 'Form / category', unit: 'Unit', location: 'Storage location', strength: 'Strength suggestions' };
 const SKIP = new Set(['SCRIPT', 'STYLE', 'OPTION', 'SELECT', 'TEXTAREA', 'INPUT']);
 const ATTRIBUTES = ['placeholder', 'aria-label', 'title'];
 
@@ -86,9 +86,12 @@ export function bindOptions({ document, api, getRole, getShopId, toast, storage 
     fill(form.elements.unit, lists.unit);
     fill(form.elements.location, lists.location, defaultLocation && lists.location.includes(defaultLocation) ? defaultLocation : undefined);
     fill($('#defaultStorageLocation'), lists.location, defaultLocation);
+    // Strength is free text: the list only feeds the field's suggestions.
+    const suggestions = $('#strengthOptions');
+    if (suggestions) suggestions.replaceChildren(...(lists.strength || []).map(value => Object.assign(document.createElement('option'), { value })));
   }
 
-  function renderManager(manage) {
+  function renderManager(manage, shopType) {
     const card = $('#optionsCard'), host = $('#optionsLists');
     if (!card || !host) return;
     const owner = getRole() === 'owner';
@@ -96,6 +99,7 @@ export function bindOptions({ document, api, getRole, getShopId, toast, storage 
     if (!owner) return;
     host.replaceChildren();
     for (const list of Object.keys(LIST_LABELS)) {
+      if (list === 'strength' && shopType === 'goods') continue;
       const block = document.createElement('div');
       block.className = 'options-list';
       const heading = document.createElement('h3');
@@ -148,7 +152,7 @@ export function bindOptions({ document, api, getRole, getShopId, toast, storage 
   function show(next, defaultLocation) {
     currentDefault = defaultLocation;
     renderSelects(next.lists, defaultLocation);
-    renderManager(next.manage);
+    renderManager(next.manage, next.shopType);
     applyType(next.shopType);
   }
 
