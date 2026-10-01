@@ -14,7 +14,21 @@ The app began as a medicine cabinet tracker, so some resource names (the Worker,
 - **Owner overview:** stock across every Shop you own, with a printable report and a combined CSV.
 - **Weekly summary email, expiry alerts, offline reading and queued edits, field help tips.**
 
-Project documents: `ARCHITECTURE.md` (designs and as-built decisions), `HANDOVER.md` (current status, release log, open work), `deploy/cloudflare-workers.md` (deployment steps).
+Project documents: `ARCHITECTURE.md` (architecture overview and links to `docs/architecture/`), `HANDOVER.md` (current status, release log, open work), `deploy/cloudflare-workers.md` (deployment steps). `docs/README.md` lists every document.
+
+## Repository layout
+
+| Path | Contents |
+| --- | --- |
+| `public/` | Browser client (HTML, CSS, ES modules), service worker `sw.js`, admin console in `public/admin/`, vendored barcode decoder in `public/vendor/` |
+| `worker/index.js` | Cloudflare Worker: routes, Access check, admin console, scheduled jobs |
+| `lib/` | Server logic shared by the Worker, the local server, tools and tests |
+| `server.js` | Local single-household server (SQLite) |
+| `migrations/` | D1 migrations, applied in order |
+| `test/` | `node --test` suites |
+| `tools/` | `export-local-to-d1.js`, an offline local-to-D1 import helper |
+| `deploy/` | Cloudflare deployment guide |
+| `docs/` | Architecture, bug process and history documents |
 
 ## Run
 
@@ -114,7 +128,7 @@ Feature flags (Worker secrets whose value is `true`; unset means off): `ADMIN_WR
 **Per-Shop flags:** `SHOP_DELETION_ENABLED` and `SHOP_PURGE_ENABLED` are only the global defaults. In `/admin`, open a Shop and use **Feature flags for this Shop** to force a flag on, force it off, or make the Shop follow the global secret again. Changes need a written reason, are audited (admin log plus the Shop's own history) and apply on the very next request, with no deploy. A per-Shop override always beats the global secret, so **Automatic purge: off** holds one Shop's data while purging continues elsewhere. `ADMIN_WRITES_ENABLED` stays global because it guards `/admin` itself.
 
 1. Run the tests: `npm test`.
-2. Apply new D1 migrations first: `npm run cf:migrate` (migrations `0001` to `0031` live in `migrations/`; list pending ones with `npx wrangler d1 migrations list medicine-inventory --remote`).
+2. Apply new D1 migrations first: `npm run cf:migrate` (migrations `0001` to `0032` live in `migrations/`; list pending ones with `npx wrangler d1 migrations list medicine-inventory --remote`).
 3. Deploy the Worker and UI: `npm run deploy`.
 
-Always migrate before deploying. Any new browser module under `public/` must be added to both `publicAssetPaths` (`lib/shared.js`) and `bootstrapAssetPaths` (`worker/index.js`), or it returns 404 in production; a test enforces this. Admin files under `public/admin/` are deliberately not in the public list.
+Always migrate before deploying. Any new browser module under `public/` must be added to `publicAssetPaths` (`lib/shared.js`, or it returns 404 in production), `bootstrapAssetPaths` (`worker/index.js`, for the fresh-cache policy) and, for offline start-up, `PRECACHE` in `public/sw.js`; a test enforces the first two. See `docs/architecture/adding-a-feature.md`. Admin files under `public/admin/` are deliberately not in the public list.

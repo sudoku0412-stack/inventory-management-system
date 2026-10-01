@@ -1,5 +1,10 @@
 # Inventory Management System — handover
 
+## Repository cleanup and architecture documents (2026-10-02)
+- Documents only, no code, migration or behaviour change. `ARCHITECTURE.md` is now a short index; its old contents moved (with history) to `docs/architecture/design-records.md`. New as-built pages with Mermaid diagrams in `docs/architecture/`: overview, modules, request-lifecycle, data-model, flows, security, testing, adding-a-feature. `docs/README.md` lists every document.
+- Moved: `BUGFIX_PLAN.md` to `docs/bugfix-plan.md`; the finished offline plans and spec from `docs/superpowers/` to `docs/history/`. Older entries below that name `ARCHITECTURE.md` sections now refer to `docs/architecture/design-records.md`.
+- README has a repository layout section and the three asset lists (`publicAssetPaths`, `bootstrapAssetPaths`, `PRECACHE`).
+
 ## Admin console is responsive (2026-10-02)
 - Client-only (`public/admin/admin.css`, `admin.js`, `index.html`), no migration, no behaviour change. On phones (<=720px) each table row is a labelled card (`data-label` on every cell, `td::before`); wide screens keep a table with sticky headers inside `.scroll`. Tabs are one scrolling, sticky row with pill styling, and the active tab scrolls into view. Header: title and Sign out on one row, then the notice and the signed-in email. Controls are 44px tall; Load more and action buttons go full width on phones.
 - Empty tables now say "Nothing to show yet." Shop detail shows its type in a small box. The static notice says "item contents". Checked every tab at 375px (no horizontal scroll) and the Shops tab at desktop width against a mock; real admin data was not viewed. Tests in `test/admin-responsive.test.js` (suite 440).
