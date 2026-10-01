@@ -108,7 +108,7 @@ export function bindShopInvitations({
   const switchButton = node('shopInvitationsSwitch'), reload = node('shopInvitationsReload');
   const modal = node('joinShopModal'), form = node('joinShopForm'), title = node('joinShopTitle'), help = node('joinShopHelp');
   const access = node('joinShopAccess'), dialogStatus = node('joinShopStatus'), cancel = node('cancelJoinShop'), submit = node('confirmJoinShop');
-  const selector = node('shopSelector');
+  const selector = node('shopSelector'), badge = node('peopleTabBadge');
 
   let key = null, epoch = 0, profileActive = false, unsupported = false;
   let invitations = [], cursor = null, seenCursors = new Set(), phase = 'idle', moreError = false, loadingMore = false, loadToken = 0;
@@ -143,9 +143,19 @@ export function bindShopInvitations({
     return '';
   }
 
+  /** The People tab shows how many invitations wait for this account; "9+" when more may follow. */
+  function renderBadge(count) {
+    if (!badge) return;
+    badge.hidden = count === 0;
+    if (!count) { badge.textContent = ''; badge.removeAttribute?.('aria-label'); return; }
+    badge.textContent = count > 9 || (cursor && count >= 9) ? '9+' : String(count);
+    badge.setAttribute('aria-label', `${count}${cursor ? ' or more' : ''} pending ${count === 1 && !cursor ? 'invitation' : 'invitations'}`);
+  }
+
   function render() {
     const visible = Boolean(key) && !unsupported;
     card.hidden = !visible;
+    renderBadge(visible && phase === 'ready' ? invitations.length : 0);
     if (!visible) return;
     const t = now(), pending = pendingIntent(), busy = Boolean(inFlight), loading = phase === 'loading' || loadingMore;
     const text = notice || derivedText();

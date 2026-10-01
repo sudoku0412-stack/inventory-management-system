@@ -509,3 +509,21 @@ test('markup, styles, worker cache policy and app wiring satisfy the UI contract
   assert.match(app, /decodePendingPage\(await api\('\/api\/household\/invitations\/pending'\)\)/);
   assert.doesNotMatch(read('public/shop-invitations-client.js'), /innerHTML|insertAdjacentHTML|setInterval|X-Shop-Id/);
 });
+
+test('the People tab badge counts pending invitations and hides when there are none', async () => {
+  const some = page({ route: happyRoute({ '/api/household/invitations/pending': () => pendingPage([invitation('inv-1'), invitation('inv-2')]) }) });
+  await some.open();
+  const badge = some.node('peopleTabBadge');
+  assert.equal(badge.hidden, false);
+  assert.equal(badge.textContent, '2');
+  assert.equal(badge.getAttribute('aria-label'), '2 pending invitations');
+  const one = page({ route: happyRoute() });
+  await one.open();
+  assert.equal(one.node('peopleTabBadge').getAttribute('aria-label'), '1 pending invitation');
+  const none = page({ route: happyRoute({ '/api/household/invitations/pending': () => pendingPage([]) }) });
+  await none.open();
+  assert.equal(none.node('peopleTabBadge').hidden, true);
+  const many = page({ route: happyRoute({ '/api/household/invitations/pending': () => pendingPage(Array.from({ length: 12 }, (_, i) => invitation(`i${i}`))) }) });
+  await many.open();
+  assert.equal(many.node('peopleTabBadge').textContent, '9+');
+});
