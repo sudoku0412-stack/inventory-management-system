@@ -361,3 +361,14 @@ tbody tr:hover { background: #f9fbfa; }
 }
 .check-row { display: flex; align-items: flex-start; gap: 10px; margin: 0 0 12px; cursor: pointer; }
 .check-row input { flex: none; width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--teal); }
+
+/* Overview list on phones: the shared table is hidden there, so each row becomes a labelled card. */
+@media (max-width: 760px) {
+  #overviewView .table-wrap { display: block; overflow: visible; }
+  #overviewTable, #overviewTable tbody { display: block; width: 100%; }
+  #overviewTable thead { display: none; }
+  #overviewTable tr { display: grid; gap: 6px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  #overviewTable td { display: flex; justify-content: space-between; gap: 14px; padding: 0; border: 0; text-align: right; overflow-wrap: anywhere; }
+  #overviewTable td::before { content: attr(data-label); flex: none; color: var(--ink-soft); font-size: .8rem; text-align: left; }
+  #overviewTable td:nth-child(2) { font-weight: 700; }
+}

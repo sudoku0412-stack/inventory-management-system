@@ -1,5 +1,9 @@
 # Medicine Inventory Tracker — handover
 
+## Fix: Overview "Show items" showed nothing on phones (2026-10-02)
+- Cause: the Overview item list reuses `.table-wrap`, which the phone stylesheet hides (Inventory has a separate card list there). The filter worked; the list was invisible. Client-only, no migration.
+- Now on phones (<=760px) each Overview row is a labelled card (`data-label` on every cell, `#overviewTable td::before`), and Show items scrolls to the list. Tests in `test/overview-mobile.test.js` (suite 387).
+
 ## Profile page split into Account / Shop / People tabs (2026-10-01)
 - Client-only, no migration. Cause of the "overlapping" cards: several Profile cards had no margin, so they touched. `#profileView > .profile-card` now has one margin rule.
 - New `public/profile-tabs.js` (in all three allowlists). Each card carries `data-tabs="account|shop|people"` (the Save row has `account shop`); the module toggles a `tab-off` class (`display: none !important`), so cards stay in the DOM and their own scripts and the `hidden` attribute keep working. The last tab is kept in `sessionStorage`; arrow keys, Home and End move between tabs.
