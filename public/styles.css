@@ -386,3 +386,5 @@ tbody tr:hover { background: #f9fbfa; }
 .shop-type > .danger-button { margin-bottom: 14px; }
 #shopTypesStatus.success { padding: 10px 14px; border-radius: 10px; background: #e6f4ef; color: #0f5c4d; font-weight: 600; }
 #shopTypesStatus.error { padding: 10px 14px; border-radius: 10px; background: #fbeaea; }
+.tab-badge { display: inline-block; min-width: 20px; margin-left: 8px; padding: 1px 6px; border-radius: 999px; background: #d9822b; color: #fff; font-size: .75rem; font-weight: 700; line-height: 1.5; text-align: center; }
+.tab-badge[hidden] { display: none; }
