@@ -18,15 +18,16 @@ import { enqueueWeeklyDigests } from '../lib/digest.js';
 import { exportInventoryCsv } from '../lib/export.js';
 import { lookupBarcode } from '../lib/barcode.js';
 import { ownerOverview, ownerOverviewCsv } from '../lib/overview.js';
-import { addDefaultOption, addShopOption, isShopType, listDefaultOptions, removeDefaultOption, removeShopOption, setShopOptionHidden, setShopType, shopOptions, shopTypeOf } from '../lib/options.js';
+import { addDefaultOption, addShopOption, isShopTypeKey, restoreShopType, shopTypeRef, listDefaultOptions, removeDefaultOption, removeShopOption, setShopOptionHidden, setShopType, shopOptions, shopTypeOf } from '../lib/options.js';
 import { getEmailPreferences, setEmailPreferences } from '../lib/email-preferences.js';
 import { listDeletedShops, restoreOwnDeletedShop, validateOwnRestore } from '../lib/deleted-shops.js';
+import { changeTypeOption, createShopType, deleteShopType, listShopTypes, updateShopType, userIdFor } from '../lib/shop-types.js';
 import { createAdditionalShop, listShops, onboardingStatus, pinnedTenant, resolveTenant, setupInitialShop, shopContext } from '../lib/tenants.js';
 import { acceptHouseholdInvitation, createHouseholdInvitation, listHouseholdAccess, pendingHouseholdInvitations, demoteHouseholdOwner, leaveHousehold, promoteHouseholdMember, removeHouseholdMember, revokeHouseholdInvitation, transferHouseholdOwnership, validateOwnershipTransfer, deleteHousehold, validateShopDeletion, validateMemberRemoval, validateOwnerDemotion, validateOwnerPromotion, validateShopLeave, throttleInvitationRoute } from '../lib/household-access.js';
 
 const jwksCache = { at: 0, keys: null };
 
-const bootstrapAssetPaths = new Set(['/index.html', '/app.js', '/greeting.js', '/shop-client.js', '/shop-creation-client.js', '/owner-promotion-client.js', '/member-removal-client.js', '/owner-demotion-client.js', '/ownership-transfer-client.js', '/shop-leave-client.js', '/shop-deletion-client.js', '/deleted-shops-client.js', '/email-preferences-client.js', '/inventory-export-client.js', '/options-client.js', '/overview-client.js', '/barcode-client.js', '/info-tips.js', '/profile-tabs.js', '/zxing-detector.js', '/vendor/zxing-reader.iife.js', '/vendor/zxing_reader.wasm', '/shop-invitations-client.js', '/change-feed-client.js', '/offline-store.js', '/offline-queue.js', '/restock-client.js', '/styles.css', '/sw.js']);
+const bootstrapAssetPaths = new Set(['/index.html', '/app.js', '/greeting.js', '/shop-client.js', '/shop-creation-client.js', '/owner-promotion-client.js', '/member-removal-client.js', '/owner-demotion-client.js', '/ownership-transfer-client.js', '/shop-leave-client.js', '/shop-deletion-client.js', '/deleted-shops-client.js', '/email-preferences-client.js', '/inventory-export-client.js', '/options-client.js', '/overview-client.js', '/barcode-client.js', '/info-tips.js', '/profile-tabs.js', '/shop-types-client.js', '/zxing-detector.js', '/vendor/zxing-reader.iife.js', '/vendor/zxing_reader.wasm', '/shop-invitations-client.js', '/change-feed-client.js', '/offline-store.js', '/offline-queue.js', '/restock-client.js', '/styles.css', '/sw.js']);
 
 export function assetCacheControl(path) {
   if (path === '/index.html') return 'no-store';
@@ -217,6 +218,18 @@ export async function handleRequest(request, env, ctx) {
         const file = await ownerOverviewCsv(env.DB, principal);
         return new Response(file.csv, { status: 200, headers: { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="${file.filename}"`, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } });
       }
+      // Custom Shop types belong to the signed-in Owner, not to a Shop, so this runs before resolveTenant and ignores X-Shop-Id.
+      if (url.pathname === '/api/shop-types' || url.pathname.startsWith('/api/shop-types/')) {
+        const userId = await userIdFor(env.DB, principal);
+        const action = url.pathname.slice('/api/shop-types'.length);
+        if (request.method === 'GET' && action === '') return json(await listShopTypes(env.DB, userId));
+        if (request.method !== 'POST' || !['', '/update', '/options', '/delete'].includes(action)) return json({ error: 'Not found' }, 404);
+        if (await migrationIsActive(env.DB)) return json({ error: 'Inventory is temporarily read-only while a migration is in progress.' }, 503);
+        requirePromotionRequest(request, url);
+        const body = await readJson(request);
+        const change = { '': createShopType, '/update': updateShopType, '/options': changeTypeOption, '/delete': deleteShopType }[action];
+        return json(await change(env.DB, userId, body), action === '' ? 201 : 200);
+      }
       const ownRestore = url.pathname.match(/^\/api\/shops\/([^/]+)\/restore$/);
       if (ownRestore) {
         if (request.method !== 'POST') return json({ error: 'Not found' }, 404);
@@ -336,13 +349,13 @@ export async function handleRequest(request, env, ctx) {
       if (request.method === 'PATCH' && url.pathname === '/api/settings') {
         const body = await readJson(request);
         const wantsType = body.shop_type !== undefined;
-        if (wantsType && !isShopType(body.shop_type)) return json({ error: 'Choose a valid Shop type.' }, 400);
+        if (wantsType && !isShopTypeKey(body.shop_type)) return json({ error: 'Choose a valid Shop type.' }, 400);
         if (wantsType && tenant.role !== 'owner') return json({ error: 'Only Owners can change the Shop type.' }, 403);
         if (!wantsType) return json(await store.updateSettings(body));
         // The default location is checked against the new type's lists, so change the type first and undo it if the rest is refused.
-        const previous = await shopTypeOf(env.DB, tenant.householdId);
+        const previous = await shopTypeRef(env.DB, tenant.householdId);
         await setShopType(env.DB, tenant, body.shop_type);
-        try { return json(await store.updateSettings(body)); } catch (error) { await setShopType(env.DB, tenant, previous); throw error; }
+        try { return json(await store.updateSettings(body)); } catch (error) { await restoreShopType(env.DB, tenant.householdId, previous); throw error; }
       }
       if (request.method === 'GET' && url.pathname === '/api/barcode') return json(await lookupBarcode(env.DB, tenant.householdId, url.searchParams.get('code')));
       if (url.pathname === '/api/options') {

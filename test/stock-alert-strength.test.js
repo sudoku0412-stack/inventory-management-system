@@ -19,7 +19,7 @@ function seed(sqlite) {
   sqlite.prepare('INSERT INTO users VALUES (?,?)').run(user, 't');
   for (const [id, name] of [[a, 'Alpha'], [b, 'Beta'], [g, 'Goods']]) sqlite.prepare('INSERT INTO households VALUES (?,?,?)').run(id, name, 't');
   for (const id of [a, b, g]) sqlite.prepare('INSERT INTO memberships VALUES (?,?,?,?)').run(id, user, 'owner', 't');
-  sqlite.prepare("INSERT INTO shop_types VALUES (?, 'goods')").run(g);
+  sqlite.prepare("INSERT INTO shop_types (household_id,shop_type) VALUES (?, 'goods')").run(g);
 }
 function fixture() {
   const sqlite = new DatabaseSync(':memory:');

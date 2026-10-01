@@ -83,7 +83,8 @@ export function bindShopCreation({ document, storage, getContext, getDisplayName
     if (busy || !validAccountContextKey(getContext()?.accountContextKey)) return;
     if (!form.checkValidity()) { form.reportValidity(); return; }
     const payload = Object.fromEntries(['shopName', 'displayName'].map(key => [key, form.elements[key].value.normalize('NFKC').trim().replace(/\s+/g, ' ')]));
-    if (form.elements.shopType?.value === 'goods') payload.shopType = 'goods';
+    const chosenType = form.elements.shopType?.value;
+    if (chosenType && chosenType !== 'medicine') payload.shopType = chosenType;
     let intent = currentIntent();
     if (intent && (intent.payload.shopName !== payload.shopName || intent.payload.displayName !== payload.displayName || intent.payload.shopType !== payload.shopType)) {
       message('Retry the saved request before changing these details.', true);

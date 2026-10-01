@@ -43,7 +43,7 @@ export function bindOverview({ document, api, request, getContext, toast, openWi
       title.textContent = shop.name;
       const type = document.createElement('p');
       type.className = 'overview-type';
-      type.textContent = shop.shopType === 'goods' ? 'General goods' : 'Medicine';
+      type.textContent = shop.shopTypeName || (shop.shopType === 'goods' ? 'General goods' : 'Medicine');
       const grid = document.createElement('dl');
       for (const [key, name] of COUNT_LABELS) {
         const cell = document.createElement('div');

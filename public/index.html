@@ -285,7 +285,7 @@
               <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">⌂</span><div><h2 id="householdDetailsTitle">Shop</h2><p>This is the label shown in the sidebar.</p></div></div>
               <p class="shop-role" id="shopRole" hidden></p>
               <div class="form-field"><label for="householdName">Shop name</label><input id="householdName" name="household_name" type="text" minlength="1" maxlength="80" required autocomplete="organization" aria-describedby="householdNameHelp" /><small id="householdNameHelp">1–80 characters</small></div>
-              <div class="form-field"><label for="shopTypeSelect">Shop type</label><select id="shopTypeSelect" name="shop_type" aria-describedby="shopTypeHelp"><option value="medicine">Medicine</option><option value="goods">General goods</option></select><small id="shopTypeHelp">Changes the wording and default lists. Saved items are not changed. Only Owners can change this.</small></div>
+              <div class="form-field"><label for="shopTypeSelect">Shop type</label><select id="shopTypeSelect" name="shop_type" aria-describedby="shopTypeHelp"><option value="medicine">Medicine</option><option value="goods">General goods</option></select><small id="shopTypeHelp">Changes the default lists and field labels. Saved items are not changed. Only Owners can change this.</small></div>
             </section>
             <section class="profile-card" data-tabs="shop" aria-labelledby="medicineDefaultsTitle">
               <div class="profile-card-heading" data-wording><span class="profile-icon" aria-hidden="true">+</span><div><h2 id="medicineDefaultsTitle">Item defaults</h2><p>Applied only when you add a new item. Existing items stay unchanged.</p></div></div>
@@ -309,6 +309,10 @@
             <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">+</span><div><h2 id="createShopTitle">Create another Shop</h2><p>Create a separate, empty Shop. Your current Shop will stay open.</p></div></div>
             <button class="button secondary" id="createShopButton" type="button">Create another Shop</button>
             <p class="access-status" id="createShopUnavailable" role="status" hidden></p>
+          </section>
+          <section class="profile-card" id="shopTypesCard" data-tabs="shop" aria-labelledby="shopTypesCardTitle" hidden>
+            <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">◇</span><div><h2 id="shopTypesCardTitle">Shop types</h2><p>Make your own types of Shop, such as Pantry, Pharmacy or Workshop, each with its own starting lists. Only you can see and use them.</p></div></div>
+            <button class="button secondary" id="openShopTypes" type="button" hidden>Manage Shop types</button>
           </section>
           <section class="profile-card" id="deletedShopsCard" data-tabs="shop" aria-labelledby="deletedShopsTitle" tabindex="-1" hidden>
             <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">↺</span><div><h2 id="deletedShopsTitle">Recently deleted Shops</h2><p>Shops you own that were deleted. You can restore one until its keep period ends; after that it is permanently removed.</p></div></div>
@@ -350,6 +354,23 @@
         <ul class="access-list" id="restockList"></ul>
       </div>
       <div class="modal-footer"><button class="button secondary" id="restockCopy" type="button">Copy list</button><button class="button secondary" id="restockShare" type="button" hidden>Share</button><button class="button primary" type="button" data-close-modal>Done</button></div>
+    </dialog>
+
+    <dialog class="modal" id="shopTypesModal" aria-labelledby="shopTypesTitle">
+      <div class="modal-header"><div><span class="overline">YOUR ACCOUNT</span><h2 id="shopTypesTitle">Shop types</h2><p>A type sets the starting Form, Unit, Storage location and Strength lists for a new Shop, whether Strength shows, and how Form is labelled. Only you can use the types you create.</p></div><button class="modal-close" type="button" data-close-modal aria-label="Close Shop types">×</button></div>
+      <div class="modal-body">
+        <form id="newShopTypeForm" class="shop-type-new" novalidate>
+          <h3>New Shop type</h3>
+          <div class="form-field"><label for="newShopTypeName">Name</label><input id="newShopTypeName" name="name" type="text" maxlength="40" autocomplete="off" placeholder="e.g. Pantry" /></div>
+          <div class="form-field"><label for="newShopTypeStart">Start from</label><select id="newShopTypeStart" name="startFrom"><option value="medicine">Medicine</option><option value="goods">General goods</option></select><small>Copies that type's lists. You can change them afterwards.</small></div>
+          <label class="check-row"><input type="checkbox" name="usesStrength" checked /> <span>Show the Strength field</span></label>
+          <div class="form-field"><label for="newShopTypeLabel">Label for Form</label><select id="newShopTypeLabel" name="formLabel"><option value="Form">Form</option><option value="Category">Category</option></select></div>
+          <button class="button primary" type="submit">Create type</button>
+        </form>
+        <p class="access-status" id="shopTypesStatus" role="status" aria-live="polite"></p>
+        <h3>Your Shop types</h3>
+        <div id="shopTypesList"></div>
+      </div>
     </dialog>
 
     <dialog class="modal" id="optionsModal" aria-labelledby="optionsTitle">
@@ -419,7 +440,7 @@
         <div class="modal-header"><div><span class="overline">NEW SHOP</span><h2 id="createShopModalTitle">Create another Shop</h2></div><button class="modal-close" type="button" data-close-modal aria-label="Close create Shop dialog">×</button></div>
         <div class="modal-body"><p id="createShopModalHelp">You’ll be the owner of a new, empty Shop. Your current Shop will stay open.</p>
           <div class="form-field"><label for="createShopName">Shop name</label><input id="createShopName" name="shopName" type="text" required minlength="1" maxlength="80" autocomplete="organization" /><small>1–80 characters</small></div>
-          <div class="form-field"><label for="createShopType">Shop type</label><select id="createShopType" name="shopType"><option value="medicine">Medicine</option><option value="goods">General goods</option></select><small>Sets the wording and default lists. You can change it later.</small></div>
+          <div class="form-field"><label for="createShopType">Shop type</label><select id="createShopType" name="shopType"><option value="medicine">Medicine</option><option value="goods">General goods</option></select><small>Sets the default lists and field labels. You can change it later.</small></div>
           <div class="form-field"><label for="createDisplayName">Your display name</label><input id="createDisplayName" name="displayName" type="text" required minlength="1" maxlength="60" autocomplete="name" /><small>1–60 characters</small></div>
           <p class="access-status" id="createShopStatus" role="status" aria-live="polite"></p>
         </div>

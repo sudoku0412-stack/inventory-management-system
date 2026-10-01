@@ -15,10 +15,19 @@ export function goodsWording(text) {
 }
 
 const label = value => value.charAt(0).toUpperCase() + value.slice(1);
+const BUILTIN = {
+  medicine: { key: 'medicine', base: 'medicine', name: 'Medicine', usesStrength: true, formLabel: 'Form' },
+  goods: { key: 'goods', base: 'goods', name: 'General goods', usesStrength: false, formLabel: 'Category' }
+};
+/** A Shop type as the page needs it: accepts a key ('medicine', 'goods', 'custom:<id>') or an info object. */
+const typeFrom = next => {
+  if (next && typeof next === 'object') return { ...BUILTIN[next.base] || BUILTIN.medicine, ...next };
+  return BUILTIN[next] || { ...BUILTIN.medicine, key: String(next || 'medicine') };
+};
 
 export function bindOptions({ document, api, getRole, getShopId, toast, storage = globalThis.localStorage, observe = true }) {
   const $ = selector => document.querySelector(selector);
-  let data = null, type = 'medicine';
+  let data = null, type = 'medicine', info = BUILTIN.medicine;
   const originals = new WeakMap(), applied = new WeakMap();
 
   function retextNode(node) {
@@ -50,16 +59,17 @@ export function bindOptions({ document, api, getRole, getShopId, toast, storage 
   }) : null;
 
   function applyType(next) {
-    type = next === 'goods' ? 'goods' : 'medicine';
+    info = typeFrom(next);
+    type = info.base === 'goods' ? 'goods' : 'medicine';
     document.documentElement.dataset.shopType = type;
     const strength = $('#addMedicineForm')?.elements?.strength?.closest('.form-field');
-    if (strength) strength.hidden = type === 'goods';
+    if (strength) strength.hidden = !info.usesStrength;
     const formLabel = $('#addMedicineForm')?.elements?.form?.closest('.form-field')?.querySelector('span');
     // Change only the label text, so the field's info button stays.
     const labelText = formLabel?.firstChild;
-    if (labelText?.nodeType === 3) labelText.nodeValue = type === 'goods' ? 'Category' : 'Form';
+    if (labelText?.nodeType === 3) labelText.nodeValue = info.formLabel;
     const typeSelect = $('#shopTypeSelect');
-    if (typeSelect) typeSelect.value = type;
+    if (typeSelect) typeSelect.value = info.key;
     // Only elements marked data-wording are reworded, so Shop names and item names are never touched.
     const roots = [...document.querySelectorAll('[data-wording]')];
     roots.forEach(retextNode);
@@ -101,7 +111,7 @@ export function bindOptions({ document, api, getRole, getShopId, toast, storage 
     }
   }
 
-  function renderManager(manage, shopType) {
+  function renderManager(manage, usesStrength) {
     const opener = $('#openOptions'), host = $('#optionsLists');
     if (!opener || !host) return;
     const owner = getRole() === 'owner';
@@ -109,7 +119,7 @@ export function bindOptions({ document, api, getRole, getShopId, toast, storage 
     if (!owner) return;
     host.replaceChildren();
     for (const list of Object.keys(LIST_LABELS)) {
-      if (list === 'strength' && shopType === 'goods') continue;
+      if (list === 'strength' && !usesStrength) continue;
       const block = document.createElement('div');
       block.className = 'options-list';
       const heading = document.createElement('h3');
@@ -164,8 +174,9 @@ export function bindOptions({ document, api, getRole, getShopId, toast, storage 
   function show(next, defaultLocation) {
     currentDefault = defaultLocation;
     renderSelects(next.lists, defaultLocation);
-    renderManager(next.manage, next.shopType);
-    applyType(next.shopType);
+    const shown = typeFrom({ ...next.typeInfo, base: next.shopType });
+    renderManager(next.manage, shown.usesStrength);
+    applyType(shown);
   }
 
   const cacheKey = () => `options:${getShopId?.() || ''}`;
@@ -175,7 +186,8 @@ export function bindOptions({ document, api, getRole, getShopId, toast, storage 
   /** Load the active Shop's lists; falls back to the last copy on this device when offline. */
   async function load(settings) {
     const defaultLocation = settings?.default_storage_location;
-    if (settings?.shop_type) applyType(settings.shop_type);
+    if (settings?.shop_type_info) applyType(settings.shop_type_info);
+    else if (settings?.shop_type) applyType(settings.shop_type);
     try {
       data = await api('/api/options');
       remember();
@@ -187,5 +199,5 @@ export function bindOptions({ document, api, getRole, getShopId, toast, storage 
     return data;
   }
 
-  return { load, applyType, goodsWording, term: text => type === 'goods' ? goodsWording(text) : text, get shopType() { return type; } };
+  return { load, applyType, goodsWording, term: text => type === 'goods' ? goodsWording(text) : text, get shopType() { return type; }, get typeKey() { return info.key; }, get typeInfo() { return info; } };
 }
