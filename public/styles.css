@@ -388,3 +388,6 @@ tbody tr:hover { background: #f9fbfa; }
 #shopTypesStatus.error { padding: 10px 14px; border-radius: 10px; background: #fbeaea; }
 .tab-badge { display: inline-block; min-width: 20px; margin-left: 8px; padding: 1px 6px; border-radius: 999px; background: #d9822b; color: #fff; font-size: .75rem; font-weight: 700; line-height: 1.5; text-align: center; }
 .tab-badge[hidden] { display: none; }
+.import-problems { margin: 8px 0 0; padding: 10px 14px 10px 30px; border-radius: 10px; background: #fbeaea; color: #8a2d28; font-size: .9rem; }
+.import-problems[hidden] { display: none; }
+#importInventorySection { display: grid; gap: 8px; justify-items: start; }
