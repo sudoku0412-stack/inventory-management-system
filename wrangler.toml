@@ -35,6 +35,8 @@ crons = ["*/15 * * * *"]
 PUSH_CONTACT = "mailto:household@craftloop.ca"
 EMAIL_FROM = "Inventory Management System <notify@craftloop.ca>"
 APP_URL = "https://inventory-management.craftloop.ca"
+# Requests for this old hostname are redirected to APP_URL.
+LEGACY_HOST = "medicineinventory.craftloop.ca"
 
 # Required production secrets: ACCESS_TEAM_DOMAIN, ACCESS_AUD, INITIAL_OWNER_EMAILS.
 # INITIAL_OWNER_EMAILS is a comma-separated, one-time bootstrap allowlist; never
