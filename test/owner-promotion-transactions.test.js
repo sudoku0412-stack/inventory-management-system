@@ -20,7 +20,7 @@ function fixture({ migrate = true } = {}) {
   for (const id of [shop, otherShop]) {
     sqlite.prepare('INSERT INTO households VALUES (?,?,?)').run(id, id, 'before');
     for (const userId of [actor, otherOwner, target, otherTarget]) sqlite.prepare('INSERT INTO memberships VALUES (?,?,?,?)').run(id, userId, [actor, otherOwner].includes(userId) ? 'owner' : 'member', 'before');
-    sqlite.prepare('INSERT INTO household_settings VALUES (?,?,?,?,?,?)').run(id, 'Name', 'Shop', 'Medicine cabinet', 'before', 'user');
+    sqlite.prepare('INSERT INTO household_settings (household_id,display_name,household_name,default_storage_location,updated_at,display_name_source) VALUES (?,?,?,?,?,?)').run(id, 'Name', 'Shop', 'Medicine cabinet', 'before', 'user');
     sqlite.prepare('INSERT INTO batches (id,name,form,quantity,unit,photo_path,created_at,updated_at,household_id) VALUES (?,?,?,?,?,?,?,?,?)').run(`batch-${id}`, 'Medicine', 'Tablets', 3, 'tablets', `photos/${id}.jpg`, 'before', 'before', id);
   }
   sqlite.prepare('INSERT INTO user_shop_preferences VALUES (?,?,?)').run(actor, otherShop, 'unchanged actor');

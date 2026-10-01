@@ -290,6 +290,7 @@
             <section class="profile-card" data-tabs="shop" aria-labelledby="medicineDefaultsTitle">
               <div class="profile-card-heading" data-wording><span class="profile-icon" aria-hidden="true">+</span><div><h2 id="medicineDefaultsTitle">Item defaults</h2><p>Applied only when you add a new item. Existing items stay unchanged.</p></div></div>
               <div class="form-field"><label for="defaultStorageLocation">Default storage location</label><select id="defaultStorageLocation" name="default_storage_location"><option>Medicine cabinet</option><option>Bathroom cabinet</option><option>Kitchen drawer</option><option>Refrigerator</option><option>First aid kit</option></select></div>
+              <div class="form-field"><label for="defaultLowStock">Default low-stock alert</label><input id="defaultLowStock" name="default_low_stock_threshold" type="number" min="0" max="1000000" step="1" value="4" inputmode="numeric" autocomplete="off" aria-describedby="defaultLowStockHelp" /><small id="defaultLowStockHelp">New items start with this number. You get an alert when the quantity falls to it or below.</small></div>
             </section>
             <section class="profile-card device-alert-card" data-tabs="account" aria-labelledby="deviceAlertsTitle">
               <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">⌁</span><div><h2 id="deviceAlertsTitle">Device alerts</h2><p id="deviceAlertStatus">Check expiry alerts in Notifications for this device.</p></div></div>

@@ -25,7 +25,7 @@ function fixture() {
   for (const [id, role] of [[a, 'owner'], [b, 'owner'], [m, 'member']]) sqlite.prepare('INSERT INTO memberships VALUES (?,?,?,?)').run(shop, id, role, 'before');
   sqlite.prepare('INSERT INTO memberships VALUES (?,?,?,?)').run(other, a, 'owner', 'before');
   sqlite.prepare('INSERT INTO memberships VALUES (?,?,?,?)').run(other, outsider, 'owner', 'before');
-  sqlite.prepare('INSERT INTO household_settings VALUES (?,?,?,?,?,?)').run(shop, 'Name', 'Shop', 'Cabinet', 'before', 'user');
+  sqlite.prepare('INSERT INTO household_settings (household_id,display_name,household_name,default_storage_location,updated_at,display_name_source) VALUES (?,?,?,?,?,?)').run(shop, 'Name', 'Shop', 'Cabinet', 'before', 'user');
   sqlite.prepare('INSERT INTO batches (id,name,form,quantity,unit,photo_path,created_at,updated_at,household_id) VALUES (?,?,?,?,?,?,?,?,?)').run('batch-1', 'Med', 'Tablets', 3, 'tablets', 'photos/batch-1.jpg', 'before', 'before', shop);
   sqlite.prepare('INSERT INTO batches (id,name,form,quantity,unit,photo_path,created_at,updated_at,household_id) VALUES (?,?,?,?,?,?,?,?,?)').run('batch-2', 'Med', 'Tablets', 3, 'tablets', 'photos/batch-2.jpg', 'before', 'before', other);
   sqlite.prepare('INSERT INTO push_subscriptions (endpoint,p256dh,auth,household_id,user_id,created_at) VALUES (?,?,?,?,?,?)').run('e-shop', 'p', 'a', shop, m, 'before');

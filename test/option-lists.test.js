@@ -139,3 +139,21 @@ test('the report escapes Shop and item names', () => {
   assert.ok(!html.includes('<script>') && !html.includes('<img'));
   assert.ok(html.includes('A &lt;script&gt;'));
 });
+
+test('a Shop-wide default low-stock alert fills new items and is validated', async () => {
+  const { db } = fixture();
+  const store = createD1Store(db, null, {}, { householdId: a, userId: user });
+  const base = { name: 'Para', quantity: 5, form: 'Tablets', unit: 'bottle', expiry_date: '2030-01-01', location: 'Medicine cabinet' };
+  assert.equal((await store.settings()).default_low_stock_threshold, 4);
+  assert.equal((await store.create(base)).low_stock_threshold, 4);
+  const profile = { display_name: 'X', household_name: 'Y', default_storage_location: 'Medicine cabinet' };
+  assert.equal((await store.updateSettings({ ...profile, default_low_stock_threshold: '12' })).default_low_stock_threshold, 12);
+  assert.equal((await store.create({ ...base, name: 'Ibu' })).low_stock_threshold, 12);
+  assert.equal((await store.create({ ...base, name: 'Zinc', low_stock_threshold: 2 })).low_stock_threshold, 2);
+  assert.equal((await store.create({ ...base, name: 'Zero', low_stock_threshold: 0 })).low_stock_threshold, 0);
+  assert.equal((await store.updateSettings(profile)).default_low_stock_threshold, 12, 'omitting it keeps the saved value');
+  for (const bad of ['-1', '1.5', 'abc', '1000001']) await assert.rejects(store.updateSettings({ ...profile, default_low_stock_threshold: bad }), /whole number/);
+  assert.equal((await store.settings()).default_low_stock_threshold, 12);
+  const other = createD1Store(db, null, {}, { householdId: b, userId: user });
+  assert.equal((await other.settings()).default_low_stock_threshold, 4, 'another Shop is unaffected');
+});
