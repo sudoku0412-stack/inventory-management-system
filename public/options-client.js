@@ -89,6 +89,16 @@ export function bindOptions({ document, api, getRole, getShopId, toast, storage 
     // Strength is free text: the list only feeds the field's suggestions.
     const suggestions = $('#strengthOptions');
     if (suggestions) suggestions.replaceChildren(...(lists.strength || []).map(value => Object.assign(document.createElement('option'), { value })));
+    // The native suggestion list is easy to miss (phones show it only while typing), so the same values also show as tap-to-fill chips.
+    const chips = $('#strengthChips'), strengthInput = form.elements.strength;
+    if (chips) {
+      chips.replaceChildren(...(lists.strength || []).map(value => {
+        const chip = Object.assign(document.createElement('button'), { type: 'button', className: 'suggest-chip', textContent: value });
+        chip.addEventListener('click', () => { strengthInput.value = value; strengthInput.dispatchEvent(new Event('input', { bubbles: true })); });
+        return chip;
+      }));
+      chips.hidden = !(lists.strength || []).length;
+    }
   }
 
   function renderManager(manage, shopType) {
