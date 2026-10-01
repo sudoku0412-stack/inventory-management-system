@@ -1,6 +1,6 @@
-# Inventory Management System architecture
+# Design records
 
-This document is the durable technical map of the deployed system. It records decisions that are already in use and clearly separates them from planned work. Update it when an architectural decision is finalized or a planned design becomes deployed.
+This file was the original `ARCHITECTURE.md`. It keeps the detailed design decisions, API contracts and rollout notes for each feature, in the order they were designed. Some early sections describe plans that have since shipped or changed (for example, the offline queue and email notices now exist). For how the system works today, start at [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and the other documents in this folder; use this file for the reasoning behind a feature. Add a new section here when a significant design decision is made.
 
 ## Product boundary
 
