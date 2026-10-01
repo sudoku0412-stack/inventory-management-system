@@ -88,8 +88,8 @@ test('migration 0031 keeps every existing list row and Shop choice', () => {
 
 function fakeDom() {
   const make = () => ({ children: [], closest: () => null, querySelector: () => null, replaceChildren(...items) { this.children = items; }, append(item) { this.children.push(item); }, dataset: {}, addEventListener() {}, classList: { toggle() {} } });
-  const nodes = { '#strengthOptions': make(), '#addMedicineForm': { elements: { form: { name: 'form', ...make() }, unit: { name: 'unit', ...make() }, location: { name: 'location', ...make() }, strength: { closest: () => null } } }, '#defaultStorageLocation': { name: 'location', ...make() }, '#optionsCard': { hidden: false }, '#optionsLists': make() };
-  const document = { documentElement: { dataset: {} }, querySelector: selector => nodes[selector] || null, querySelectorAll: () => [], createElement: () => ({ ...make(), setAttribute() {} }) };
+  const nodes = { '#strengthOptions': make(), '#strengthChips': make(), '#addMedicineForm': { elements: { form: { name: 'form', ...make() }, unit: { name: 'unit', ...make() }, location: { name: 'location', ...make() }, strength: { value: '', closest: () => null, dispatchEvent(event) { this.fired = event.type; } } } }, '#defaultStorageLocation': { name: 'location', ...make() }, '#optionsCard': { hidden: false }, '#optionsLists': make() };
+  const document = { documentElement: { dataset: {} }, querySelector: selector => nodes[selector] || null, querySelectorAll: () => [], createElement: () => { const node = { ...make(), setAttribute() {} }; node.addEventListener = (type, handler) => { node.handler = handler; }; return node; } };
   return { document, nodes };
 }
 const lists = { form: ['Tablets'], unit: ['bottle'], location: ['Shelf'], strength: ['250 mg', '500 mg'] };
@@ -100,6 +100,26 @@ test('the strength field offers the Shop list as suggestions', async () => {
   const client = bindOptions({ document, api: async () => ({ shopType: 'medicine', lists, manage }), getRole: () => 'owner', toast() {}, storage: null, observe: false });
   await client.load({});
   assert.deepEqual(nodes['#strengthOptions'].children.map(option => option.value), ['250 mg', '500 mg']);
+});
+
+test('the strength suggestions also show as tap-to-fill chips', async () => {
+  const { document, nodes } = fakeDom();
+  const client = bindOptions({ document, api: async () => ({ shopType: 'medicine', lists, manage }), getRole: () => 'owner', toast() {}, storage: null, observe: false });
+  await client.load({});
+  const chips = nodes['#strengthChips'];
+  assert.deepEqual(chips.children.map(chip => chip.textContent), ['250 mg', '500 mg']);
+  assert.equal(chips.hidden, false);
+  chips.children[1].handler();
+  const input = nodes['#addMedicineForm'].elements.strength;
+  assert.equal(input.value, '500 mg');
+  assert.equal(input.fired, 'input');
+});
+
+test('with no suggestions the chip row stays hidden', async () => {
+  const { document, nodes } = fakeDom();
+  const client = bindOptions({ document, api: async () => ({ shopType: 'goods', lists: { ...lists, strength: [] }, manage }), getRole: () => 'owner', toast() {}, storage: null, observe: false });
+  await client.load({});
+  assert.equal(nodes['#strengthChips'].hidden, true);
 });
 
 test('the Owner list editor shows strength for medicine Shops and hides it for goods Shops', async () => {
