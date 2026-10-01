@@ -3,8 +3,10 @@ main = "worker/index.js"
 compatibility_date = "2025-04-01"
 compatibility_flags = ["nodejs_compat"]
 
+# The old hostname stays until Cloudflare Access also covers the new one and users have moved over.
 routes = [
-  { pattern = "medicineinventory.craftloop.ca", custom_domain = true }
+  { pattern = "medicineinventory.craftloop.ca", custom_domain = true },
+  { pattern = "inventory-management.craftloop.ca", custom_domain = true }
 ]
 
 [assets]
