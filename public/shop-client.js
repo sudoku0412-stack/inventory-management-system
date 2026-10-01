@@ -18,6 +18,8 @@ export async function requestShopApi(fetchImpl, path, options = {}, activeShopId
     const error = Error(data.error || 'Request failed.');
     error.status = result.status;
     error.current = data.current;
+    error.problems = data.problems;
+    error.moreProblems = data.moreProblems;
     const retryAfter = result.headers?.get?.('retry-after');
     if (typeof retryAfter === 'string' && /^\d{1,5}$/.test(retryAfter)) error.retryAfter = Number(retryAfter);
     throw error;

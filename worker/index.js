@@ -27,7 +27,7 @@ import { acceptHouseholdInvitation, createHouseholdInvitation, listHouseholdAcce
 
 const jwksCache = { at: 0, keys: null };
 
-const bootstrapAssetPaths = new Set(['/index.html', '/app.js', '/greeting.js', '/shop-client.js', '/shop-creation-client.js', '/owner-promotion-client.js', '/member-removal-client.js', '/owner-demotion-client.js', '/ownership-transfer-client.js', '/shop-leave-client.js', '/shop-deletion-client.js', '/deleted-shops-client.js', '/email-preferences-client.js', '/inventory-export-client.js', '/options-client.js', '/overview-client.js', '/barcode-client.js', '/info-tips.js', '/profile-tabs.js', '/shop-types-client.js', '/zxing-detector.js', '/vendor/zxing-reader.iife.js', '/vendor/zxing_reader.wasm', '/shop-invitations-client.js', '/change-feed-client.js', '/offline-store.js', '/offline-queue.js', '/restock-client.js', '/styles.css', '/sw.js']);
+const bootstrapAssetPaths = new Set(['/index.html', '/app.js', '/greeting.js', '/shop-client.js', '/shop-creation-client.js', '/owner-promotion-client.js', '/member-removal-client.js', '/owner-demotion-client.js', '/ownership-transfer-client.js', '/shop-leave-client.js', '/shop-deletion-client.js', '/deleted-shops-client.js', '/email-preferences-client.js', '/inventory-export-client.js', '/options-client.js', '/overview-client.js', '/barcode-client.js', '/info-tips.js', '/profile-tabs.js', '/shop-types-client.js', '/csv-import-client.js', '/zxing-detector.js', '/vendor/zxing-reader.iife.js', '/vendor/zxing_reader.wasm', '/shop-invitations-client.js', '/change-feed-client.js', '/offline-store.js', '/offline-queue.js', '/restock-client.js', '/styles.css', '/sw.js']);
 
 export function assetCacheControl(path) {
   if (path === '/index.html') return 'no-store';
@@ -403,6 +403,11 @@ export async function handleRequest(request, env, ctx) {
         ctx.waitUntil(store.deliverPushes({ contact: env.PUSH_CONTACT }));
         return json(created, 201);
       }
+      if (request.method === 'POST' && url.pathname === '/api/batches/import') {
+        const result = await store.importBatches((await readJson(request)).rows);
+        ctx.waitUntil(store.deliverPushes({ contact: env.PUSH_CONTACT }));
+        return json(result, 201);
+      }
       if (match && request.method === 'PATCH' && !match[2]) {
         const updated = await store.update(match[1], await readJson(request));
         ctx.waitUntil(store.deliverPushes({ contact: env.PUSH_CONTACT }));
@@ -449,7 +454,7 @@ export async function handleRequest(request, env, ctx) {
       }
       return json({ error: 'Not found' }, 404);
     } catch (error) {
-      return json({ error: error.message || 'Server error', ...(Object.hasOwn(error, 'current') ? { current: error.current } : {}) }, error.status || 500, error.retryAfter ? { 'retry-after': String(error.retryAfter) } : {});
+      return json({ error: error.message || 'Server error', ...(Object.hasOwn(error, 'current') ? { current: error.current } : {}), ...(Object.hasOwn(error, 'problems') ? { problems: error.problems, moreProblems: error.moreProblems } : {}) }, error.status || 500, error.retryAfter ? { 'retry-after': String(error.retryAfter) } : {});
     }
   }
 

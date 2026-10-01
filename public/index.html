@@ -249,6 +249,14 @@
               <button class="button secondary" id="exportInventoryButton" type="button">Export inventory (CSV)</button>
               <p class="access-status" id="exportInventoryStatus" role="status" aria-live="polite"></p>
             </div>
+            <div id="importInventorySection" class="shop-leave" hidden>
+              <button class="button secondary" id="importInventoryButton" type="button">Import items (CSV)</button>
+              <input id="importInventoryFile" type="file" accept=".csv,text/csv" hidden />
+              <button class="text-button" id="importInventoryTemplate" type="button">Download the CSV template</button>
+              <p class="access-meta">Needs the columns name, quantity, form and unit. Optional: strength, expiry_date (2027-03-31), location, notes, low_stock_threshold. Up to 200 items. If any row has a problem, nothing is imported.</p>
+              <p class="access-status" id="importInventoryStatus" role="status" aria-live="polite"></p>
+              <ul class="import-problems" id="importInventoryProblems" hidden></ul>
+            </div>
             <div id="leaveShopSection" class="shop-leave" hidden>
               <button class="button secondary" id="leaveShopButton" type="button">Leave this Shop</button>
               <p class="access-status" id="leaveShopStatus" role="status" aria-live="polite"></p>
