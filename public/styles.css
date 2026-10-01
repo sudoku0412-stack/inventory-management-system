@@ -329,3 +329,17 @@ tbody tr:hover { background: #f9fbfa; }
 .info-tip-text { position: fixed; z-index: 2147483647; box-sizing: border-box; width: max-content; max-width: min(280px, calc(100vw - 16px)); padding: 9px 12px; border-radius: 10px; background: #18312f; color: #fff; font-size: .8rem; font-weight: 500; line-height: 1.35; box-shadow: 0 8px 24px rgba(0,0,0,.25); pointer-events: none; }
 
 .suggest-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }.suggest-chips[hidden] { display: none; }.suggest-chip { padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: var(--ink-soft); font: inherit; font-size: .8rem; cursor: pointer; }.suggest-chip:hover, .suggest-chip:focus-visible { border-color: var(--teal); color: var(--ink); }
+
+/* Inventory header actions: themed colours, and an even grid on phones (Add on top, the other two side by side). */
+.button.action-scan { border-color: #b9dfd6; background: var(--mint); color: var(--teal-dark); }
+.button.action-scan:hover { background: #cdeee0; }
+.button.action-lists { border-color: var(--teal); background: #fff; color: var(--teal-dark); }
+.button.action-lists:hover { background: #f1f9f6; }
+@media (max-width: 760px) {
+  .inventory-heading { flex-direction: column; align-items: stretch; gap: 16px; }
+  .inventory-heading .header-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
+  .inventory-heading .header-actions .button { width: 100%; padding-inline: 10px; }
+  .inventory-heading .header-actions .add-medicine-trigger { grid-column: 1 / -1; order: -1; }
+  .inventory-heading .header-actions .action-lists[hidden] { display: none; }
+  .inventory-heading .header-actions .action-lists[hidden] ~ .action-scan { grid-column: 1 / -1; }
+}

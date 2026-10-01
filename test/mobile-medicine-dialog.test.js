@@ -37,3 +37,13 @@ test('the Restock list button is spaced from the cards above it, centered, and f
   assert.match(styles, /\.restock-open \{ display: flex; align-items: center; justify-content: center; gap: 8px; margin: 16px 0 18px; \}/);
   assert.match(styles, /@media \(max-width: 760px\) \{ \.restock-open \{ width: 100%; \} \}/);
 });
+
+test('Inventory header actions are themed and sit in an even grid on phones', () => {
+  const css = readFileSync(new URL('../public/styles.css', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.match(html, /class="button secondary action-lists"/);
+  assert.match(html, /class="button secondary action-scan scan-barcode-trigger"/);
+  assert.match(css, /\.button\.action-scan \{[^}]*background: var\(--mint\)/);
+  assert.match(css, /\.inventory-heading \.header-actions \{ display: grid; grid-template-columns: 1fr 1fr/);
+  assert.match(css, /\.add-medicine-trigger \{ grid-column: 1 \/ -1; order: -1/);
+});

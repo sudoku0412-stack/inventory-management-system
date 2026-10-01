@@ -1,5 +1,8 @@
 # Medicine Inventory Tracker — handover
 
+## Inventory header buttons: even grid and theme colours (2026-10-01)
+- CSS and class names only. On phones (<=760px) Add medicine spans the full width on top, with Manage lists and Scan barcode side by side below (Scan takes the full row when Manage lists is hidden for non-Owners). Scan barcode is mint (`.action-scan`), Manage lists is white with a teal border (`.action-lists`). Test in `test/mobile-medicine-dialog.test.js` (suite 375).
+
 ## Dropdown lists moved out of Profile (2026-10-01)
 - Client-only, no migration. The Owner list editor is now a dialog (`#optionsModal`) opened by a "Manage lists" button (`#openOptions`) in the Inventory header actions. The button is hidden unless the active Shop role is owner (`options-client.js` `renderManager`). The Profile card `#optionsCard` is gone. Tests in `test/stock-alert-strength.test.js` (suite 374).
 
