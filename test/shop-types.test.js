@@ -166,6 +166,18 @@ test('choosing a type is limited to your own types, and built-in types clear the
   assert.equal(ref.key, 'medicine');
 });
 
+test('another Owner can keep the Shop\'s current type, which is not theirs, but cannot pick it for another Shop', async () => {
+  const { db, sqlite } = fixture();
+  sqlite.prepare('INSERT INTO memberships VALUES (?,?,?,?)').run(a, u2, 'owner', 't');
+  const type = byName(await createShopType(db, u1, { name: 'Pantry', startFrom: 'goods' }), 'Pantry');
+  await setShopType(db, owner(a), type.key);
+  await setShopType(db, owner(a, u2), type.key);
+  assert.equal((await shopTypeRef(db, a)).key, type.key);
+  await assert.rejects(setShopType(db, owner(d, u2), type.key), /valid Shop type/);
+  await setShopType(db, owner(a, u2), 'goods');
+  assert.equal((await shopTypeRef(db, a)).key, 'goods');
+});
+
 test('a refused settings change can be undone to the exact previous type', async () => {
   const { db } = fixture();
   const type = byName(await createShopType(db, u1, { name: 'Pantry', startFrom: 'goods' }), 'Pantry');
