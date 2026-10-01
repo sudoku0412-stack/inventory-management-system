@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="A calm, simple inventory management system for your Shop: medicines, supplies or anything you stock." />
+    <meta name="description" content="A calm, simple inventory management system for your Shop: items, supplies or anything you stock." />
     <meta name="theme-color" content="#123e3d" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23123e3d'/%3E%3Cpath d='M19 32h26M32 19v26' stroke='%23d8f3e5' stroke-width='8' stroke-linecap='round'/%3E%3C/svg%3E" />
     <title>Inventory Management System</title>
@@ -91,10 +91,10 @@
             <div>
               <p class="eyebrow" id="todayDate">SHOP OVERVIEW</p>
               <h1 id="dashboardGreeting">Good morning, Kaushik</h1>
-              <p data-wording>Here’s what needs attention in your medicine cabinet.</p>
+              <p data-wording>Here’s what needs attention in your inventory.</p>
             </div>
             <button class="button primary add-medicine-trigger" type="button" data-wording>
-              <span aria-hidden="true">＋</span> Add medicine
+              <span aria-hidden="true">＋</span> Add item
             </button>
           </div>
 
@@ -113,7 +113,7 @@
           <div class="metric-grid" aria-label="Inventory summary">
             <button class="metric-card" type="button" data-filter-jump="all">
               <span class="metric-icon teal"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 6h12v15H6zM9 3h6v5H9zM10 13h4M10 17h4" /></svg></span>
-              <span><span class="metric-label" data-wording>Total medicines</span><strong id="totalMetric">—</strong><small id="totalMetricNote">Loading…</small></span>
+              <span><span class="metric-label" data-wording>Total items</span><strong id="totalMetric">—</strong><small id="totalMetricNote">Loading…</small></span>
             </button>
             <button class="metric-card" type="button" data-filter-jump="expiring">
               <span class="metric-icon amber"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v6l4 2" /></svg></span>
@@ -133,7 +133,7 @@
 
           <section class="section-block">
             <div class="section-heading">
-              <div><h2>Next to expire</h2><p data-wording>Medicines to use or replace first.</p></div>
+              <div><h2>Next to expire</h2><p data-wording>Items to use or replace first.</p></div>
               <button class="text-button" type="button" data-view="inventory">View all inventory <span aria-hidden="true">→</span></button>
             </div>
             <div class="expiry-list" id="expiryList"></div>
@@ -142,15 +142,15 @@
 
         <section class="view" id="inventoryView" data-view-panel="inventory" hidden>
           <div class="page-heading inventory-heading">
-            <div data-wording><p class="eyebrow">YOUR MEDICINE CABINET</p><h1>Inventory</h1><p>Search, review and update every medicine in your home.</p></div>
-            <div class="header-actions"><button class="button secondary action-lists" id="openOptions" type="button" hidden>Manage lists</button><button class="button secondary action-scan scan-barcode-trigger" type="button">Scan barcode</button><button class="button primary add-medicine-trigger" type="button" data-wording><span aria-hidden="true">＋</span> Add medicine</button></div>
+            <div data-wording><p class="eyebrow">YOUR INVENTORY</p><h1>Inventory</h1><p>Search, review and update every item in your home.</p></div>
+            <div class="header-actions"><button class="button secondary action-lists" id="openOptions" type="button" hidden>Manage lists</button><button class="button secondary action-scan scan-barcode-trigger" type="button">Scan barcode</button><button class="button primary add-medicine-trigger" type="button" data-wording><span aria-hidden="true">＋</span> Add item</button></div>
           </div>
 
           <div class="inventory-toolbar">
             <label class="search-field">
               <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4" /></svg>
-              <span class="sr-only" data-wording>Search medicines</span>
-              <input data-wording id="inventorySearch" type="search" placeholder="Search medicine, type or location…" autocomplete="off" />
+              <span class="sr-only" data-wording>Search items</span>
+              <input data-wording id="inventorySearch" type="search" placeholder="Search item, type or location…" autocomplete="off" />
             </label>
             <label class="select-field">
               <span class="sr-only">Filter inventory by status</span>
@@ -177,13 +177,13 @@
           <div class="inventory-surface">
             <div class="table-wrap">
               <table>
-                <thead><tr><th data-wording>Medicine</th><th>Status</th><th>Expiry</th><th>Quantity</th><th>Location</th><th><span class="sr-only">Actions</span></th></tr></thead>
+                <thead><tr><th data-wording>Item</th><th>Status</th><th>Expiry</th><th>Quantity</th><th>Location</th><th><span class="sr-only">Actions</span></th></tr></thead>
                 <tbody id="inventoryTableBody"></tbody>
               </table>
             </div>
             <div class="mobile-inventory" id="mobileInventory"></div>
             <div class="empty-state" id="emptyState" hidden>
-              <span aria-hidden="true">⌕</span><h2 data-wording>No medicines found</h2><p>Try a different search or status filter.</p>
+              <span aria-hidden="true">⌕</span><h2 data-wording>No items found</h2><p>Try a different search or status filter.</p>
               <button class="text-button" id="clearFilters" type="button">Clear filters</button>
             </div>
             <div class="table-footer"><span id="resultCount">Loading inventory…</span><span>Last updated just now</span></div>
@@ -211,7 +211,7 @@
 
         <section class="view" id="notificationsView" data-view-panel="notifications" hidden>
           <div class="page-heading">
-            <div data-wording><p class="eyebrow">STAY AHEAD</p><h1>Notifications</h1><p>Time-sensitive updates about your medicine cabinet.</p></div>
+            <div data-wording><p class="eyebrow">STAY AHEAD</p><h1>Notifications</h1><p>Time-sensitive updates about your inventory.</p></div>
             <div class="heading-actions">
               <button class="button secondary" id="pushAlertsBtn" type="button">Enable expiry alerts</button>
               <button class="button secondary" id="markAllRead" type="button">Mark all as read</button>
@@ -278,7 +278,7 @@
           <section class="profile-card" id="emailPreferencesCard" data-tabs="account" aria-labelledby="emailPreferencesTitle" hidden>
               <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">✉</span><div><h2 id="emailPreferencesTitle">Email notices</h2><p>Emails about Shop changes you are part of: a Shop being deleted, or ownership passing to you. Invitations are always sent.</p></div></div>
               <label class="check-row"><input type="checkbox" id="emailNoticesToggle" /> <span>Email me about Shop changes</span></label>
-              <label class="check-row"><input type="checkbox" id="emailDigestToggle" /> <span data-wording>Weekly summary: a Monday email when a medicine is expired, expiring within 30 days or running low</span></label>
+              <label class="check-row"><input type="checkbox" id="emailDigestToggle" /> <span data-wording>Weekly summary: a Monday email when an item is expired, expiring within 30 days or running low</span></label>
               <p class="access-status" id="emailPreferencesStatus" role="status" aria-live="polite"></p>
             </section>
             <section class="profile-card" data-tabs="shop" aria-labelledby="householdDetailsTitle">
@@ -288,7 +288,7 @@
               <div class="form-field"><label for="shopTypeSelect">Shop type</label><select id="shopTypeSelect" name="shop_type" aria-describedby="shopTypeHelp"><option value="medicine">Medicine</option><option value="goods">General goods</option></select><small id="shopTypeHelp">Changes the wording and default lists. Saved items are not changed. Only Owners can change this.</small></div>
             </section>
             <section class="profile-card" data-tabs="shop" aria-labelledby="medicineDefaultsTitle">
-              <div class="profile-card-heading" data-wording><span class="profile-icon" aria-hidden="true">+</span><div><h2 id="medicineDefaultsTitle">Medicine defaults</h2><p>Applied only when you add a new medicine. Existing medicines stay unchanged.</p></div></div>
+              <div class="profile-card-heading" data-wording><span class="profile-icon" aria-hidden="true">+</span><div><h2 id="medicineDefaultsTitle">Item defaults</h2><p>Applied only when you add a new item. Existing items stay unchanged.</p></div></div>
               <div class="form-field"><label for="defaultStorageLocation">Default storage location</label><select id="defaultStorageLocation" name="default_storage_location"><option>Medicine cabinet</option><option>Bathroom cabinet</option><option>Kitchen drawer</option><option>Refrigerator</option><option>First aid kit</option></select></div>
             </section>
             <section class="profile-card device-alert-card" data-tabs="account" aria-labelledby="deviceAlertsTitle">
@@ -336,7 +336,7 @@
       <nav class="mobile-nav" aria-label="Mobile navigation">
         <button class="active" type="button" data-view="dashboard" aria-current="page"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" /></svg><span>Home</span></button>
         <button type="button" data-view="inventory"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 5.5h14v15H5zM8 3.5h8v4H8zM9 12h6M9 16h4" /></svg><span>Inventory</span></button>
-        <button class="mobile-add add-medicine-trigger" type="button" aria-label="Add medicine" data-wording><span>＋</span></button>
+        <button class="mobile-add add-medicine-trigger" type="button" aria-label="Add item" data-wording><span>＋</span></button>
         <button type="button" data-view="notifications"><span class="mobile-icon-wrap"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 8h18c0-1-3-1-3-8M10 21h4" /></svg><i id="mobileNotificationCount" hidden>0</i></span><span>Alerts</span></button>
         <button type="button" id="mobileProfile" data-view="profile"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0" /></svg><span>Profile</span></button>
       </nav>
@@ -345,7 +345,7 @@
     <dialog class="modal confirm-modal" id="restockModal" aria-labelledby="restockTitle">
       <div class="modal-header"><div><span class="overline">SHOPPING</span><h2 id="restockTitle">Restock list</h2></div><button class="modal-close" type="button" id="restockClose" data-close-modal aria-label="Close">×</button></div>
       <div class="modal-body">
-        <p class="access-meta">Expired, expiring within 30 days, or low on stock. A medicine with a healthy spare pack is left off.</p>
+        <p class="access-meta">Expired, expiring within 30 days, or low on stock. An item with a healthy spare pack is left off.</p>
         <p class="access-empty" id="restockEmpty" hidden>Nothing needs restocking right now.</p>
         <ul class="access-list" id="restockList"></ul>
       </div>
@@ -374,7 +374,7 @@
     </dialog>
     <dialog class="modal" id="addMedicineModal" aria-labelledby="addMedicineTitle">
       <form id="addMedicineForm" novalidate autocomplete="off">
-        <div class="modal-header"><div><span class="overline">NEW ITEM</span><h2 id="addMedicineTitle" data-wording>Add medicine</h2></div><button class="modal-close" type="button" data-close-modal aria-label="Close add medicine dialog">×</button></div>
+        <div class="modal-header"><div><span class="overline">NEW ITEM</span><h2 id="addMedicineTitle" data-wording>Add item</h2></div><button class="modal-close" type="button" data-close-modal aria-label="Close add item dialog">×</button></div>
         <div class="modal-body">
           <div class="packaging-scan">
             <span>Packaging photo</span>
@@ -390,7 +390,7 @@
               <p id="packagingSuggestStatus" role="status"></p>
             </div>
           </div>
-          <label class="form-field full"><span data-wording>Medicine name <em>*</em></span><input data-wording id="medicineName" name="name" type="text" placeholder="e.g. Paracetamol" required autocomplete="off" /><small class="field-error"></small></label>
+          <label class="form-field full"><span data-wording>Item name <em>*</em></span><input data-wording id="medicineName" name="name" type="text" placeholder="e.g. Paracetamol, rice or batteries" required autocomplete="off" /><small class="field-error"></small></label>
           <div class="form-row">
             <label class="form-field"><span>Strength</span><input name="strength" type="text" list="strengthOptions" placeholder="e.g. 500 mg" autocomplete="off" /><datalist id="strengthOptions"></datalist><span class="suggest-chips" id="strengthChips" hidden></span></label>
             <label class="form-field"><span>Form</span><select name="form" autocomplete="off"><option>Tablets</option><option>Capsules</option><option>Liquid</option><option>Cream</option><option>Inhaler</option><option>Drops</option><option>Other</option></select></label>
@@ -445,7 +445,7 @@
       <form id="restoreShopForm" novalidate><div class="modal-header"><div><span class="overline">RECENTLY DELETED</span><h2 id="restoreShopTitle">Restore Shop?</h2></div></div><div class="modal-body"><p id="restoreShopHelp">Everyone who had access gets it back. Invitations and notification subscriptions removed when the Shop was deleted are not restored.</p><p class="access-status" id="restoreShopStatus" role="status" aria-live="polite"></p></div><div class="modal-footer"><button class="button secondary" id="cancelRestoreShop" type="button">Cancel</button><button class="button primary" id="confirmRestoreShop" type="submit">Restore Shop</button></div></form>
     </dialog>
     <dialog class="modal confirm-modal" id="deleteShopModal" aria-labelledby="deleteShopTitle" aria-describedby="deleteShopShop deleteShopHelp">
-      <form id="deleteShopForm" novalidate><div class="modal-header"><div><span class="overline">DANGER ZONE</span><h2 id="deleteShopTitle">Delete Shop?</h2></div></div><div class="modal-body"><p id="deleteShopShop"></p><p id="deleteShopHelp">Everyone loses access now. Export your inventory first if you need a copy. Medicines and photos are permanently deleted after <span id="deleteShopDaysText">14</span> days. Invitations and notifications stop immediately.</p><label for="deleteShopDays">Keep for how many days? (7 to 30)</label><input id="deleteShopDays" type="number" inputmode="numeric" min="7" max="30" step="1" value="14"><label for="deleteShopConfirm" id="deleteShopConfirmLabel">Type the Shop name to confirm</label><input id="deleteShopConfirm" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"><p class="access-status" id="deleteShopModalStatus" role="status" aria-live="polite"></p></div><div class="modal-footer"><button class="button secondary" id="cancelDeleteShop" type="button">Cancel</button><button class="button primary danger-button" id="confirmDeleteShop" type="submit" disabled>Delete Shop</button></div></form>
+      <form id="deleteShopForm" novalidate><div class="modal-header"><div><span class="overline">DANGER ZONE</span><h2 id="deleteShopTitle">Delete Shop?</h2></div></div><div class="modal-body"><p id="deleteShopShop"></p><p id="deleteShopHelp">Everyone loses access now. Export your inventory first if you need a copy. Items and photos are permanently deleted after <span id="deleteShopDaysText">14</span> days. Invitations and notifications stop immediately.</p><label for="deleteShopDays">Keep for how many days? (7 to 30)</label><input id="deleteShopDays" type="number" inputmode="numeric" min="7" max="30" step="1" value="14"><label for="deleteShopConfirm" id="deleteShopConfirmLabel">Type the Shop name to confirm</label><input id="deleteShopConfirm" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"><p class="access-status" id="deleteShopModalStatus" role="status" aria-live="polite"></p></div><div class="modal-footer"><button class="button secondary" id="cancelDeleteShop" type="button">Cancel</button><button class="button primary danger-button" id="confirmDeleteShop" type="submit" disabled>Delete Shop</button></div></form>
     </dialog>
     <dialog class="modal confirm-modal" id="removeMemberModal" aria-labelledby="removeMemberTitle" aria-describedby="removeMemberShop removeMemberHelp">
       <form id="removeMemberForm" novalidate><div class="modal-header"><div><span class="overline">SHOP ACCESS</span><h2 id="removeMemberTitle">Remove member?</h2></div></div><div class="modal-body"><p id="removeMemberShop"></p><p id="removeMemberHelp">They lose access to this Shop immediately. You can invite them again later.</p><p class="access-status" id="removeMemberStatus" role="status" aria-live="polite"></p></div><div class="modal-footer"><button class="button secondary" id="cancelRemoveMember" type="button">Cancel</button><button class="button primary" id="confirmRemoveMember" type="submit">Remove</button></div></form>
@@ -461,7 +461,7 @@
       </div>
       <div class="modal-body">
         <video id="packagingCameraVideo" autoplay playsinline muted></video>
-        <p data-wording>Allow camera access if Chrome asks. Frame the medicine name and expiry, then capture.</p>
+        <p data-wording>Allow camera access if Chrome asks. Frame the item name and expiry, then capture.</p>
       </div>
       <div class="modal-footer">
         <button class="button secondary" type="button" data-close-modal>Cancel</button>
@@ -470,7 +470,7 @@
     </dialog>
 
     <dialog class="modal batch-modal" id="batchModal" aria-labelledby="batchTitle">
-      <div class="modal-header"><div><span class="status-pill" id="batchStatus">Healthy</span><h2 id="batchTitle">Medicine details</h2><p id="batchSubtitle"></p></div><button class="modal-close" type="button" data-close-modal aria-label="Close medicine details">×</button></div>
+      <div class="modal-header"><div><span class="status-pill" id="batchStatus">Healthy</span><h2 id="batchTitle">Item details</h2><p id="batchSubtitle"></p></div><button class="modal-close" type="button" data-close-modal aria-label="Close item details">×</button></div>
       <div class="modal-body">
         <div class="detail-hero"><div class="medicine-avatar large" id="batchInitials">PA</div><div><span>Current quantity</span><strong id="batchQuantity">18 tablets</strong></div></div>
         <figure class="batch-photo" id="batchPhotoWrap" hidden><img id="batchPhoto" alt="Saved packaging photo" /></figure>
@@ -485,7 +485,7 @@
       <div class="modal-footer split"><button class="button danger-button" id="discardBatch" type="button">Discard batch</button><span><button class="button secondary" id="editBatch" type="button">Edit</button> <button class="button primary" id="consumeBatch" type="button">Mark as used</button></span></div>
     </dialog>
 
-    <div class="toast" id="toast" role="status" aria-live="polite"><span>✓</span><p>Medicine added</p></div>
+    <div class="toast" id="toast" role="status" aria-live="polite"><span>✓</span><p>Item added</p></div>
     <script type="module" src="app.js"></script>
   </body>
 </html>

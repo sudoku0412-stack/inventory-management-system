@@ -92,7 +92,7 @@ const auditColumns = [
 
 function setWrites(enabled) {
   writesEnabled = enabled === true;
-  $('banner').textContent = writesEnabled ? 'Changes are audited. Metadata only; medicine contents are never shown.' : 'Read-only. Metadata only; medicine contents are never shown.';
+  $('banner').textContent = writesEnabled ? 'Changes are audited. Metadata only; item contents are never shown.' : 'Read-only. Metadata only; item contents are never shown.';
   $('banner').classList.toggle('audited', writesEnabled);
 }
 
@@ -101,7 +101,7 @@ const views = {
     const data = await get('/admin/api/overview');
     $('who').textContent = `Signed in as ${data.admin}`;
     setWrites(data.writesEnabled);
-    const labels = [['shops', 'Shops'], ['users', 'Users'], ['memberships', 'Memberships'], ['owners', 'Owner seats'], ['pendingInvitations', 'Pending invitations'], ['emailsNeedingAttention', 'Emails needing attention'], ['emailsQueued', 'Emails queued'], ['medicines', 'Medicines (count only)'], ['changeFeedRows', 'Change-feed rows'], ['auditEventsLast24h', 'Audit events, 24h'], ['appliedMigrations', 'Applied migrations'], ['migrationState', 'Migration state']];
+    const labels = [['shops', 'Shops'], ['users', 'Users'], ['memberships', 'Memberships'], ['owners', 'Owner seats'], ['pendingInvitations', 'Pending invitations'], ['emailsNeedingAttention', 'Emails needing attention'], ['emailsQueued', 'Emails queued'], ['medicines', 'Items (count only)'], ['changeFeedRows', 'Change-feed rows'], ['auditEventsLast24h', 'Audit events, 24h'], ['appliedMigrations', 'Applied migrations'], ['migrationState', 'Migration state']];
     content.replaceChildren(el('dl', { class: 'grid' }, ...labels.map(([key, label]) => el('div', {}, el('dt', {}, label), el('dd', {}, text(data[key]))))));
     return null;
   },
@@ -143,7 +143,7 @@ const views = {
     };
     content.replaceChildren(
       el('h2', {}, text(data.shop.name)),
-      el('p', {}, `ID ${data.shop.id} · created ${when(data.shop.created_at)} · ${data.shop.medicine_count} medicines (count only)`),
+      el('p', {}, `ID ${data.shop.id} · created ${when(data.shop.created_at)} · ${data.shop.medicine_count} items (count only)`),
       ...(data.deletion ? [el('p', { class: 'note' }, data.deletion.purged_at ? `Purged ${when(data.deletion.purged_at)}.` : `Pending deletion since ${when(data.deletion.deleted_at)}; permanently purged after ${when(data.deletion.purge_after)}.`)] : []),
       ...(restoreButton ? [restoreButton, extendButton] : []),
       ...(writesEnabled || data.flags?.length ? [el('h2', {}, 'Feature flags for this Shop'), el('p', { class: 'note' }, 'A change applies on the next request. Follow global uses the Worker secret.'), table('Feature flags', [

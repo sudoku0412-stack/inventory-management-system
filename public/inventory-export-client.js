@@ -28,7 +28,7 @@ export function bindInventoryExport({ document, getContext, request, createObjec
       link.href = url; link.download = exportFileName(shopName, now()); link.rel = 'noopener';
       document.body.append(link); link.click(); link.remove();
       setTimeout(() => revokeObjectURL(url), 0);
-      status('Your export was downloaded. It lists every medicine, including discarded ones. Photos are not included.');
+      status('Your export was downloaded. It lists every item, including discarded ones. Photos are not included.');
     } catch (error) {
       const current = getContext();
       if (current?.activeShopId !== shopId) return;

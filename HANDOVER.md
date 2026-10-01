@@ -1,5 +1,10 @@
 # Inventory Management System — handover
 
+## Generic wording across the app (2026-10-02)
+- Client and message text only, no migration. Every visible "medicine" became "item" for all Shops (Add item, Total items, Item name, Item details, No items found, Search items, Inventory instead of "medicine cabinet", and the matching toasts, errors, export note and admin labels). The Gemini photo prompt now says product, and the Open Facts user agent is `InventoryManagementSystem/1.0`.
+- Kept on purpose: the Shop type choice "Medicine", the "Medicine cabinet" storage location (a data value for Medicine Shops), CSS classes and element ids. The old `data-wording` reword for General goods Shops still exists but now has almost nothing to change; Form/Category and the hidden Strength still depend on Shop type.
+- Open: custom domain (user will move off `medicineinventory.craftloop.ca` once wording is final; needs Cloudflare Access, `ACCESS_AUD`, redirect and `appUrl` changes). `test/generic-wording.test.js` guards the page text (suite 394).
+
 ## Renamed to Inventory Management System (2026-10-02)
 - User-facing name only: page title, header brand, admin title, push notification text, invitation, deletion, ownership and weekly emails (`lib/email-outbox.js`), `EMAIL_FROM`, server log, README and ARCHITECTURE. Infrastructure names are deliberately unchanged (Worker, D1 database and R2 bucket `medicine-inventory`, repo, `package.json` name, production URL), because renaming them means migrating live data.
 - The weekly email now reads "weekly inventory check". Medicine Shops still use medicine wording inside the app (`data-wording` handling); only the product name is generic.
