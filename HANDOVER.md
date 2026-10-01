@@ -1,5 +1,8 @@
 # Medicine Inventory Tracker — handover
 
+## Dropdown lists moved out of Profile (2026-10-01)
+- Client-only, no migration. The Owner list editor is now a dialog (`#optionsModal`) opened by a "Manage lists" button (`#openOptions`) in the Inventory header actions. The button is hidden unless the active Shop role is owner (`options-client.js` `renderManager`). The Profile card `#optionsCard` is gone. Tests in `test/stock-alert-strength.test.js` (suite 374).
+
 ## Strength suggestions and visible low-stock alert (2026-10-01)
 - Migration `0031_strength_suggestions.sql` (NOT yet applied to production): rebuilds `option_defaults` and `shop_options` so `list` accepts `strength`, copies all rows, seeds six medicine defaults (100/200/250/500/1000 mg, 5 mg/5 mL). Goods Shops have none.
 - Strength is a fourth list in `OPTION_LISTS` but stays FREE TEXT: it only feeds a `<datalist id="strengthOptions">` on the Add/Edit field. It is not validated, and `OPTIONAL_LISTS` in `lib/options.js` lets it be emptied (the other lists must keep one option). The Owner list editor and admin Lists tab show it for medicine Shops only.
