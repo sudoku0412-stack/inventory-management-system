@@ -11,7 +11,7 @@ export function bindShopTypes({ document, api, getContext, getCurrentKey, toast 
   let data = { builtin: BUILTIN, custom: [] };
 
   const isOwner = () => Boolean(getContext()?.shops?.some(shop => shop.role === 'owner'));
-  const say = (message, error = false) => { if (status) { status.textContent = message; status.classList?.toggle('error', error); } };
+  const say = (message, error = false) => { if (status) { status.textContent = message; status.classList?.toggle('error', error); status.classList?.toggle('success', Boolean(message) && !error); if (message) status.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }); } };
   const make = (tag, props = {}, ...children) => { const node = Object.assign(document.createElement(tag), props); node.append(...children); return node; };
   const errorText = error => error?.status === 0 || error?.message === 'Failed to fetch' ? 'Shop types need a connection.' : (error?.message || 'Something went wrong.');
 
@@ -57,6 +57,14 @@ export function bindShopTypes({ document, api, getContext, getCurrentKey, toast 
     return block;
   }
 
+  function labelChips(input) {
+    return make('span', { className: 'suggest-chips' }, ...LABEL_SUGGESTIONS.map(value => {
+      const chip = make('button', { type: 'button', className: 'suggest-chip', textContent: value });
+      chip.addEventListener('click', () => { input.value = value; });
+      return chip;
+    }));
+  }
+
   function typeBlock(type) {
     const details = make('details', { className: 'shop-type' });
     details.dataset.id = type.id;
@@ -67,12 +75,11 @@ export function bindShopTypes({ document, api, getContext, getCurrentKey, toast 
     name.setAttribute('aria-label', `Name of ${type.name}`);
     const strength = make('input', { type: 'checkbox', checked: type.usesStrength });
     const label = make('input', { type: 'text', maxLength: 20, value: type.formLabel, required: true });
-    label.setAttribute('list', 'formLabelOptions');
     const save = make('button', { type: 'submit', className: 'button secondary', textContent: 'Save type' });
     const settings = make('form', { className: 'shop-type-settings' },
       make('label', { className: 'form-field' }, make('span', { textContent: 'Name' }), name),
       make('label', { className: 'check-row' }, strength, make('span', { textContent: 'Show the Strength field' })),
-      make('label', { className: 'form-field' }, make('span', { textContent: 'Label for Form' }), label), save);
+      make('label', { className: 'form-field' }, make('span', { textContent: 'Label for Form' }), label), labelChips(label), save);
     settings.addEventListener('submit', event => { event.preventDefault(); change('/api/shop-types/update', { id: type.id, name: name.value, usesStrength: strength.checked, formLabel: label.value }, `${name.value.trim() || type.name} saved.`); });
     const remove = make('button', { type: 'button', className: 'button secondary danger-button', textContent: 'Delete type', disabled: type.shopCount > 0 });
     remove.setAttribute('aria-label', `Delete ${type.name}`);
@@ -111,10 +118,10 @@ export function bindShopTypes({ document, api, getContext, getCurrentKey, toast 
       data = await api(path, { method: 'POST', body: JSON.stringify(body) });
       render();
       for (const node of listHost.querySelectorAll('details')) if (open.has(node.dataset.id)) node.open = true;
-      say('Saved.'); if (message) toast?.(message);
+      say(message || 'Saved.'); if (message && !modal?.open) toast?.(message);
       return true;
     } catch (error) {
-      say(errorText(error), true); toast?.(errorText(error));
+      say(errorText(error), true); if (!modal?.open) toast?.(errorText(error));
       return false;
     }
   }

@@ -384,3 +384,5 @@ tbody tr:hover { background: #f9fbfa; }
 .shop-type > :not(summary) { margin-left: 14px; margin-right: 14px; }
 .shop-type > h4 { margin-top: 14px; margin-bottom: 6px; }
 .shop-type > .danger-button { margin-bottom: 14px; }
+#shopTypesStatus.success { padding: 10px 14px; border-radius: 10px; background: #e6f4ef; color: #0f5c4d; font-weight: 600; }
+#shopTypesStatus.error { padding: 10px 14px; border-radius: 10px; background: #fbeaea; }

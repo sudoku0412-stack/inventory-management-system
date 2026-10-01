@@ -396,3 +396,22 @@ test('creating a type pops a message and each type summarises itself in plain wo
   assert.ok(texts.includes('Used by 2 Shops · Strength hidden · Form is called “Category”'));
   assert.ok(texts.includes('Edit') && texts.includes('Dropdown choices'));
 });
+
+test('while the dialog is open the confirmation shows inside it, not as a hidden toast', async () => {
+  const { document, nodes } = clientDom();
+  const toasts = [], classes = {};
+  nodes['#shopTypesStatus'].classList = { toggle: (name, on) => { classes[name] = on; } };
+  nodes['#shopTypesModal'].open = true;
+  bindShopTypes({ document, api: async () => ({ builtin: [], custom: [pantry] }), getContext: ownerContext, getCurrentKey: () => 'medicine', toast: message => toasts.push(message) });
+  const form = nodes['#newShopTypeForm'];
+  form.elements.name.value = 'Pantry';
+  await form.listeners.submit({ preventDefault() {} });
+  assert.deepEqual(toasts, []);
+  assert.match(nodes['#shopTypesStatus'].textContent, /Pantry created/);
+  assert.equal(classes.success, true);
+});
+
+test('the Form label field is plain text with chips, not a native suggestion list', () => {
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.doesNotMatch(html, /formLabelOptions/);
+});
