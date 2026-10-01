@@ -343,3 +343,21 @@ tbody tr:hover { background: #f9fbfa; }
   .inventory-heading .header-actions .action-lists[hidden] { display: none; }
   .inventory-heading .header-actions .action-lists[hidden] ~ .action-scan { grid-column: 1 / -1; }
 }
+
+/* Profile page: section tabs and even spacing between cards. */
+.profile-tabs { display: flex; gap: 4px; max-width: 900px; margin: 0 0 20px; padding: 4px; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+.profile-tab { flex: 1 1 0; min-height: 42px; padding: 8px 14px; border: 0; border-radius: 10px; background: transparent; color: var(--ink-soft); font: inherit; font-weight: 600; cursor: pointer; }
+.profile-tab:hover { background: #f1f7f5; color: var(--ink); }
+.profile-tab.active, .profile-tab[aria-selected="true"] { background: var(--teal); color: #fff; box-shadow: 0 5px 14px rgba(40,125,118,.2); }
+.profile-tab:focus-visible { outline: 3px solid rgba(40,125,118,.35); outline-offset: 2px; }
+.tab-off { display: none !important; }
+#profileView > .profile-card { max-width: 900px; margin: 0 0 18px; }
+#profileView .profile-layout { margin-bottom: 18px; }
+#profileView .household-access { margin-top: 0; padding-top: 0; border-top: 0; }
+#profileView .profile-layout .profile-card { align-self: start; }
+@media (max-width: 760px) {
+  #profileView > .profile-card { margin-bottom: 13px; }
+  .profile-tabs { position: sticky; top: 0; z-index: 5; margin-bottom: 14px; }
+}
+.check-row { display: flex; align-items: flex-start; gap: 10px; margin: 0 0 12px; cursor: pointer; }
+.check-row input { flex: none; width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--teal); }
