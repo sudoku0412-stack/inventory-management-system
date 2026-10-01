@@ -1,6 +1,7 @@
 // Owner overview: per-Shop summary cards, one combined item list with a Shop filter, a printable report
 // (opened in its own window; the browser's Print dialog saves it as a PDF) and a combined CSV download.
 const STATUS_LABELS = { expired: 'Expired', expiring: 'Expiring soon', low: 'Low stock', healthy: 'Healthy', unknown: 'No expiry date' };
+const COLUMN_LABELS = ['Shop', 'Item', 'Quantity', 'Expiry', 'Location', 'Status'];
 const COUNT_LABELS = [['total', 'Items'], ['expired', 'Expired'], ['expiring', 'Expiring soon'], ['low', 'Low stock']];
 
 export const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
@@ -53,7 +54,7 @@ export function bindOverview({ document, api, request, getContext, toast, openWi
       }
       const view = Object.assign(document.createElement('button'), { type: 'button', className: 'text-button', textContent: 'Show items' });
       view.setAttribute('aria-label', `Show items for ${shop.name}`);
-      view.addEventListener('click', () => { $('overviewShop').value = shop.id; renderTable(); });
+      view.addEventListener('click', () => { $('overviewShop').value = shop.id; renderTable(); $('overviewTable').closest?.('.inventory-surface')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }); });
       card.append(title, type, grid, view);
       return card;
     }));
@@ -74,8 +75,10 @@ export function bindOverview({ document, api, request, getContext, toast, openWi
     body.replaceChildren(...rows.map(item => {
       const tr = document.createElement('tr');
       const cells = [item.shopName, item.strength ? `${item.name} (${item.strength})` : item.name, `${item.quantity} ${item.unit}`, item.expiry_date || '—', item.location || '—'];
-      for (const text of cells) tr.append(Object.assign(document.createElement('td'), { textContent: text }));
+      // data-label lets phones show each cell as "Label: value" instead of a wide table column.
+      cells.forEach((text, index) => { const cell = Object.assign(document.createElement('td'), { textContent: text }); cell.dataset.label = COLUMN_LABELS[index]; tr.append(cell); });
       const pill = document.createElement('td');
+      pill.dataset.label = COLUMN_LABELS[5];
       pill.append(Object.assign(document.createElement('span'), { className: `status-pill ${item.status}`, textContent: STATUS_LABELS[item.status] || item.status }));
       tr.append(pill);
       return tr;
