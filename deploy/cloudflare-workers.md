@@ -1,4 +1,4 @@
-# Deploy to https://medicineinventory.craftloop.ca (always on, no Mac, no tunnel)
+# Deploy to https://inventory-management.craftloop.ca (always on, no Mac, no tunnel)
 
 This app runs on **Cloudflare Workers** with **D1** (inventory), **R2** (packaging photos), and **KV** (VAPID keys). Your phone opens the domain over HTTPS and can use **Take photo** for scanning.
 
@@ -6,7 +6,7 @@ Local `npm start` still works for development (SQLite in `data/`). Production da
 
 ## Before you publish
 
-1. **Cloudflare Access** on `medicineinventory.craftloop.ca` (Zero Trust → Access → self-hosted app). Configure Google and/or Apple identity providers and allow only intended household accounts. Apple requires an Apple Developer Service ID, configured return URL and domain association in Apple’s portal, then the provider configuration in Cloudflare; keep all Apple credentials in the respective consoles.
+1. **Cloudflare Access** on `inventory-management.craftloop.ca` (Zero Trust → Access → self-hosted app). Configure Google and/or Apple identity providers and allow only intended household accounts. Apple requires an Apple Developer Service ID, configured return URL and domain association in Apple’s portal, then the provider configuration in Cloudflare; keep all Apple credentials in the respective consoles.
 2. **Gemini key** as a Worker secret for packaging scan.
 
 ## One-time Cloudflare setup
@@ -67,7 +67,7 @@ echo true | npx wrangler secret put SHOP_PURGE_ENABLED     # cron permanently pu
 
 Enable admin changes first so a deleted Shop can be restored. These secrets are global defaults; staff can override `SHOP_DELETION_ENABLED` and `SHOP_PURGE_ENABLED` for a single Shop in `/admin` (migration 0023), and an override wins immediately. Without `SHOP_PURGE_ENABLED` the 15-minute cron only logs what it would purge. Turn a flag off with `npx wrangler secret delete NAME`; the change takes effect immediately.
 
-7. Attach the custom domain in the Cloudflare dashboard if Wrangler has not already linked `medicineinventory.craftloop.ca`.
+7. Attach the custom domain in the Cloudflare dashboard if Wrangler has not already linked `inventory-management.craftloop.ca`.
 
 ## Deploy
 
@@ -75,7 +75,7 @@ Enable admin changes first so a deleted Shop can be restored. These secrets are 
 npm run deploy
 ```
 
-Open **https://medicineinventory.craftloop.ca** on your phone, sign in with Access, then **Add medicine → Take photo**.
+Open **https://inventory-management.craftloop.ca** on your phone, sign in with Access, then **Add item → Take photo**.
 
 ## What runs where
 
