@@ -179,7 +179,28 @@ function requireInvitationAcceptanceRequest(request, url) {
   if (request.headers.get('origin') !== url.origin || request.headers.get('sec-fetch-site') === 'cross-site') throw Object.assign(new Error('This invitation request must come from this site.'), { status: 403 });
 }
 
+/**
+ * After a move to a new hostname: requests that reach the old hostname (LEGACY_HOST) are sent to APP_URL with the same
+ * path and query. The target host always comes from APP_URL, never from the request, so this cannot redirect elsewhere.
+ * Without LEGACY_HOST (local runs, tests) nothing is redirected.
+ */
+export function legacyRedirect(request, env) {
+  const legacy = String(env.LEGACY_HOST || '').trim().toLowerCase();
+  if (!legacy || !env.APP_URL) return null;
+  const url = new URL(request.url);
+  if (url.hostname.toLowerCase() !== legacy) return null;
+  let target;
+  try { target = new URL(env.APP_URL); } catch { return null; }
+  if (target.hostname.toLowerCase() === legacy) return null;
+  target.pathname = url.pathname;
+  target.search = url.search;
+  const safe = request.method === 'GET' || request.method === 'HEAD';
+  return new Response(null, { status: safe ? 301 : 308, headers: { location: target.toString(), 'cache-control': 'public, max-age=86400' } });
+}
+
 export async function handleRequest(request, env, ctx) {
+  const redirected = legacyRedirect(request, env);
+  if (redirected) return redirected;
   const url = new URL(request.url);
   if (url.pathname === '/admin' || url.pathname.startsWith('/admin/')) return handleAdmin(request, env, url);
   if (url.pathname.startsWith('/api/')) {

@@ -1,5 +1,9 @@
 # Inventory Management System — handover
 
+## Old host redirects to the new one (2026-10-02)
+- `legacyRedirect` in `worker/index.js` runs first in `handleRequest`: requests for `LEGACY_HOST` (`medicineinventory.craftloop.ca`, set in `wrangler.toml`) get a 301 (308 for non-GET/HEAD) to `APP_URL` with the same path and query, cached for a day. The target host comes only from `APP_URL`. No `LEGACY_HOST` means no redirect (local runs, tests). Tests in `test/legacy-redirect.test.js` (suite 433).
+- The old host is still listed in the Access applications, so a signed-out visitor sees the Access login for the old host before the redirect. Remove the old host from both Access applications and from `routes` in `wrangler.toml` only once nobody uses it any more; the redirect then stops working for it.
+
 ## New domain and repo name (2026-10-02)
 - Repo renamed to `sudoku0412-stack/inventory-management-system` (GitHub redirects the old URL; the local `origin` was updated). The npm package name, Worker, D1 database and R2 bucket keep `medicine-inventory`.
 - New hostname `inventory-management.craftloop.ca` is added to `wrangler.toml` routes NEXT TO the old `medicineinventory.craftloop.ca`. `APP_URL` is still the OLD host on purpose: until Cloudflare Access covers the new host, emails must keep linking to the working one.
