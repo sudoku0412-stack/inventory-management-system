@@ -41,6 +41,7 @@ function tenantDatabase(displayName = 'Legacy', { compatibilityMigration = true 
   sqlite.exec(readFileSync(new URL('../migrations/0006_household_invitation_expiration.sql', import.meta.url), 'utf8'));
   sqlite.exec(readFileSync(new URL('../migrations/0007_sync_mutation_foundation.sql', import.meta.url), 'utf8'));
   sqlite.exec(readFileSync(new URL('../migrations/0008_household_display_name_source.sql', import.meta.url), 'utf8'));
+  sqlite.exec(readFileSync(new URL('../migrations/0034_default_low_stock_threshold.sql', import.meta.url), 'utf8'));
   if (compatibilityMigration) sqlite.exec(readFileSync(new URL('../migrations/0009_seed_legacy_household_display_names.sql', import.meta.url), 'utf8'));
   sqlite.exec(readFileSync(new URL('../migrations/0010_access_audit.sql', import.meta.url), 'utf8'));
   sqlite.exec(readFileSync(new URL('../migrations/0011_user_shop_preferences.sql', import.meta.url), 'utf8'));
