@@ -8,7 +8,7 @@
 
 **Tech Stack:** Vanilla browser JS modules, Service Worker API, IndexedDB, existing Cloudflare Worker asset allowlists.
 
-**Spec:** `docs/superpowers/specs/2026-09-29-offline-use-design.md` (this plan is slice 1: components 1 and 2; slice 2 is a later plan).
+**Spec:** `docs/history/2026-09-29-offline-use-design.md` (this plan is slice 1: components 1 and 2; slice 2 is a later plan).
 
 ## Global Constraints
 

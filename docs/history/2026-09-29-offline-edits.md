@@ -8,7 +8,7 @@
 
 **Tech Stack:** Vanilla browser JS modules, IndexedDB, existing REST API.
 
-**Spec:** `docs/superpowers/specs/2026-09-29-offline-use-design.md` (components 3 to 5). Slice 1 (`docs/superpowers/plans/2026-09-29-offline-read.md`) is deployed.
+**Spec:** `docs/history/2026-09-29-offline-use-design.md` (components 3 to 5). Slice 1 (`docs/history/2026-09-29-offline-read.md`) is deployed.
 
 ## Global Constraints
 
