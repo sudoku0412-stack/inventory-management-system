@@ -74,15 +74,17 @@ form.addEventListener('submit', async event => {
   }
 });
 
+// Tables are real tables on wide screens. On phones the stylesheet turns each row into a card and shows data-label before each value.
 function table(caption, columns, rows) {
   const head = el('tr', {}, ...columns.map(column => el('th', { scope: 'col' }, column.label)));
   const body = rows.map(row => el('tr', {}, ...columns.map(column => {
-    const cell = el('td');
+    const cell = el('td', { 'data-label': column.label });
     const value = column.render ? column.render(row) : text(row[column.key]);
     cell.append(value);
     return cell;
   })));
-  return el('div', { class: 'scroll' }, el('table', {}, el('caption', { class: 'sr' }, caption), el('thead', {}, head), el('tbody', {}, ...body)));
+  const wrap = el('div', { class: 'scroll' }, el('table', {}, el('caption', { class: 'sr' }, caption), el('thead', {}, head), el('tbody', {}, ...body)));
+  return rows.length ? wrap : el('div', {}, el('h3', { class: 'table-title' }, caption), el('p', { class: 'note' }, 'Nothing to show yet.'));
 }
 
 const auditColumns = [
@@ -144,8 +146,10 @@ const views = {
     content.replaceChildren(
       el('h2', {}, text(data.shop.name)),
       el('p', {}, `ID ${data.shop.id} · created ${when(data.shop.created_at)} · ${data.shop.medicine_count} items (count only)`),
-      el('p', {}, `Shop type: ${data.shopType.name}${data.shopType.custom ? ` (made by ${data.shopType.ownerEmail || 'a former Owner'})` : ''} · Strength ${data.shopType.usesStrength ? 'shown' : 'hidden'} · Form labelled ${data.shopType.formLabel}`),
-      el('p', { class: 'note' }, ['form', 'unit', 'location', 'strength'].map(list => `${{ form: 'Form / category', unit: 'Unit', location: 'Storage location', strength: 'Strength' }[list]}: ${data.shopType.lists[list].length ? data.shopType.lists[list].join(', ') : '—'}`).join(' · ')),
+      el('div', { class: 'typebox' },
+        el('p', { class: 'typehead' }, `Shop type: ${data.shopType.name}${data.shopType.custom ? ` (made by ${data.shopType.ownerEmail || 'a former Owner'})` : ''}`),
+        el('p', { class: 'note' }, `Strength ${data.shopType.usesStrength ? 'shown' : 'hidden'} · Form labelled ${data.shopType.formLabel}`),
+        ...['form', 'unit', 'location', 'strength'].map(list => el('p', { class: 'note' }, `${{ form: 'Form / category', unit: 'Unit', location: 'Storage location', strength: 'Strength' }[list]}: ${data.shopType.lists[list].length ? data.shopType.lists[list].join(', ') : '—'}`))),
       ...(data.deletion ? [el('p', { class: 'note' }, data.deletion.purged_at ? `Purged ${when(data.deletion.purged_at)}.` : `Pending deletion since ${when(data.deletion.deleted_at)}; permanently purged after ${when(data.deletion.purge_after)}.`)] : []),
       ...(restoreButton ? [restoreButton, extendButton] : []),
       ...(writesEnabled || data.flags?.length ? [el('h2', {}, 'Feature flags for this Shop'), el('p', { class: 'note' }, 'A change applies on the next request. Follow global uses the Worker secret.'), table('Feature flags', [
@@ -191,7 +195,7 @@ const views = {
       wrap.append(el('h2', {}, names[type]));
       for (const list of ['form', 'unit', 'location', 'strength']) {
         if (list === 'strength' && type === 'goods') continue;
-        const row = el('p', {}, el('strong', {}, `${listNames[list]}: `));
+        const row = el('p', { class: 'listrow' }, el('strong', {}, `${listNames[list]}: `));
         for (const value of data[type][list]) {
           const remove = el('button', { type: 'button', class: 'danger', 'aria-label': `Remove ${value} from ${names[type]} ${listNames[list]}` }, `${value} ×`);
           remove.disabled = !writesEnabled;
@@ -240,7 +244,7 @@ function route() {
   const [name, arg] = (location.hash.slice(1) || 'overview').split('/');
   const tab = views[name] ? name : 'overview';
   for (const link of document.querySelectorAll('#tabs a')) {
-    if (link.dataset.tab === (tab === 'shop' ? 'shops' : tab)) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
+    if (link.dataset.tab === (tab === 'shop' ? 'shops' : tab)) { link.setAttribute('aria-current', 'page'); link.scrollIntoView?.({ block: 'nearest', inline: 'center' }); } else link.removeAttribute('aria-current');
   }
   cursor = null; loader = () => run(tab, cursor, arg);
   run(tab, null, arg);
