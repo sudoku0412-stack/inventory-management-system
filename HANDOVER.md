@@ -1,5 +1,11 @@
 # Medicine Inventory Tracker — handover
 
+## Profile page split into Account / Shop / People tabs (2026-10-01)
+- Client-only, no migration. Cause of the "overlapping" cards: several Profile cards had no margin, so they touched. `#profileView > .profile-card` now has one margin rule.
+- New `public/profile-tabs.js` (in all three allowlists). Each card carries `data-tabs="account|shop|people"` (the Save row has `account shop`); the module toggles a `tab-off` class (`display: none !important`), so cards stay in the DOM and their own scripts and the `hidden` attribute keep working. The last tab is kept in `sessionStorage`; arrow keys, Home and End move between tabs.
+- Account: Profile, Email notices (moved inside `#profileSettingsForm`), Device alerts, Sign out. Shop: Current Shop (selector, export, leave, delete), Shop name and type, defaults, Overview link, Create another Shop, Recently deleted Shops. People: Shop invitations (sent to you) and Shop access.
+- One Save button still saves the whole form, shown on the Account and Shop tabs. Added `.check-row` styles for the email checkboxes. Gap: a pending-invitation signal on the People tab, and focus calls aimed at a card on another tab do nothing. Tests in `test/profile-tabs.test.js` (suite 384).
+
 ## Inventory header buttons: even grid and theme colours (2026-10-01)
 - CSS and class names only. On phones (<=760px) Add medicine spans the full width on top, with Manage lists and Scan barcode side by side below (Scan takes the full row when Manage lists is hidden for non-Owners). Scan barcode is mint (`.action-scan`), Manage lists is white with a teal border (`.action-lists`). Test in `test/mobile-medicine-dialog.test.js` (suite 375).
 

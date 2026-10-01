@@ -233,7 +233,12 @@
           <div class="page-heading">
             <div><p class="eyebrow">YOUR SHOP</p><h1>Profile &amp; settings</h1><p>Keep the names and defaults your Shop sees every day up to date.</p></div>
           </div>
-          <section class="profile-card shop-selector-card" id="shopSelectorCard" aria-labelledby="shopSelectorTitle" hidden>
+          <div class="profile-tabs" role="tablist" aria-label="Profile sections">
+            <button class="profile-tab" type="button" role="tab" id="profileTabAccount" data-profile-tab="account" aria-selected="true">Account</button>
+            <button class="profile-tab" type="button" role="tab" id="profileTabShop" data-profile-tab="shop" aria-selected="false" tabindex="-1">Shop</button>
+            <button class="profile-tab" type="button" role="tab" id="profileTabPeople" data-profile-tab="people" aria-selected="false" tabindex="-1">People</button>
+          </div>
+          <section class="profile-card shop-selector-card" id="shopSelectorCard" data-tabs="shop" aria-labelledby="shopSelectorTitle" hidden>
             <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">⌁</span><div><h2 id="shopSelectorTitle">Current Shop</h2><p>Choose the Shop whose inventory and settings you want to use.</p></div></div>
             <div id="shopSelectorBusy">
               <label class="form-field" for="shopSelector"><span>Shop</span><select id="shopSelector" aria-describedby="shopSwitchStatus"></select></label>
@@ -253,18 +258,7 @@
               <p class="access-status" id="deleteShopStatus" role="status" aria-live="polite"></p>
             </div>
           </section>
-          <section class="profile-card" id="emailPreferencesCard" aria-labelledby="emailPreferencesTitle" hidden>
-            <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">✉</span><div><h2 id="emailPreferencesTitle">Email notices</h2><p>Emails about Shop changes you are part of: a Shop being deleted, or ownership passing to you. Invitations are always sent.</p></div></div>
-            <label class="check-row"><input type="checkbox" id="emailNoticesToggle" /> <span>Email me about Shop changes</span></label>
-            <label class="check-row"><input type="checkbox" id="emailDigestToggle" /> <span data-wording>Weekly summary: a Monday email when a medicine is expired, expiring within 30 days or running low</span></label>
-            <p class="access-status" id="emailPreferencesStatus" role="status" aria-live="polite"></p>
-          </section>
-          <section class="profile-card" id="deletedShopsCard" aria-labelledby="deletedShopsTitle" tabindex="-1" hidden>
-            <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">↺</span><div><h2 id="deletedShopsTitle">Recently deleted Shops</h2><p>Shops you own that were deleted. You can restore one until its keep period ends; after that it is permanently removed.</p></div></div>
-            <p class="access-status" id="deletedShopsStatus" role="status" aria-live="polite"></p>
-            <ul class="access-list" id="deletedShopsList"></ul>
-          </section>
-          <section class="profile-card shop-invitations-card" id="shopInvitationsCard" aria-labelledby="shopInvitationsTitle" hidden>
+          <section class="profile-card shop-invitations-card" id="shopInvitationsCard" data-tabs="people" aria-labelledby="shopInvitationsTitle" hidden>
             <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">✉</span><div><h2 id="shopInvitationsTitle">Shop invitations</h2><p>Invitations sent to your signed-in account. Joining adds Member access and keeps your current Shop open.</p></div></div>
             <p class="access-status" id="shopInvitationsStatus" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></p>
             <ul class="shop-invitation-list" id="shopInvitationsList" aria-busy="false"></ul>
@@ -276,41 +270,52 @@
               <button class="button secondary" id="shopInvitationsReload" type="button" hidden>Reload Shops</button>
             </div>
           </section>
-          <section class="profile-card" id="overviewProfileCard" data-owner-overview aria-labelledby="overviewProfileTitle" hidden>
-            <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">▤</span><div><h2 id="overviewProfileTitle">Overview of all your Shops</h2><p>See stock across every Shop you own and print a report.</p></div></div>
-            <button class="button secondary" type="button" data-view="overview">Open overview</button>
-          </section>
-          <section class="profile-card create-shop-card" id="createShopCard" aria-labelledby="createShopTitle" hidden>
-            <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">+</span><div><h2 id="createShopTitle">Create another Shop</h2><p>Create a separate, empty Shop. Your current Shop will stay open.</p></div></div>
-            <button class="button secondary" id="createShopButton" type="button">Create another Shop</button>
-            <p class="access-status" id="createShopUnavailable" role="status" hidden></p>
-          </section>
           <form class="profile-layout" id="profileSettingsForm" novalidate>
-            <section class="profile-card" aria-labelledby="profileDetailsTitle">
+            <section class="profile-card" data-tabs="account" aria-labelledby="profileDetailsTitle">
               <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">●</span><div><h2 id="profileDetailsTitle">Profile</h2><p>Your name appears in the dashboard greeting and avatar.</p></div></div>
               <div class="form-field"><label for="displayName">Display name</label><input id="displayName" name="display_name" type="text" minlength="1" maxlength="60" required autocomplete="name" aria-describedby="displayNameHelp" /><small id="displayNameHelp">1–60 characters</small></div>
             </section>
-            <section class="profile-card" aria-labelledby="householdDetailsTitle">
+          <section class="profile-card" id="emailPreferencesCard" data-tabs="account" aria-labelledby="emailPreferencesTitle" hidden>
+              <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">✉</span><div><h2 id="emailPreferencesTitle">Email notices</h2><p>Emails about Shop changes you are part of: a Shop being deleted, or ownership passing to you. Invitations are always sent.</p></div></div>
+              <label class="check-row"><input type="checkbox" id="emailNoticesToggle" /> <span>Email me about Shop changes</span></label>
+              <label class="check-row"><input type="checkbox" id="emailDigestToggle" /> <span data-wording>Weekly summary: a Monday email when a medicine is expired, expiring within 30 days or running low</span></label>
+              <p class="access-status" id="emailPreferencesStatus" role="status" aria-live="polite"></p>
+            </section>
+            <section class="profile-card" data-tabs="shop" aria-labelledby="householdDetailsTitle">
               <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">⌂</span><div><h2 id="householdDetailsTitle">Shop</h2><p>This is the label shown in the sidebar.</p></div></div>
               <p class="shop-role" id="shopRole" hidden></p>
               <div class="form-field"><label for="householdName">Shop name</label><input id="householdName" name="household_name" type="text" minlength="1" maxlength="80" required autocomplete="organization" aria-describedby="householdNameHelp" /><small id="householdNameHelp">1–80 characters</small></div>
               <div class="form-field"><label for="shopTypeSelect">Shop type</label><select id="shopTypeSelect" name="shop_type" aria-describedby="shopTypeHelp"><option value="medicine">Medicine</option><option value="goods">General goods</option></select><small id="shopTypeHelp">Changes the wording and default lists. Saved items are not changed. Only Owners can change this.</small></div>
             </section>
-            <section class="profile-card" aria-labelledby="medicineDefaultsTitle">
+            <section class="profile-card" data-tabs="shop" aria-labelledby="medicineDefaultsTitle">
               <div class="profile-card-heading" data-wording><span class="profile-icon" aria-hidden="true">+</span><div><h2 id="medicineDefaultsTitle">Medicine defaults</h2><p>Applied only when you add a new medicine. Existing medicines stay unchanged.</p></div></div>
               <div class="form-field"><label for="defaultStorageLocation">Default storage location</label><select id="defaultStorageLocation" name="default_storage_location"><option>Medicine cabinet</option><option>Bathroom cabinet</option><option>Kitchen drawer</option><option>Refrigerator</option><option>First aid kit</option></select></div>
             </section>
-            <section class="profile-card device-alert-card" aria-labelledby="deviceAlertsTitle">
+            <section class="profile-card device-alert-card" data-tabs="account" aria-labelledby="deviceAlertsTitle">
               <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">⌁</span><div><h2 id="deviceAlertsTitle">Device alerts</h2><p id="deviceAlertStatus">Check expiry alerts in Notifications for this device.</p></div></div>
               <button class="text-button" type="button" data-view="notifications">Manage expiry alerts <span aria-hidden="true">→</span></button>
             </section>
-            <section class="profile-card sign-out-card" aria-labelledby="signOutTitle">
+            <section class="profile-card sign-out-card" data-tabs="account" aria-labelledby="signOutTitle">
               <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">↪</span><div><h2 id="signOutTitle">Sign out</h2><p>Sign out of Cloudflare Access on this device.</p></div></div>
               <a class="button secondary" href="/cdn-cgi/access/logout">Sign out</a>
             </section>
-            <div class="profile-save-row"><p id="profileSaveStatus" role="status" aria-live="polite"></p><button class="button primary" id="saveProfileSettings" type="submit" disabled>Save changes</button></div>
+            <div class="profile-save-row" data-tabs="account shop"><p id="profileSaveStatus" role="status" aria-live="polite"></p><button class="button primary" id="saveProfileSettings" type="submit" disabled>Save changes</button></div>
           </form>
-          <section class="household-access" id="householdAccess" aria-labelledby="householdAccessTitle">
+          <section class="profile-card" id="overviewProfileCard" data-tabs="shop" data-owner-overview aria-labelledby="overviewProfileTitle" hidden>
+            <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">▤</span><div><h2 id="overviewProfileTitle">Overview of all your Shops</h2><p>See stock across every Shop you own and print a report.</p></div></div>
+            <button class="button secondary" type="button" data-view="overview">Open overview</button>
+          </section>
+          <section class="profile-card create-shop-card" id="createShopCard" data-tabs="shop" aria-labelledby="createShopTitle" hidden>
+            <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">+</span><div><h2 id="createShopTitle">Create another Shop</h2><p>Create a separate, empty Shop. Your current Shop will stay open.</p></div></div>
+            <button class="button secondary" id="createShopButton" type="button">Create another Shop</button>
+            <p class="access-status" id="createShopUnavailable" role="status" hidden></p>
+          </section>
+          <section class="profile-card" id="deletedShopsCard" data-tabs="shop" aria-labelledby="deletedShopsTitle" tabindex="-1" hidden>
+            <div class="profile-card-heading"><span class="profile-icon" aria-hidden="true">↺</span><div><h2 id="deletedShopsTitle">Recently deleted Shops</h2><p>Shops you own that were deleted. You can restore one until its keep period ends; after that it is permanently removed.</p></div></div>
+            <p class="access-status" id="deletedShopsStatus" role="status" aria-live="polite"></p>
+            <ul class="access-list" id="deletedShopsList"></ul>
+          </section>
+          <section class="household-access" id="householdAccess" data-tabs="people" aria-labelledby="householdAccessTitle">
             <div class="section-heading"><div><h2 id="householdAccessTitle" tabindex="-1">Shop access</h2><p id="householdAccessIntro">Loading Shop access…</p></div></div>
             <p id="householdAccessStatus" class="access-status" role="status" aria-live="polite"></p>
             <div id="householdAccessContent" hidden>
