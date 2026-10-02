@@ -391,3 +391,13 @@ tbody tr:hover { background: #f9fbfa; }
 .import-problems { margin: 8px 0 0; padding: 10px 14px 10px 30px; border-radius: 10px; background: #fbeaea; color: #8a2d28; font-size: .9rem; }
 .import-problems[hidden] { display: none; }
 #importInventorySection { display: grid; gap: 8px; justify-items: start; }
+.history-block { margin-top: 18px; }
+.history-block h2, .history-block h3 { margin: 0 0 6px; }
+.history-list { margin: 8px 0 0; padding: 0; list-style: none; border: 1px solid var(--line); border-radius: 12px; background: #fff; max-height: 320px; overflow-y: auto; }
+.history-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; padding: 10px 14px; border-bottom: 1px solid var(--line); border-left: 4px solid var(--line); }
+.history-row:last-child { border-bottom: 0; }
+.history-row small { color: var(--ink-soft); }
+.history-row.added { border-left-color: var(--teal); }
+.history-row.used { border-left-color: #d9822b; }
+.history-row.discarded { border-left-color: #c0443d; }
+.history-block[hidden] { display: none; }

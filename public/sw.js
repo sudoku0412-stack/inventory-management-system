@@ -3,7 +3,7 @@
 const SHELL_CACHE = 'inventory-shell-v1';
 // Caches from before the rename are removed on activation too.
 const CACHE_PREFIXES = ['medicine-shell-', 'inventory-shell-'];
-const PRECACHE = ['/', '/index.html', '/app.js', '/greeting.js', '/shop-client.js', '/shop-creation-client.js', '/owner-promotion-client.js', '/member-removal-client.js', '/owner-demotion-client.js', '/ownership-transfer-client.js', '/shop-leave-client.js', '/shop-deletion-client.js', '/deleted-shops-client.js', '/email-preferences-client.js', '/inventory-export-client.js', '/options-client.js', '/overview-client.js', '/barcode-client.js', '/info-tips.js', '/profile-tabs.js', '/shop-types-client.js', '/csv-import-client.js', '/zxing-detector.js', '/shop-invitations-client.js', '/change-feed-client.js', '/offline-store.js', '/offline-queue.js', '/restock-client.js', '/styles.css'];
+const PRECACHE = ['/', '/index.html', '/app.js', '/greeting.js', '/shop-client.js', '/shop-creation-client.js', '/owner-promotion-client.js', '/member-removal-client.js', '/owner-demotion-client.js', '/ownership-transfer-client.js', '/shop-leave-client.js', '/shop-deletion-client.js', '/deleted-shops-client.js', '/email-preferences-client.js', '/inventory-export-client.js', '/options-client.js', '/overview-client.js', '/barcode-client.js', '/info-tips.js', '/profile-tabs.js', '/shop-types-client.js', '/csv-import-client.js', '/stock-history-client.js', '/zxing-detector.js', '/shop-invitations-client.js', '/change-feed-client.js', '/offline-store.js', '/offline-queue.js', '/restock-client.js', '/styles.css'];
 const STATIC_FILE = /\.(?:js|css|png|svg|ico|webmanifest|json)$/;
 
 self.addEventListener('install', event => {
