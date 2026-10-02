@@ -129,16 +129,6 @@
             </button>
           </div>
 
-          <button class="button secondary bulk-toggle" id="bulkToggle" type="button" aria-pressed="false">Select items</button>
-          <div class="bulk-bar" id="bulkBar" role="region" aria-label="Actions for selected items" hidden>
-            <strong id="bulkCount" aria-live="polite">Tap items to select them</strong>
-            <span class="bulk-actions">
-              <button class="button secondary" id="bulkAll" type="button">Select all shown</button>
-              <button class="button secondary" id="bulkMove" type="button" disabled>Move…</button>
-              <button class="button danger-button" id="bulkDiscard" type="button" disabled>Discard…</button>
-              <button class="text-button" id="bulkCancel" type="button">Cancel</button>
-            </span>
-          </div>
           <button class="button secondary restock-open" type="button" data-open-restock>Restock list <span data-restock-count>0</span></button>
 
           <section class="section-block">
@@ -177,6 +167,16 @@
 
           <button class="button secondary restock-open" type="button" data-open-restock>Restock list <span data-restock-count>0</span></button>
 
+          <button class="button secondary bulk-toggle" id="bulkToggle" type="button" aria-pressed="false">Select items</button>
+          <div class="bulk-bar" id="bulkBar" role="region" aria-label="Actions for selected items" hidden>
+            <strong id="bulkCount" aria-live="polite">Tap items to select them</strong>
+            <span class="bulk-actions">
+              <button class="button secondary" id="bulkAll" type="button">Select all shown</button>
+              <button class="button secondary" id="bulkMove" type="button" disabled>Move…</button>
+              <button class="button danger-button" id="bulkDiscard" type="button" disabled>Discard…</button>
+              <button class="text-button" id="bulkCancel" type="button">Cancel</button>
+            </span>
+          </div>
           <div class="filter-chips" role="group" aria-label="Quick status filters">
             <button class="filter-chip active" type="button" data-filter="all" aria-pressed="true">All <span id="allCount">—</span></button>
             <button class="filter-chip" type="button" data-filter="expiring" aria-pressed="false">Expiring soon <span id="expiringCount">—</span></button>
