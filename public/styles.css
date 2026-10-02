@@ -401,3 +401,13 @@ tbody tr:hover { background: #f9fbfa; }
 .history-row.used { border-left-color: #d9822b; }
 .history-row.discarded { border-left-color: #c0443d; }
 .history-block[hidden] { display: none; }
+.bulk-toggle { align-self: flex-start; margin-bottom: 12px; }
+.bulk-toggle[aria-pressed="true"] { background: var(--teal); color: #fff; border-color: var(--teal); }
+.bulk-bar { position: sticky; top: 0; z-index: 4; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin: 0 0 12px; padding: 10px 14px; border: 1px solid var(--teal); border-radius: 12px; background: #eaf5f2; }
+.bulk-bar[hidden] { display: none; }
+.bulk-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.bulk-mode [data-batch-id] { cursor: pointer; }
+.bulk-mode tr[data-batch-id] td:first-child .medicine-cell::before, .bulk-mode .mobile-medicine::before { content: "☐"; font-size: 1.25rem; margin-right: 10px; color: var(--ink-soft); }
+.bulk-mode .selected td:first-child .medicine-cell::before, .bulk-mode .mobile-medicine.selected::before { content: "☑"; color: var(--teal); }
+.bulk-mode tr.selected td, .bulk-mode .mobile-medicine.selected { background: #eaf5f2; }
+.bulk-mode .mobile-medicine { align-items: center; }

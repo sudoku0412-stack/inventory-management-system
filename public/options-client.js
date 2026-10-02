@@ -199,5 +199,5 @@ export function bindOptions({ document, api, getRole, getShopId, toast, storage 
     return data;
   }
 
-  return { load, applyType, goodsWording, term: text => type === 'goods' ? goodsWording(text) : text, get shopType() { return type; }, get typeKey() { return info.key; }, get typeInfo() { return info; } };
+  return { load, applyType, get lists() { return data?.lists; }, goodsWording, term: text => type === 'goods' ? goodsWording(text) : text, get shopType() { return type; }, get typeKey() { return info.key; }, get typeInfo() { return info; } };
 }

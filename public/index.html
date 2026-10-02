@@ -129,6 +129,16 @@
             </button>
           </div>
 
+          <button class="button secondary bulk-toggle" id="bulkToggle" type="button" aria-pressed="false">Select items</button>
+          <div class="bulk-bar" id="bulkBar" role="region" aria-label="Actions for selected items" hidden>
+            <strong id="bulkCount" aria-live="polite">Tap items to select them</strong>
+            <span class="bulk-actions">
+              <button class="button secondary" id="bulkAll" type="button">Select all shown</button>
+              <button class="button secondary" id="bulkMove" type="button" disabled>Move…</button>
+              <button class="button danger-button" id="bulkDiscard" type="button" disabled>Discard…</button>
+              <button class="text-button" id="bulkCancel" type="button">Cancel</button>
+            </span>
+          </div>
           <button class="button secondary restock-open" type="button" data-open-restock>Restock list <span data-restock-count>0</span></button>
 
           <section class="section-block">
@@ -360,6 +370,24 @@
         <button type="button" id="mobileProfile" data-view="profile"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0" /></svg><span>Profile</span></button>
       </nav>
     </div>
+
+    <dialog class="modal confirm-modal" id="bulkMoveModal" aria-labelledby="bulkMoveTitle">
+      <div class="modal-header"><div><span class="overline">INVENTORY</span><h2 id="bulkMoveTitle">Move items</h2></div><button class="modal-close" type="button" data-close-modal aria-label="Close">×</button></div>
+      <div class="modal-body">
+        <p id="bulkMoveText"></p>
+        <label class="form-field"><span>Storage location</span><select id="bulkMoveLocation"></select></label>
+        <p class="access-status" id="bulkMoveStatus" role="status" aria-live="polite"></p>
+      </div>
+      <div class="modal-footer"><button class="button secondary" type="button" data-close-modal>Cancel</button><button class="button primary" id="bulkMoveConfirm" type="button">Move</button></div>
+    </dialog>
+    <dialog class="modal confirm-modal" id="bulkDiscardModal" aria-labelledby="bulkDiscardTitle">
+      <div class="modal-header"><div><span class="overline">INVENTORY</span><h2 id="bulkDiscardTitle">Discard items?</h2></div><button class="modal-close" type="button" data-close-modal aria-label="Close">×</button></div>
+      <div class="modal-body">
+        <p id="bulkDiscardText"></p>
+        <p class="access-status" id="bulkDiscardStatus" role="status" aria-live="polite"></p>
+      </div>
+      <div class="modal-footer"><button class="button secondary" type="button" data-close-modal>Cancel</button><button class="button danger-button" id="bulkDiscardConfirm" type="button">Discard</button></div>
+    </dialog>
 
     <dialog class="modal confirm-modal" id="restockModal" aria-labelledby="restockTitle">
       <div class="modal-header"><div><span class="overline">SHOPPING</span><h2 id="restockTitle">Restock list</h2></div><button class="modal-close" type="button" id="restockClose" data-close-modal aria-label="Close">×</button></div>
