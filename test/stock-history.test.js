@@ -125,7 +125,11 @@ test('the item and Shop lists fill from the server and hide when empty or offlin
   assert.equal(nodes['#shopHistoryList'].children[0].children[0].textContent, 'Para: Used 3 tablet · 7 tablet now');
   reply = { events: [], usedLast30Days: 0 };
   await history.showItem('b1');
-  assert.equal(nodes['#batchHistory'].hidden, true);
+  assert.equal(nodes['#batchHistory'].hidden, false, 'an item with no history says so instead of vanishing');
+  assert.equal(nodes['#batchHistoryList'].hidden, true);
+  assert.match(nodes['#batchUsage'].textContent, /No changes recorded yet/);
+  await history.showShop();
+  assert.match(nodes['#shopHistoryUsage'].textContent, /No changes recorded yet/);
   reply = new Error('Failed to fetch');
   await history.showItem('b1'); await history.showShop();
   assert.equal(nodes['#batchHistory'].hidden, true);
