@@ -2,10 +2,12 @@
 // Selecting is a mode: while it is on, tapping a row ticks it instead of opening the item. Needs a connection.
 export const BULK_LIMIT = 100;
 
-export function bindBulkSelect({ document, api, getRecords, getLocations, onDone, toast }) {
+export function bindBulkSelect({ document, api, getRecords, getLocations, getForms = () => [], getFormLabel = () => 'Form', getShops = () => [], onDone, toast }) {
   const node = id => document.querySelector(`#${id}`);
   const view = node('inventoryView'), toggle = node('bulkToggle'), bar = node('bulkBar'), count = node('bulkCount');
   const all = node('bulkAll'), move = node('bulkMove'), discard = node('bulkDiscard'), cancel = node('bulkCancel');
+  const form = node('bulkForm'), formModal = node('bulkFormModal'), formSelect = node('bulkFormValue'), formConfirm = node('bulkFormConfirm'), formStatus = node('bulkFormStatus'), formText = node('bulkFormText');
+  const copy = node('bulkCopy'), copyModal = node('bulkCopyModal'), copySelect = node('bulkCopyShop'), copyConfirm = node('bulkCopyConfirm'), copyStatus = node('bulkCopyStatus'), copyText = node('bulkCopyText'), copyProblems = node('bulkCopyProblems');
   const moveModal = node('bulkMoveModal'), moveSelect = node('bulkMoveLocation'), moveConfirm = node('bulkMoveConfirm'), moveStatus = node('bulkMoveStatus');
   const discardModal = node('bulkDiscardModal'), discardText = node('bulkDiscardText'), discardConfirm = node('bulkDiscardConfirm'), discardStatus = node('bulkDiscardStatus');
   if (!view || !toggle || !bar) return { refresh() {}, get active() { return false; } };
@@ -26,7 +28,9 @@ export function bindBulkSelect({ document, api, getRecords, getLocations, onDone
       if (active) row.setAttribute('aria-selected', String(on)); else row.removeAttribute('aria-selected');
     }
     count.textContent = selected.size ? `${plural(selected.size)} selected` : 'Tap items to select them';
-    for (const button of [move, discard]) button.disabled = busy || selected.size === 0;
+    for (const button of [move, discard, form, copy]) if (button) button.disabled = busy || selected.size === 0;
+    if (form) form.textContent = `Change ${getFormLabel().toLowerCase()}…`;
+    if (copy) copy.hidden = getShops().length === 0;
     all.textContent = selected.size && selected.size === getRecords().length ? 'Clear selection' : 'Select all shown';
   }
 
@@ -64,19 +68,20 @@ export function bindBulkSelect({ document, api, getRecords, getLocations, onDone
   document.addEventListener('click', interceptClick, true);
   document.addEventListener('keydown', interceptKey, true);
 
-  async function send(body, statusNode, confirmButton, doneText) {
+  async function send(body, statusNode, confirmButton, doneText, { path = '/api/batches/bulk', modal = null, problemsNode = null } = {}) {
     if (busy) return;
-    busy = true; confirmButton.disabled = true; statusNode.textContent = 'Working…'; refresh();
+    busy = true; confirmButton.disabled = true; statusNode.textContent = 'Working…'; if (problemsNode) problemsNode.replaceChildren(); refresh();
     try {
-      const result = await api('/api/batches/bulk', { method: 'POST', body: JSON.stringify(body) });
+      const result = await api(path, { method: 'POST', body: JSON.stringify(body) });
       const message = `${doneText(result.changed)}${result.skipped ? ` Skipped ${result.skipped} that no longer ${result.skipped === 1 ? 'exists' : 'exist'}.` : ''}`;
       statusNode.textContent = '';
       toast?.(message);
-      (body.action === 'move' ? moveModal : discardModal)?.close?.();
+      (modal || (body.action === 'move' ? moveModal : discardModal))?.close?.();
       setActive(false);
       await onDone?.(result);
     } catch (error) {
       statusNode.textContent = error.status === 0 || error.message === 'Failed to fetch' ? 'This needs a connection. Try again when you are online.' : error.message;
+      if (problemsNode) problemsNode.replaceChildren(...(error.problems || []).map(item => Object.assign(document.createElement('li'), { textContent: `${item.name || `Row ${item.row}`}: ${item.message}` })));
     } finally { busy = false; confirmButton.disabled = false; refresh(); }
   }
 
@@ -98,6 +103,32 @@ export function bindBulkSelect({ document, api, getRecords, getLocations, onDone
     if (discardModal && !discardModal.open) discardModal.showModal();
   });
   discardConfirm.addEventListener('click', () => send({ action: 'discard', ids: [...selected] }, discardStatus, discardConfirm, n => `Discarded ${plural(n)}.`));
+
+  form?.addEventListener('click', () => {
+    if (!selected.size || busy) return;
+    const forms = getForms(), label = getFormLabel();
+    formSelect.replaceChildren(...forms.map(value => Object.assign(document.createElement('option'), { value, textContent: value })));
+    formStatus.textContent = forms.length ? '' : `Add a ${label.toLowerCase()} under Manage lists first.`;
+    formConfirm.disabled = !forms.length;
+    formText.textContent = `Set the ${label.toLowerCase()} of ${plural(selected.size)} to:`;
+    if (formModal && !formModal.open) formModal.showModal();
+  });
+  formConfirm?.addEventListener('click', () => send({ action: 'form', ids: [...selected], form: formSelect.value }, formStatus, formConfirm, n => `Changed the ${getFormLabel().toLowerCase()} of ${plural(n)} to ${formSelect.value}.`, { modal: formModal }));
+
+  copy?.addEventListener('click', () => {
+    if (!selected.size || busy) return;
+    const shops = getShops();
+    copySelect.replaceChildren(...shops.map(shop => Object.assign(document.createElement('option'), { value: shop.id, textContent: shop.name })));
+    copyStatus.textContent = shops.length ? '' : 'You need another Shop to copy to.';
+    copyProblems?.replaceChildren();
+    copyConfirm.disabled = !shops.length;
+    copyText.textContent = `Copy ${plural(selected.size)} to:`;
+    if (copyModal && !copyModal.open) copyModal.showModal();
+  });
+  copyConfirm?.addEventListener('click', () => {
+    const shop = getShops().find(item => item.id === copySelect.value);
+    send({ ids: [...selected], targetShopId: copySelect.value }, copyStatus, copyConfirm, n => `Copied ${plural(n)} to ${shop?.name || 'the other Shop'}. The originals stay here.`, { path: '/api/batches/copy', modal: copyModal, problemsNode: copyProblems });
+  });
 
   return { refresh, get active() { return active; }, get selected() { return [...selected]; } };
 }

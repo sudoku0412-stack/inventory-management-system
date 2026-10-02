@@ -173,6 +173,8 @@
             <span class="bulk-actions">
               <button class="button secondary" id="bulkAll" type="button">Select all shown</button>
               <button class="button secondary" id="bulkMove" type="button" disabled>Move…</button>
+              <button class="button secondary" id="bulkForm" type="button" disabled>Change form…</button>
+              <button class="button secondary" id="bulkCopy" type="button" disabled hidden>Copy to Shop…</button>
               <button class="button danger-button" id="bulkDiscard" type="button" disabled>Discard…</button>
               <button class="text-button" id="bulkCancel" type="button">Cancel</button>
             </span>
@@ -379,6 +381,26 @@
         <p class="access-status" id="bulkMoveStatus" role="status" aria-live="polite"></p>
       </div>
       <div class="modal-footer"><button class="button secondary" type="button" data-close-modal>Cancel</button><button class="button primary" id="bulkMoveConfirm" type="button">Move</button></div>
+    </dialog>
+    <dialog class="modal confirm-modal" id="bulkFormModal" aria-labelledby="bulkFormTitle">
+      <div class="modal-header"><div><span class="overline">INVENTORY</span><h2 id="bulkFormTitle">Change form or category</h2></div><button class="modal-close" type="button" data-close-modal aria-label="Close">×</button></div>
+      <div class="modal-body">
+        <p id="bulkFormText"></p>
+        <label class="form-field"><span>Choose from this Shop’s list</span><select id="bulkFormValue"></select></label>
+        <p class="access-status" id="bulkFormStatus" role="status" aria-live="polite"></p>
+      </div>
+      <div class="modal-footer"><button class="button secondary" type="button" data-close-modal>Cancel</button><button class="button primary" id="bulkFormConfirm" type="button">Change</button></div>
+    </dialog>
+    <dialog class="modal confirm-modal" id="bulkCopyModal" aria-labelledby="bulkCopyTitle">
+      <div class="modal-header"><div><span class="overline">INVENTORY</span><h2 id="bulkCopyTitle">Copy to another Shop</h2></div><button class="modal-close" type="button" data-close-modal aria-label="Close">×</button></div>
+      <div class="modal-body">
+        <p id="bulkCopyText"></p>
+        <label class="form-field"><span>Shop</span><select id="bulkCopyShop"></select></label>
+        <p class="access-meta">Copies name, strength, form, unit, quantity, expiry, location, notes and low-stock alert. Photos and history stay with the original. The other Shop’s lists must include the form and unit.</p>
+        <p class="access-status" id="bulkCopyStatus" role="status" aria-live="polite"></p>
+        <ul class="import-problems" id="bulkCopyProblems"></ul>
+      </div>
+      <div class="modal-footer"><button class="button secondary" type="button" data-close-modal>Cancel</button><button class="button primary" id="bulkCopyConfirm" type="button">Copy</button></div>
     </dialog>
     <dialog class="modal confirm-modal" id="bulkDiscardModal" aria-labelledby="bulkDiscardTitle">
       <div class="modal-header"><div><span class="overline">INVENTORY</span><h2 id="bulkDiscardTitle">Discard items?</h2></div><button class="modal-close" type="button" data-close-modal aria-label="Close">×</button></div>

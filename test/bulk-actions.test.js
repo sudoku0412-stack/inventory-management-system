@@ -25,7 +25,7 @@ function shops() {
   const photos = { put: async () => {}, delete: async key => { deleted.push(key); } };
   const one = createD1Store(db, photos, {}, { householdId: 'h1', userId: 'u1' });
   const two = createD1Store(db, photos, {}, { householdId: 'h2', userId: 'u3' });
-  return { sqlite, one, two, deleted };
+  return { sqlite, db, one, two, deleted };
 }
 
 test('moving items changes their location, bumps the revision and feeds the change log', async () => {
@@ -159,4 +159,114 @@ test('each new control sits inside the screen it belongs to', () => {
   inside('shopHistory', 'id="notificationsView"', 'id="profileView"');
   inside('batchHistory', 'id="batchModal"', '</dialog>');
   inside('importInventorySection', 'id="profileView"', 'id="batchModal"');
+});
+
+/* Change form and copy to another Shop */
+import { setShopType } from '../lib/options.js';
+import { parseCopy } from '../lib/bulk-actions.js';
+
+test('parseBulk and parseCopy validate the new actions', () => {
+  assert.deepEqual(parseBulk({ action: 'form', ids: ['a'], form: ' Syrup ' }), { action: 'form', ids: ['a'], form: 'Syrup' });
+  for (const bad of [{ action: 'form', ids: ['a'] }, { action: 'form', ids: ['a'], form: '  ' }, { action: 'form', ids: ['a'], form: 'x'.repeat(31) }]) assert.throws(() => parseBulk(bad), error => error.status === 400);
+  assert.deepEqual(parseCopy({ ids: ['a', 'a', 'b'], targetShopId: 'h2' }), { ids: ['a', 'b'], targetShopId: 'h2' });
+  for (const bad of [null, {}, { ids: [], targetShopId: 'h2' }, { ids: ['a'] }, { ids: ['a'], targetShopId: '' }, { ids: [1], targetShopId: 'h2' }]) assert.throws(() => parseCopy(bad), error => error.status === 400);
+  assert.throws(() => parseCopy({ ids: Array.from({ length: BULK_LIMIT + 1 }, (_, i) => `i${i}`), targetShopId: 'h2' }), error => error.status === 413);
+});
+
+test('changing the form sets it on every selected item, matching the Shop list ignoring case', async () => {
+  const { sqlite, one } = shops();
+  const a = await one.create({ ...base, name: 'A' }), b = await one.create({ ...base, name: 'B' });
+  assert.deepEqual(await one.bulkChange({ action: 'form', ids: [a.id, b.id], form: 'syrup' }), { changed: 2, skipped: 0 });
+  assert.deepEqual((await one.list()).map(item => item.form), ['Syrup', 'Syrup']);
+  assert.equal(sqlite.prepare("SELECT count(*) n FROM batch_changes WHERE revision=2").get().n, 2);
+  await assert.rejects(one.bulkChange({ action: 'form', ids: [a.id], form: 'Not a form' }), /not in this Shop/);
+  assert.equal((await one.list())[0].form, 'Syrup');
+});
+
+function twoShops({ targetGoods = false, role = 'member' } = {}) {
+  const ctx = shops();
+  ctx.sqlite.prepare('INSERT INTO memberships VALUES (?,?,?,?)').run('h2', 'u1', role, 't');
+  return ctx;
+}
+
+test('copying adds new items to the other Shop, keeps the originals, and records history there', async () => {
+  const { sqlite, one, two } = twoShops();
+  const a = await one.create({ ...base, name: 'A', strength: '5 mg', notes: 'n', low_stock_threshold: 2, photo: 'data:image/jpeg;base64,/9j/' });
+  const b = await one.create({ ...base, name: 'B', quantity: 9 });
+  assert.deepEqual(await one.copyToShop({ ids: [a.id, b.id], targetShopId: 'h2' }), { copied: 2, skipped: 0 });
+  assert.equal((await one.list()).length, 2, 'originals stay');
+  const copies = await two.list();
+  assert.deepEqual(copies.map(item => [item.name, item.quantity, item.strength, item.notes, item.low_stock_threshold, item.has_photo]), [['A', 4, '5 mg', 'n', 2, false], ['B', 9, '', '', 4, false]]);
+  assert.notEqual(copies[0].id, a.id);
+  assert.equal(sqlite.prepare("SELECT count(*) n FROM batch_changes WHERE household_id='h2'").get().n, 2);
+  assert.deepEqual(sqlite.prepare("SELECT item_name,kind,change FROM stock_events WHERE household_id='h2' ORDER BY item_name").all().map(row => ({ ...row })), [{ item_name: 'A', kind: 'added', change: 4 }, { item_name: 'B', kind: 'added', change: 9 }]);
+});
+
+test('copy is refused for non-members, the same Shop, unknown items and lists that do not fit, all without side effects', async () => {
+  const { sqlite, db, one, two } = shops();
+  const a = await one.create({ ...base, name: 'A' });
+  await assert.rejects(one.copyToShop({ ids: [a.id], targetShopId: 'h2' }), error => error.status === 403);
+  sqlite.prepare('INSERT INTO memberships VALUES (?,?,?,?)').run('h2', 'u1', 'member', 't');
+  await assert.rejects(one.copyToShop({ ids: [a.id], targetShopId: 'h1' }), /different Shop/);
+  await assert.rejects(one.copyToShop({ ids: ['nope'], targetShopId: 'h2' }), error => error.status === 404);
+  await setShopType(db, { userId: 'u3', householdId: 'h2', role: 'owner' }, 'goods');
+  await assert.rejects(one.copyToShop({ ids: [a.id], targetShopId: 'h2' }), error => {
+    assert.equal(error.status, 422);
+    assert.equal(error.problems[0].name, 'A');
+    assert.match(error.problems[0].message, /other Shop’s Form list/);
+    assert.match(error.message, /Nothing was copied/);
+    return true;
+  });
+  assert.equal((await two.list()).length, 0);
+  assert.equal(sqlite.prepare("SELECT count(*) n FROM stock_events WHERE household_id='h2'").get().n, 0);
+});
+
+test('items from another Shop cannot be copied by id', async () => {
+  const { one, two } = twoShops();
+  const theirs = await two.create({ ...base, name: 'Theirs' });
+  await assert.rejects(one.copyToShop({ ids: [theirs.id], targetShopId: 'h2' }), error => error.status === 404);
+});
+
+test('the bar offers Change form and Copy to Shop, and posts to the right routes', async () => {
+  const { document, nodes, rowNodes, captured } = dom();
+  for (const id of ['bulkForm', 'bulkFormModal', 'bulkFormValue', 'bulkFormConfirm', 'bulkFormStatus', 'bulkFormText', 'bulkCopy', 'bulkCopyModal', 'bulkCopyShop', 'bulkCopyConfirm', 'bulkCopyStatus', 'bulkCopyText', 'bulkCopyProblems']) {
+    nodes[`#${id}`] = { hidden: false, disabled: false, textContent: '', children: [], listeners: {}, value: '', open: false, classList: { toggle() {} }, addEventListener(type, fn) { this.listeners[type] = fn; }, replaceChildren(...items) { this.children = items; }, showModal() { this.open = true; }, close() { this.open = false; } };
+  }
+  const sent = [], toasts = [];
+  let fail = null;
+  bindBulkSelect({ document, api: async (path, options) => { sent.push([path, JSON.parse(options.body)]); if (fail) throw fail; return { changed: 2, copied: 2, skipped: 0 }; }, getRecords: () => ['a', 'b', 'c'].map(id => ({ id })), getLocations: () => [],
+    getForms: () => ['Tablets', 'Syrup'], getFormLabel: () => 'Category', getShops: () => [{ id: 's2', name: 'Second' }], toast: message => toasts.push(message) });
+  nodes['#bulkToggle'].listeners.click();
+  assert.equal(nodes['#bulkForm'].textContent, 'Change category…');
+  assert.equal(nodes['#bulkCopy'].hidden, false);
+  click(captured, rowNodes[0]); click(captured, rowNodes[1]);
+  nodes['#bulkForm'].listeners.click();
+  assert.equal(nodes['#bulkFormText'].textContent, 'Set the category of 2 items to:');
+  nodes['#bulkFormValue'].value = 'Syrup';
+  await nodes['#bulkFormConfirm'].listeners.click();
+  assert.deepEqual(sent[0], ['/api/batches/bulk', { action: 'form', ids: ['a', 'b'], form: 'Syrup' }]);
+  assert.equal(toasts[0], 'Changed the category of 2 items to Syrup.');
+  nodes['#bulkToggle'].listeners.click();
+  click(captured, rowNodes[2]);
+  nodes['#bulkCopy'].listeners.click();
+  assert.equal(nodes['#bulkCopyText'].textContent, 'Copy 1 item to:');
+  nodes['#bulkCopyShop'].value = 's2';
+  fail = Object.assign(new Error('Nothing was copied. 1 item does not fit the other Shop’s lists.'), { status: 422, problems: [{ row: 2, name: 'C', message: 'Form “Tablets” is not in the other Shop’s Form list.' }] });
+  await nodes['#bulkCopyConfirm'].listeners.click();
+  assert.deepEqual(sent[1], ['/api/batches/copy', { ids: ['c'], targetShopId: 's2' }]);
+  assert.match(nodes['#bulkCopyStatus'].textContent, /Nothing was copied/);
+  assert.equal(nodes['#bulkCopyProblems'].children[0].textContent, 'C: Form “Tablets” is not in the other Shop’s Form list.');
+  assert.equal(nodes['#bulkCopyModal'].open, true);
+  fail = null;
+  await nodes['#bulkCopyConfirm'].listeners.click();
+  assert.equal(toasts.at(-1), 'Copied 2 items to Second. The originals stay here.');
+  assert.equal(nodes['#bulkCopyModal'].open, false);
+});
+
+test('Copy to Shop is hidden when there is no other Shop', () => {
+  const { document, nodes } = dom();
+  nodes['#bulkCopy'] = { hidden: false, disabled: false, textContent: '', addEventListener() {} };
+  nodes['#bulkForm'] = { hidden: false, disabled: false, textContent: '', addEventListener() {} };
+  bindBulkSelect({ document, api: async () => ({}), getRecords: () => [], getLocations: () => [], getShops: () => [], toast() {} }).refresh();
+  assert.equal(nodes['#bulkCopy'].hidden, true);
 });
