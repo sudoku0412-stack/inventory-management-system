@@ -149,3 +149,14 @@ test('the page has the select toggle, action bar and both dialogs', () => {
   const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
   for (const id of ['bulkToggle', 'bulkBar', 'bulkMoveModal', 'bulkMoveLocation', 'bulkDiscardModal', 'bulkDiscardConfirm']) assert.match(html, new RegExp(`id="${id}"`));
 });
+
+test('each new control sits inside the screen it belongs to', () => {
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const at = text => { const index = html.indexOf(text); assert.ok(index >= 0, text); return index; };
+  const inside = (id, start, end) => { const from = at(start), to = html.indexOf(end, from); assert.ok(at(`id="${id}"`) > from && at(`id="${id}"`) < to, `${id} is inside ${start}`); };
+  inside('bulkToggle', 'id="inventoryView"', 'id="overviewView"');
+  inside('bulkBar', 'id="inventoryView"', 'id="overviewView"');
+  inside('shopHistory', 'id="notificationsView"', 'id="profileView"');
+  inside('batchHistory', 'id="batchModal"', '</dialog>');
+  inside('importInventorySection', 'id="profileView"', 'id="batchModal"');
+});
