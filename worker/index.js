@@ -8,7 +8,7 @@ import {
   visionConfig
 } from '../lib/shared.js';
 import { createD1Store, loadVapid } from '../lib/store-d1.js';
-import { adminShopTypes, adminActivity, adminAudit, adminEmailOutbox, adminOverview, adminShopDetail, adminShops, adminExtendShop, adminRestoreShop, adminRevokeInvitation, adminSetShopFlag, authorizeAdmin, writeAdminAudit } from '../lib/admin.js';
+import { adminShopTypes, adminActivity, adminAudit, adminEmailOutbox, adminOverview, adminShopDetail, adminShops, adminExtendShop, adminRestoreShop, adminRevokeInvitation, adminSetShopFlag, adminUpdateShopType, adminChangeShopTypeOption, authorizeAdmin, writeAdminAudit } from '../lib/admin.js';
 import { listBatchChanges, parseChangeQuery, pruneBatchChanges } from '../lib/batch-changes.js';
 import { purgeDeletedShops } from '../lib/shop-purge.js';
 import { effectiveFlag } from '../lib/feature-flags.js';
@@ -109,7 +109,8 @@ async function handleAdmin(request, env, url) {
       await writeAdminAudit(env.DB, { email: admin.email, action: `option-default.${body.action}`, target: `${body.shopType}/${body.list}/${String(body.value).slice(0, 30)}`, requestId });
       return json(await (body.action === 'add' ? addDefaultOption : removeDefaultOption)(env.DB, body), 200, adminHeaders);
     }
-    const writeRoute = request.method === 'POST' && api ? url.pathname.match(/^\/admin\/api\/shops\/([^/]+)\/(?:invitations\/([^/]+)\/revoke|restore|extend|flags)$/) : null;
+    const typeRoute = request.method === 'POST' && api ? url.pathname.match(/^\/admin\/api\/shop-types\/([^/]+)\/(update|options)$/) : null;
+    const writeRoute = typeRoute || (request.method === 'POST' && api ? url.pathname.match(/^\/admin\/api\/shops\/([^/]+)\/(?:invitations\/([^/]+)\/revoke|restore|extend|flags)$/) : null);
     if (request.method !== 'GET' && request.method !== 'HEAD' && !writeRoute) return json({ error: 'Not found' }, 405, { ...adminHeaders, allow: 'GET, HEAD' });
     const writesEnabled = env.ADMIN_WRITES_ENABLED === 'true';
     if (writeRoute) {
@@ -117,7 +118,9 @@ async function handleAdmin(request, env, url) {
       if (!/^application\/json(?:\s*;|$)/i.test(request.headers.get('content-type') || '')) return json({ error: 'Content-Type must be application/json.' }, 400, adminHeaders);
       if (request.headers.get('origin') !== url.origin || request.headers.get('sec-fetch-site') === 'cross-site' || request.headers.get('x-admin-action') !== '1') return json({ error: 'This admin change must come from the console.' }, 403, adminHeaders);
       const body = await readJson(request);
-      const done = writeRoute[2]
+      const done = typeRoute
+        ? await (typeRoute[2] === 'update' ? adminUpdateShopType : adminChangeShopTypeOption)(env.DB, admin, typeRoute[1], body, { requestId })
+        : writeRoute[2]
         ? await adminRevokeInvitation(env.DB, admin, { shopId: writeRoute[1], invitationId: writeRoute[2] }, body, { requestId })
         : url.pathname.endsWith('/extend')
           ? await adminExtendShop(env.DB, admin, writeRoute[1], body, { requestId })
@@ -133,7 +136,7 @@ async function handleAdmin(request, env, url) {
       if (url.pathname === '/admin/api/shops') return await audited('shops.list', null, () => adminShops(db, params));
       const detail = url.pathname.match(/^\/admin\/api\/shops\/([^/]+)$/);
       if (detail) return await audited('shop.view', detail[1], async () => ({ ...await adminShopDetail(db, detail[1], undefined, env), writesEnabled }));
-      if (url.pathname === '/admin/api/shop-types') return await audited('shop-types.view', null, () => adminShopTypes(db, params));
+      if (url.pathname === '/admin/api/shop-types') return await audited('shop-types.view', null, async () => ({ ...await adminShopTypes(db, params), writesEnabled }));
       if (url.pathname === '/admin/api/audit') return await audited('audit.view', params.get('shop'), () => adminAudit(db, params));
       if (url.pathname === '/admin/api/option-defaults') return await audited('option-defaults.view', null, async () => ({ ...await listDefaultOptions(db), writesEnabled }));
       if (url.pathname === '/admin/api/email-outbox') return await audited('email-outbox.view', null, () => adminEmailOutbox(db, params));
