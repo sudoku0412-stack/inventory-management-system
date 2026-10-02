@@ -409,6 +409,11 @@ export async function handleRequest(request, env, ctx) {
         return json(await store.stockHistory({ batchId: batch && batch.length <= 64 ? batch : null, limit }));
       }
       if (request.method === 'POST' && url.pathname === '/api/batches/bulk') return json(await store.bulkChange(await readJson(request)));
+      if (request.method === 'POST' && url.pathname === '/api/batches/copy') {
+        const result = await store.copyToShop(await readJson(request));
+        ctx.waitUntil(store.deliverPushes({ contact: env.PUSH_CONTACT }));
+        return json(result, 201);
+      }
       if (request.method === 'POST' && url.pathname === '/api/batches/import') {
         const result = await store.importBatches((await readJson(request)).rows);
         ctx.waitUntil(store.deliverPushes({ contact: env.PUSH_CONTACT }));

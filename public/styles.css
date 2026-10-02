@@ -411,3 +411,4 @@ tbody tr:hover { background: #f9fbfa; }
 .bulk-mode .selected td:first-child .medicine-cell::before, .bulk-mode .mobile-medicine.selected::before { content: "☑"; color: var(--teal); }
 .bulk-mode tr.selected td, .bulk-mode .mobile-medicine.selected { background: #eaf5f2; }
 .bulk-mode .mobile-medicine { align-items: center; }
+.import-problems:empty { display: none; }
