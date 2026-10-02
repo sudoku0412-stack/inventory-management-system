@@ -51,7 +51,7 @@ test('discarding items removes them, their reminders and photos, and records the
   assert.deepEqual((await one.list()).map(item => item.name), ['Keep']);
   assert.equal(sqlite.prepare("SELECT count(*) n FROM notifications WHERE batch_id=?").get(a.id).n, 0);
   assert.equal(deleted.length, 1);
-  assert.deepEqual(sqlite.prepare("SELECT item_name,change,quantity_after FROM stock_events WHERE kind='discarded' ORDER BY id").all().map(row => ({ ...row })), [{ item_name: 'A', change: -4, quantity_after: 0 }, { item_name: 'B', change: -4, quantity_after: 0 }]);
+  assert.deepEqual(sqlite.prepare("SELECT item_name,change,quantity_after FROM stock_events WHERE kind='discarded' ORDER BY item_name").all().map(row => ({ ...row })), [{ item_name: 'A', change: -4, quantity_after: 0 }, { item_name: 'B', change: -4, quantity_after: 0 }]);
   assert.equal(sqlite.prepare("SELECT count(*) n FROM batch_changes WHERE kind='remove'").get().n, 2);
   assert.ok(keep.id);
 });
