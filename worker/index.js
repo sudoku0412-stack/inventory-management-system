@@ -27,7 +27,7 @@ import { acceptHouseholdInvitation, createHouseholdInvitation, listHouseholdAcce
 
 const jwksCache = { at: 0, keys: null };
 
-const bootstrapAssetPaths = new Set(['/index.html', '/app.js', '/greeting.js', '/shop-client.js', '/shop-creation-client.js', '/owner-promotion-client.js', '/member-removal-client.js', '/owner-demotion-client.js', '/ownership-transfer-client.js', '/shop-leave-client.js', '/shop-deletion-client.js', '/deleted-shops-client.js', '/email-preferences-client.js', '/inventory-export-client.js', '/options-client.js', '/overview-client.js', '/barcode-client.js', '/info-tips.js', '/profile-tabs.js', '/shop-types-client.js', '/csv-import-client.js', '/stock-history-client.js', '/zxing-detector.js', '/vendor/zxing-reader.iife.js', '/vendor/zxing_reader.wasm', '/shop-invitations-client.js', '/change-feed-client.js', '/offline-store.js', '/offline-queue.js', '/restock-client.js', '/styles.css', '/sw.js']);
+const bootstrapAssetPaths = new Set(['/index.html', '/app.js', '/greeting.js', '/shop-client.js', '/shop-creation-client.js', '/owner-promotion-client.js', '/member-removal-client.js', '/owner-demotion-client.js', '/ownership-transfer-client.js', '/shop-leave-client.js', '/shop-deletion-client.js', '/deleted-shops-client.js', '/email-preferences-client.js', '/inventory-export-client.js', '/options-client.js', '/overview-client.js', '/barcode-client.js', '/info-tips.js', '/profile-tabs.js', '/shop-types-client.js', '/csv-import-client.js', '/stock-history-client.js', '/bulk-select-client.js', '/zxing-detector.js', '/vendor/zxing-reader.iife.js', '/vendor/zxing_reader.wasm', '/shop-invitations-client.js', '/change-feed-client.js', '/offline-store.js', '/offline-queue.js', '/restock-client.js', '/styles.css', '/sw.js']);
 
 export function assetCacheControl(path) {
   if (path === '/index.html') return 'no-store';
@@ -408,6 +408,7 @@ export async function handleRequest(request, env, ctx) {
         const limit = Number(url.searchParams.get('limit') || 50);
         return json(await store.stockHistory({ batchId: batch && batch.length <= 64 ? batch : null, limit }));
       }
+      if (request.method === 'POST' && url.pathname === '/api/batches/bulk') return json(await store.bulkChange(await readJson(request)));
       if (request.method === 'POST' && url.pathname === '/api/batches/import') {
         const result = await store.importBatches((await readJson(request)).rows);
         ctx.waitUntil(store.deliverPushes({ contact: env.PUSH_CONTACT }));
