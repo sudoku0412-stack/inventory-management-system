@@ -227,6 +227,12 @@
               <button class="button light" id="reviewCabinetBtn" type="button">Review inventory</button>
             </aside>
           </div>
+          <section class="history-block" id="shopHistory" aria-labelledby="shopHistoryTitle" hidden>
+            <h2 id="shopHistoryTitle">Recent activity</h2>
+            <p class="access-meta">Every time stock was added, used, changed or discarded. Newest first.</p>
+            <p class="access-meta" id="shopHistoryUsage"></p>
+            <ul class="history-list" id="shopHistoryList"></ul>
+          </section>
         </section>
 
         <section class="view" id="profileView" data-view-panel="profile" hidden>
@@ -507,6 +513,11 @@
         <dl class="detail-grid">
           <div><dt>Expiry date</dt><dd id="batchExpiry">—</dd></div><div><dt>Stored in</dt><dd id="batchLocation">—</dd></div><div><dt>Added</dt><dd id="batchAdded">—</dd></div><div><dt>Notes</dt><dd id="batchNotes">—</dd></div>
         </dl>
+        <section class="history-block" id="batchHistory" hidden>
+          <h3>Recent activity</h3>
+          <p class="access-meta" id="batchUsage"></p>
+          <ul class="history-list" id="batchHistoryList"></ul>
+        </section>
         <div class="quantity-stepper" id="consumeControl">
           <label for="consumeAmount">How many did you use?</label>
           <div><button type="button" data-step="-1" aria-label="Decrease quantity to use">−</button><input id="consumeAmount" name="consume-amount" type="number" min="1" value="1" autocomplete="off" /><button type="button" data-step="1" aria-label="Increase quantity to use">＋</button></div>

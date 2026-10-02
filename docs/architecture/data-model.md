@@ -201,6 +201,7 @@ erDiagram
 
 - `batches.revision` starts at 1 and increases on every change; a write with an older `baseRevision` gets 409 with the current batch.
 - Every batch write appends a `batch_changes` row in the same D1 batch. `batch_change_floor` (one row) records the highest sequence removed by pruning; a client cursor below it gets `reset: true`.
+- Every quantity change (add, use, edit, discard, CSV import) also appends a `stock_events` row right after the `batch_changes` row, with `WHERE changes()=1` so it only exists when the write did. It copies the item name and unit so history survives a rename. Rows are kept until the Shop is purged; the item dialog and Notifications read them through `GET /api/stock-events`.
 - Lists are `form`, `unit`, `location` and `strength`. `option_defaults` holds platform defaults per built-in type; `custom_type_options` holds a custom type's lists; `shop_options` holds a Shop's own additions (`is_custom = 1`) and hidden defaults (`hidden = 1`).
 - `shop_types.shop_type` always holds the base type, even when `custom_type_id` is set, so older code paths keep working.
 
