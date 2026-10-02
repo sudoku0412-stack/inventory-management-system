@@ -175,13 +175,45 @@ const views = {
   },
   async types(after) {
     const data = await get(`/admin/api/shop-types${after ? `?cursor=${encodeURIComponent(after)}` : ''}`);
+    setWrites(data.writesEnabled);
     const names = { form: 'Form / category', unit: 'Unit', location: 'Storage location', strength: 'Strength' };
+    const reload = () => run('types');
     const lists = row => el('div', {}, ...Object.keys(names).map(list => el('p', {}, el('strong', {}, `${names[list]}: `), text(row.lists[list].length ? row.lists[list].join(', ') : '—'))));
-    const view = el('div', {}, el('p', { class: 'note' }, 'Read-only. Shop types Owners created for their own Shops: configuration only, never item contents. Built-in types are under Lists.'),
+    // Staff edits: settings and list values. Each change asks for a reason and is recorded in the audit log.
+    const editor = row => {
+      if (!writesEnabled) return null;
+      const name = el('input', { type: 'text', maxlength: '40', value: row.name, 'aria-label': `Name of ${row.name}` });
+      const label = el('input', { type: 'text', maxlength: '20', value: row.form_label, 'aria-label': `Form label of ${row.name}` });
+      const strength = el('input', { type: 'checkbox', 'aria-label': `Show Strength for ${row.name}` });
+      strength.checked = Boolean(row.uses_strength);
+      const save = el('button', { type: 'button', class: 'primary' }, 'Save settings…');
+      save.addEventListener('click', () => {
+        const extra = { name: name.value, usesStrength: strength.checked, formLabel: label.value };
+        openAction({ key: `type:${row.id}:${JSON.stringify(extra)}`, title: `Change ${row.name}?`, effect: 'Changes this Owner’s Shop type. Shops that use it see the new name, label and Strength setting. Saved items are not changed.', verb: 'Save settings', path: `/admin/api/shop-types/${encodeURIComponent(row.id)}/update`, extra, trigger: save, done: reload });
+      });
+      const box = el('div', { class: 'typeedit' }, el('p', {}, el('label', {}, 'Name ', name), ' ', el('label', {}, 'Form label ', label), ' ', el('label', {}, strength, ' Show Strength'), ' ', save));
+      for (const list of Object.keys(names)) {
+        const line = el('p', { class: 'listrow' }, el('strong', {}, `${names[list]}: `));
+        for (const value of row.lists[list]) {
+          const remove = el('button', { type: 'button', class: 'danger', 'aria-label': `Remove ${value} from ${names[list]} of ${row.name}` }, `${value} ×`);
+          remove.addEventListener('click', () => openAction({ key: `typeopt:${row.id}:${list}:${value}:remove`, title: `Remove “${value}”?`, effect: `Removes it from ${row.name}’s ${names[list].toLowerCase()} list for new Shops and for Shops using the type. Saved items keep their value.`, verb: 'Remove', path: `/admin/api/shop-types/${encodeURIComponent(row.id)}/options`, extra: { list, value, action: 'remove' }, trigger: remove, done: reload }));
+          line.append(remove, ' ');
+        }
+        const input = el('input', { type: 'text', maxlength: '30', 'aria-label': `New ${names[list]} option for ${row.name}` }), add = el('button', { type: 'button', class: 'primary' }, 'Add');
+        add.addEventListener('click', () => {
+          if (!input.value.trim()) { status.textContent = 'Type a value to add first.'; status.classList.add('error'); return; }
+          openAction({ key: `typeopt:${row.id}:${list}:${input.value}:add`, title: `Add “${input.value.trim()}”?`, effect: `Adds it to ${row.name}’s ${names[list].toLowerCase()} list.`, verb: 'Add', path: `/admin/api/shop-types/${encodeURIComponent(row.id)}/options`, extra: { list, value: input.value, action: 'add' }, trigger: add, done: reload });
+        });
+        line.append(input, ' ', add);
+        box.append(line);
+      }
+      return box;
+    };
+    const view = el('div', {}, el('p', { class: 'note' }, writesEnabled ? 'Shop types Owners created for their own Shops: configuration only, never item contents. Changes need a reason and are audited. Built-in types are under Lists.' : 'Read-only here. Shop types Owners created for their own Shops: configuration only, never item contents. Built-in types are under Lists.'),
       table('Shop types made by Owners', [
         { label: 'Name', key: 'name' }, { label: 'Owner', key: 'owner_email' }, { label: 'Started as', render: row => row.base_type === 'goods' ? 'General goods' : 'Medicine' },
         { label: 'Strength', render: row => row.uses_strength ? 'Shown' : 'Hidden' }, { label: 'Form label', key: 'form_label' }, { label: 'Shops', key: 'shop_count' },
-        { label: 'Created', render: row => when(row.created_at) }, { label: 'Lists', render: lists }
+        { label: 'Created', render: row => when(row.created_at) }, { label: 'Lists', render: row => el('div', {}, lists(row), ...[editor(row)].filter(Boolean)) }
       ], data.types));
     after ? content.append(view) : content.replaceChildren(view);
     return data.nextCursor;

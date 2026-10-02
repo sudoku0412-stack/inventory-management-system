@@ -96,3 +96,6 @@ dialog input, dialog textarea { width: 100%; margin-top: 4px; padding: 10px; bor
   .listrow button { flex: 1 1 auto; }
 }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.typeedit { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fafcfb; }
+.typeedit label { display: inline-flex; align-items: center; gap: 6px; margin: 4px 8px 4px 0; }
+.typeedit input[type="text"] { min-height: 40px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; }

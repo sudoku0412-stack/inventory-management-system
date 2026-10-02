@@ -457,3 +457,84 @@ test('the admin pages have a Shop types tab and show the type on the Shops list 
   assert.match(js, /\{ label: 'Type', key: 'shop_type' \}/);
   assert.match(js, /Shop type: \$\{data\.shopType\.name\}/);
 });
+
+// ---- Staff edits of Owner-made Shop types ----
+test('staff can rename a Shop type, toggle Strength and set any Form label, with an audit row and replay safety', () => withFetch(async () => {
+  const f = fixture(); withCustomType(f); const w = writable(f);
+  const path = `/admin/api/shop-types/${typeId}/update`;
+  const body = (op, extra) => ({ operationId: opId(op), reason: REASON, ...extra });
+  const type = () => w.rows('SELECT name,uses_strength,form_label,form_label_text FROM custom_shop_types WHERE id=\'' + typeId + '\'')[0];
+  const first = await w.post(path, body(70, { name: 'Larder', usesStrength: true, formLabel: 'Kind' }));
+  assert.equal(first.status, 200);
+  assert.deepEqual(await first.json(), { changed: true });
+  assert.deepEqual(type(), { name: 'Larder', uses_strength: 1, form_label: 'Form', form_label_text: 'Kind' });
+  const audit = w.rows("SELECT admin_email,action,target,reason,operation_id FROM admin_audit WHERE action='shop-type.update'");
+  assert.deepEqual(audit, [{ admin_email: EMAIL, action: 'shop-type.update', target: `type:${typeId}`, reason: REASON, operation_id: opId(70) }]);
+  assert.deepEqual(await (await w.post(path, body(70, { name: 'Larder', usesStrength: true, formLabel: 'Kind' }))).json(), { changed: false }, 'replay');
+  assert.equal(w.rows("SELECT * FROM admin_audit WHERE action='shop-type.update'").length, 1);
+  assert.deepEqual(await (await w.post(path, body(71, { name: 'Larder' }))).json(), { changed: false }, 'no real change writes nothing');
+  assert.equal(w.rows("SELECT * FROM admin_audit WHERE action='shop-type.update'").length, 1);
+  const shown = await (await f.call('/admin/api/shop-types')).json();
+  assert.deepEqual([shown.types[0].name, shown.types[0].form_label, shown.types[0].uses_strength, shown.writesEnabled], ['Larder', 'Kind', true, true]);
+}));
+
+test('staff type edits are validated and need the same safeguards as other admin writes', () => withFetch(async () => {
+  const f = fixture(); withCustomType(f); const w = writable(f);
+  const path = `/admin/api/shop-types/${typeId}/update`;
+  const ok = { operationId: opId(80), reason: REASON, name: 'Pantry 2' };
+  assert.equal((await w.post(path, { ...ok, reason: 'short' })).status, 400);
+  assert.equal((await w.post(path, { ...ok, operationId: 'nope' })).status, 400);
+  assert.equal((await w.post(path, { ...ok, extra: 1 })).status, 400);
+  assert.equal((await w.post(path, { ...ok, name: 'Medicine' })).status, 409);
+  assert.equal((await w.post(path, { ...ok, formLabel: ' ' })).status, 400);
+  assert.equal((await w.post(path, { ...ok, usesStrength: 'yes' })).status, 400);
+  f.sqlite.prepare("INSERT INTO custom_shop_types (id,owner_user_id,name,base_type,uses_strength,form_label,created_at) VALUES (?,?,?,?,?,?,?)").run(uuid(90), uuid(21), 'Taken', 'goods', 0, 'Category', 't');
+  assert.equal((await w.post(path, { ...ok, name: 'taken' })).status, 409);
+  assert.equal((await w.post(`/admin/api/shop-types/${uuid(91)}/update`, ok)).status, 404);
+  assert.equal((await w.post('/admin/api/shop-types/not-an-id/update', ok)).status, 404);
+  assert.equal((await w.post(path, ok, { headers: { origin: 'https://evil.example' } })).status, 403);
+  assert.equal((await w.post(path, ok, { headers: { 'x-admin-action': '' } })).status, 403);
+  assert.equal((await w.post(path, ok, { token: jwt({ email: 'stranger@example.test' }) })).status, 403);
+  assert.equal(w.rows("SELECT name FROM custom_shop_types WHERE id='" + typeId + "'")[0].name, 'Pantry', 'nothing changed');
+  assert.equal(w.rows("SELECT * FROM admin_audit WHERE action LIKE 'shop-type.%'").length, 0);
+  f.env.ADMIN_WRITES_ENABLED = undefined;
+  assert.equal((await w.post(path, ok)).status, 403);
+  f.env.ADMIN_WRITES_ENABLED = 'true';
+  assert.equal((await w.post(path, ok)).status, 200);
+}));
+
+test('staff can add and remove list values on a Shop type, keeping one value in each required list', () => withFetch(async () => {
+  const f = fixture(); withCustomType(f); const w = writable(f);
+  const path = `/admin/api/shop-types/${typeId}/options`;
+  const send = (op, extra) => w.post(path, { operationId: opId(op), reason: REASON, ...extra });
+  const list = name => w.rows(`SELECT value FROM custom_type_options WHERE type_id='${typeId}' AND list='${name}' ORDER BY sort_order`).map(row => row.value);
+  assert.equal((await send(90, { list: 'unit', value: 'bag', action: 'add' })).status, 200);
+  assert.deepEqual(list('unit'), ['tin', 'jar', 'bag']);
+  assert.equal((await send(91, { list: 'unit', value: 'BAG', action: 'add' })).status, 409);
+  assert.equal((await send(92, { list: 'unit', value: 'tin', action: 'remove' })).status, 200);
+  assert.deepEqual(list('unit'), ['jar', 'bag']);
+  assert.equal((await send(93, { list: 'unit', value: 'nope', action: 'remove' })).status, 404);
+  assert.equal((await send(94, { list: 'form', value: 'Dry goods', action: 'remove' })).status, 400, 'a required list keeps one value');
+  assert.equal((await send(95, { list: 'strength', value: '5 mg', action: 'add' })).status, 200);
+  assert.equal((await send(96, { list: 'strength', value: '5 mg', action: 'remove' })).status, 200, 'strength may be emptied');
+  assert.equal((await send(97, { list: 'colour', value: 'x', action: 'add' })).status, 400);
+  assert.equal((await send(98, { list: 'unit', value: 'x', action: 'flip' })).status, 400);
+  assert.equal((await send(99, { list: 'unit', value: ' ', action: 'add' })).status, 400);
+  assert.equal((await send(90, { list: 'unit', value: 'bag', action: 'add' })).status, 200, 'replay is a no-op');
+  assert.deepEqual(list('unit'), ['jar', 'bag']);
+  assert.deepEqual(w.rows("SELECT action FROM admin_audit WHERE action LIKE 'shop-type.option.%' ORDER BY created_at, rowid").map(row => row.action), ['shop-type.option.add', 'shop-type.option.remove', 'shop-type.option.add', 'shop-type.option.remove']);
+}));
+
+test('a staff type edit is atomic with its audit row', () => withFetch(async () => {
+  const f = fixture(); withCustomType(f); const w = writable(f);
+  f.sqlite.exec("CREATE TRIGGER block_type_audit BEFORE INSERT ON admin_audit WHEN NEW.action='shop-type.update' BEGIN SELECT RAISE(ABORT, 'blocked'); END;");
+  assert.notEqual((await w.post(`/admin/api/shop-types/${typeId}/update`, { operationId: opId(100), reason: REASON, name: 'Blocked' })).status, 200);
+  assert.equal(w.rows("SELECT name FROM custom_shop_types WHERE id='" + typeId + "'")[0].name, 'Pantry');
+}));
+
+test('the Shop types tab offers staff editing only when admin changes are on', () => {
+  const js = readFileSync(new URL('../public/admin/admin.js', import.meta.url), 'utf8');
+  assert.match(js, /\/admin\/api\/shop-types\/\$\{encodeURIComponent\(row\.id\)\}\/update/);
+  assert.match(js, /\/admin\/api\/shop-types\/\$\{encodeURIComponent\(row\.id\)\}\/options/);
+  assert.doesNotMatch(js, /Read-only\. Shop types Owners created/);
+});
