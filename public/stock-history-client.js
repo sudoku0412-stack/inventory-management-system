@@ -33,8 +33,10 @@ export function bindStockHistory({ document, api, now = () => new Date() }) {
       row.append(text, time);
       return row;
     }));
-    if (target.usage) target.usage.textContent = data.usedLast30Days ? `Used ${data.usedLast30Days} in the last 30 days.` : '';
-    target.section.hidden = data.events.length === 0;
+    const empty = data.events.length === 0;
+    if (target.usage) target.usage.textContent = empty ? 'No changes recorded yet. From now on, every time stock is added, used or discarded it shows here.' : data.usedLast30Days ? `Used ${data.usedLast30Days} in the last 30 days.` : '';
+    target.list.hidden = empty;
+    target.section.hidden = false;
   }
 
   return {
