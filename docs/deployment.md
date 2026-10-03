@@ -89,6 +89,8 @@ application in Zero Trust:
 The more specific path wins over the main application, so the rest of the site stays behind Access. Share
 `https://inventory-management.craftloop.ca/welcome` as the public address. Without the bypass the page still works, but visitors sign in first.
 
+For the branded Cloudflare sign-in page (Zero Trust → Custom pages → Access login page), use `https://inventory-management.craftloop.ca/welcome/logo-v1.png` as the Logo URL. It is served by the same public `/welcome*` path. If the logo changes, add a new file name (for example `logo-v2.png`) because image files are cached for a year.
+
 ## Maintenance switch (optional, during risky migrations)
 
 The Worker has a read-only switch for the moments when a migration must not race with writes. It is deliberately **not** created by a migration: if the table `migration_runs` does not exist, the app behaves normally. When the table exists and its single row has `state = 'active'`, every write route answers 503 ("Inventory is temporarily read-only while a migration is in progress") and the admin Overview shows the state. Reads keep working.

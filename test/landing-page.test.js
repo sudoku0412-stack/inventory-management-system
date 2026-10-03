@@ -54,3 +54,16 @@ test('the app itself still needs Access: root is not part of the public landing 
   assert.deepEqual(asked, ['/index.html']);
   assert.equal((await serve('/api/batches')).response.status === 200, false);
 });
+
+test('the logo files for the Cloudflare Access login page are public, cached as images, and real PNGs', async () => {
+  for (const path of ['/welcome/logo-v1.png', '/welcome/icon-v1.png']) {
+    assert.ok(publicAssetPaths.has(path), path);
+    const { response, asked } = await serve(path);
+    assert.equal(response.status, 200);
+    assert.deepEqual(asked, [path]);
+    assert.equal(response.headers.get('cache-control'), 'public, max-age=31536000, immutable');
+    const file = await readFile(new URL(`../public${path}`, import.meta.url));
+    assert.deepEqual([...file.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], `${path} is a PNG`);
+    assert.ok(file.length < 200 * 1024, `${path} stays small`);
+  }
+});
