@@ -15,37 +15,80 @@
         <svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="16" fill="#123e3d"/><path d="M19 32h26M32 19v26" stroke="#d8f3e5" stroke-width="8" stroke-linecap="round"/></svg>
         <span>Inventory Management System</span>
       </a>
-      <a class="button small" href="/signin">Sign in</a>
     </header>
 
     <main>
       <section class="hero">
-        <p class="eyebrow">BY CRAFTLOOP</p>
-        <h1>Know what you have, before it runs out or expires.</h1>
-        <p class="lead">One simple place to keep track of items, expiry dates and stock levels across all your shops. Made for medicines, groceries, supplies and anything else you count.</p>
-        <div class="actions">
-          <a class="button" href="/signin">Sign in</a>
-          <a class="text-link" href="#features">See what it does</a>
+        <div class="hero-copy">
+          <p class="eyebrow">BY CRAFTLOOP</p>
+          <h1>Know what you have, <span>before it runs out or expires.</span></h1>
+          <p class="lead">One simple place to keep track of items, expiry dates and stock levels across all your shops. Made for medicines, groceries, supplies and anything else you count.</p>
+          <div class="actions">
+            <a class="button large" href="/signin">Sign in <span aria-hidden="true">→</span></a>
+            <a class="text-link" href="#features">See what it does</a>
+          </div>
+          <p class="note">Access is by invitation. Sign in with the email your shop owner used, and we will send you a one-time code.</p>
         </div>
-        <p class="note">Access is by invitation. Sign in with the email your shop owner used, and we will send you a one-time code.</p>
+
+        <div class="preview" aria-hidden="true">
+          <div class="preview-card">
+            <div class="preview-head"><strong>Main shop</strong><span>3 items</span></div>
+            <ul>
+              <li><span class="dot ok"></span><div><b>Paracetamol 500 mg</b><small>24 tablets · Medicine cabinet</small></div><em class="pill ok">Healthy</em></li>
+              <li><span class="dot soon"></span><div><b>Olive oil 1 L</b><small>6 bottles · Pantry shelf</small></div><em class="pill soon">Expires in 9 days</em></li>
+              <li><span class="dot low"></span><div><b>AA batteries</b><small>2 packs · Storeroom</small></div><em class="pill low">Low stock</em></li>
+            </ul>
+          </div>
+          <div class="preview-chip chip-one"><span class="chip-icon">!</span> 2 items need attention</div>
+          <div class="preview-chip chip-two"><span class="chip-icon good">✓</span> Restock list ready</div>
+        </div>
       </section>
 
       <section class="features" id="features" aria-labelledby="featuresTitle">
+        <p class="eyebrow">WHAT YOU GET</p>
         <h2 id="featuresTitle">Everything in one place</h2>
         <ul>
-          <li><h3>Expiry and low-stock alerts</h3><p>See what is expired, expiring soon or running low, and get reminders before it matters.</p></li>
-          <li><h3>Several shops, one account</h3><p>Run more than one shop, switch between them, and see an overview and printable report across all of them.</p></li>
-          <li><h3>Made for your kind of stock</h3><p>Pick a shop type with the right forms, units and storage locations, or create your own.</p></li>
-          <li><h3>Fast to fill in</h3><p>Scan barcodes with your camera, snap a pack photo to suggest the name and expiry, or import a CSV.</p></li>
-          <li><h3>Work together</h3><p>Invite members to keep the stock up to date, and see a history of every item added, used or discarded.</p></li>
-          <li><h3>Works on every device</h3><p>Use it in the browser or install it like an app. It keeps working when the connection drops.</p></li>
+          <li>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+            <h3>Expiry and low-stock alerts</h3><p>See what is expired, expiring soon or running low, and get reminders before it matters.</p>
+          </li>
+          <li>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10l2-5h14l2 5M3 10v9h18v-9M3 10h18M9 14h6"/></svg>
+            <h3>Several shops, one account</h3><p>Run more than one shop, switch between them, and see an overview and printable report across all of them.</p>
+          </li>
+          <li>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h16"/></svg>
+            <h3>Made for your kind of stock</h3><p>Pick a shop type with the right forms, units and storage locations, or create your own.</p>
+          </li>
+          <li>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V5h3M20 7V5h-3M4 17v2h3M20 17v2h-3M8 9v6M12 9v6M16 9v6"/></svg>
+            <h3>Fast to fill in</h3><p>Scan barcodes with your camera, snap a pack photo to suggest the name and expiry, or import a CSV.</p>
+          </li>
+          <li>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 19v-1a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v1M10 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM20 19v-1a3 3 0 0 0-2-2.8M16 5.2a3 3 0 0 1 0 5.6"/></svg>
+            <h3>Work together</h3><p>Invite members to keep the stock up to date, and see a history of every item added, used or discarded.</p>
+          </li>
+          <li>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h10a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1ZM11 18h2"/></svg>
+            <h3>Works on every device</h3><p>Use it in the browser or install it like an app. It keeps working when the connection drops.</p>
+          </li>
         </ul>
+      </section>
+
+      <section class="steps" aria-labelledby="stepsTitle">
+        <p class="eyebrow">GETTING STARTED</p>
+        <h2 id="stepsTitle">Up and running in three steps</h2>
+        <ol>
+          <li><span class="num">1</span><h3>Get invited</h3><p>Your shop owner adds your email address.</p></li>
+          <li><span class="num">2</span><h3>Sign in</h3><p>Enter your email and the one-time code we send you.</p></li>
+          <li><span class="num">3</span><h3>Start tracking</h3><p>Add items, scan barcodes and keep every shelf in check.</p></li>
+        </ol>
       </section>
 
       <section class="cta" aria-labelledby="ctaTitle">
         <h2 id="ctaTitle">Ready to open your inventory?</h2>
-        <a class="button" href="/signin">Sign in</a>
-        <p class="note">Questions or want your own? <a href="https://craftloop.ca/#contact">Contact craftloop</a>.</p>
+        <a class="button large" href="/signin">Sign in <span aria-hidden="true">→</span></a>
+        <p class="note">Questions, or want your own? <a href="https://craftloop.ca/#contact">Contact craftloop</a>.</p>
       </section>
     </main>
 

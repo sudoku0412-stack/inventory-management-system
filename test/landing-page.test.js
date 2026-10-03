@@ -35,7 +35,8 @@ test('only the landing files are public under /welcome, and only for GET', async
 test('the landing page points sign-in at the app, loads no scripts, and names the product', async () => {
   const page = await html();
   assert.match(page, /<title>Inventory Management System<\/title>/);
-  assert.ok((page.match(/<a class="button[^"]*" href="\/signin">Sign in<\/a>/g) || []).length >= 2, 'sign-in buttons go to /signin, which Access protects');
+  assert.equal((page.match(/href="\/signin"/g) || []).length, 2, 'one Sign in button in the hero and one at the end, none in the header');
+  assert.doesNotMatch(page.match(/<header[\s\S]*?<\/header>/)[0], /signin/, 'the header carries no second Sign in button');
   assert.doesNotMatch(page, /href="\/">/, 'nothing links to /, which sends signed-out visitors back here');
   assert.doesNotMatch(page, /<script/i, 'no scripts: the page stays inside the strict CSP');
   assert.doesNotMatch(page, /style=/i, 'no inline styles: the CSP allows only the stylesheet');
