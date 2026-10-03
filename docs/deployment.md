@@ -77,6 +77,18 @@ npm run deploy
 
 Open **https://inventory-management.craftloop.ca** on your phone, sign in with Access, then **Add item → Take photo**.
 
+## Public landing page (optional)
+
+`/welcome` is a branded page anyone can open, with a **Sign in** button that goes to the app root (which Access protects). The Worker
+serves only `/welcome`, `/welcome/` and `/welcome/landing.css` this way. To let signed-out visitors see it, add one more Access
+application in Zero Trust:
+
+- Type: self-hosted. Destination: `inventory-management.craftloop.ca` with path `/welcome*`.
+- Policy: action **Bypass**, include **Everyone**.
+
+The more specific path wins over the main application, so the rest of the site stays behind Access. Share
+`https://inventory-management.craftloop.ca/welcome` as the public address. Without the bypass the page still works, but visitors sign in first.
+
 ## Maintenance switch (optional, during risky migrations)
 
 The Worker has a read-only switch for the moments when a migration must not race with writes. It is deliberately **not** created by a migration: if the table `migration_runs` does not exist, the app behaves normally. When the table exists and its single row has `state = 'active'`, every write route answers 503 ("Inventory is temporarily read-only while a migration is in progress") and the admin Overview shows the state. Reads keep working.

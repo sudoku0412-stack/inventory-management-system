@@ -328,7 +328,7 @@ export function app(store = createStore(), { suggest = suggestFromPhoto, env = p
         return json(res, 204, {});
       }
       if (req.method === 'GET') {
-        const file = resolve(publicDir, url.pathname === '/' ? 'index.html' : '.' + url.pathname);
+        const file = resolve(publicDir, url.pathname === '/' ? 'index.html' : url.pathname === '/welcome' || url.pathname === '/welcome/' ? 'welcome/index.html' : '.' + url.pathname);
         if (!file.startsWith(publicDir)) return json(res, 404, { error: 'Not found' });
         try { await stat(file); } catch { return json(res, 404, { error: 'Not found' }); }
         const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
