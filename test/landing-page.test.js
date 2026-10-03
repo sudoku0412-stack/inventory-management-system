@@ -35,7 +35,8 @@ test('only the landing files are public under /welcome, and only for GET', async
 test('the landing page points sign-in at the app, loads no scripts, and names the product', async () => {
   const page = await html();
   assert.match(page, /<title>Inventory Management System<\/title>/);
-  assert.ok((page.match(/<a class="button[^"]*" href="\/">Sign in<\/a>/g) || []).length >= 2, 'sign-in buttons go to the app root, behind Access');
+  assert.ok((page.match(/<a class="button[^"]*" href="\/signin">Sign in<\/a>/g) || []).length >= 2, 'sign-in buttons go to /signin, which Access protects');
+  assert.doesNotMatch(page, /href="\/">/, 'nothing links to /, which sends signed-out visitors back here');
   assert.doesNotMatch(page, /<script/i, 'no scripts: the page stays inside the strict CSP');
   assert.doesNotMatch(page, /style=/i, 'no inline styles: the CSP allows only the stylesheet');
   assert.doesNotMatch(page, /medicine inventory|medicineinventory/i);
@@ -66,4 +67,13 @@ test('the logo files for the Cloudflare Access login page are public, cached as 
     assert.deepEqual([...file.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], `${path} is a PNG`);
     assert.ok(file.length < 200 * 1024, `${path} stays small`);
   }
+});
+
+test('/signin sends a signed-in visitor on to the app and is never cached', async () => {
+  const { response, asked } = await serve('/signin');
+  assert.equal(response.status, 302);
+  assert.equal(response.headers.get('location'), '/');
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  assert.deepEqual(asked, []);
+  assert.equal((await serve('/signin', 'POST')).response.status, 404);
 });
