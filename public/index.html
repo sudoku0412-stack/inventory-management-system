@@ -484,7 +484,7 @@
           <div class="form-row">
             <label class="form-field"><span>Quantity <em>*</em></span><input name="quantity" type="number" min="1" placeholder="e.g. 20" required autocomplete="off" /><small class="field-error"></small></label>
             <div class="form-field expiry-field">
-              <label for="expiryDate">Expiry date</label>
+              <div class="expiry-label-row"><label for="expiryDate">Expiry date</label><button class="text-button scan-expiry-trigger" type="button">Scan with camera</button></div>
               <input id="expiryDate" class="expiry-date-input" name="expiry" type="date" autocomplete="off" aria-describedby="expiryDateHelp" />
               <label class="expiry-unknown" for="expiryUnknown"><input id="expiryUnknown" name="expiry_unknown" type="checkbox" /><span>I don’t know the expiry date</span></label>
               <small id="expiryDateHelp">Choose this when the package does not show an expiry date.</small>
@@ -538,6 +538,16 @@
     </dialog>
     <dialog class="modal confirm-modal" id="promoteMemberModal" aria-labelledby="promoteMemberTitle" aria-describedby="promoteMemberShop promoteMemberHelp">
       <form id="promoteMemberForm" novalidate><div class="modal-header"><div><span class="overline">SHOP ACCESS</span><h2 id="promoteMemberTitle">Make owner?</h2></div></div><div class="modal-body"><p id="promoteMemberShop"></p><p id="promoteMemberHelp">They’ll be able to manage this Shop’s access, including inviting people and making other members owners. You’ll stay an owner. Only promote someone you trust.</p><p class="access-status" id="promoteMemberStatus" role="status" aria-live="polite"></p></div><div class="modal-footer"><button class="button secondary" id="cancelPromoteMember" type="button">Cancel</button><button class="button primary" id="confirmPromoteMember" type="submit">Make owner</button></div></form>
+    </dialog>
+
+    <dialog class="modal camera-modal" id="expiryScanModal" aria-labelledby="expiryScanTitle">
+      <div class="modal-header"><div><span class="overline">EXPIRY DATE</span><h2 id="expiryScanTitle">Scan the expiry date</h2></div><button class="modal-close" type="button" data-close-modal aria-label="Close scan dialog">×</button></div>
+      <div class="modal-body">
+        <video id="expiryScanVideo" class="scan-video" playsinline muted></video>
+        <p id="expiryScanStatus" role="status" aria-live="polite"></p>
+        <small>Reads the text on your device. Nothing is uploaded. It looks for a date after EXP, USE BY or BEST BEFORE. Always check the date before saving.</small>
+      </div>
+      <div class="modal-footer"><button class="button secondary" type="button" data-close-modal>Cancel</button></div>
     </dialog>
 
     <dialog class="modal camera-modal" id="packagingCameraModal" aria-labelledby="packagingCameraTitle">
