@@ -89,6 +89,15 @@ application in Zero Trust:
 The more specific path wins over the main application, so the rest of the site stays behind Access. Share
 `https://inventory-management.craftloop.ca/welcome` as the public address. Without the bypass the page still works, but visitors sign in first.
 
+To send signed-out visitors from the app address to the landing page, add a Single Redirect rule (Cloudflare dashboard → the zone → Rules → Redirect Rules):
+
+- When: Hostname equals `inventory-management.craftloop.ca` **and** URI Path equals `/` **and** Cookie does not contain `CF_Authorization`.
+  As an expression: `(http.host eq "inventory-management.craftloop.ca" and http.request.uri.path eq "/" and not http.cookie contains "CF_Authorization")`
+- Then: Dynamic or static redirect to `https://inventory-management.craftloop.ca/welcome`, status 302.
+
+Signed-in visitors carry the Access cookie and go straight to the app. The landing page's Sign in button points at `/signin`, which Access protects; after
+sign-in the Worker sends the visitor to `/`. If the rule matched `/` for that button the visitor would loop back to the landing page, so keep the button on `/signin`.
+
 For the branded Cloudflare sign-in page (Zero Trust → Custom pages → Access login page), use `https://inventory-management.craftloop.ca/welcome/logo-v1.png` as the Logo URL. It is served by the same public `/welcome*` path. If the logo changes, add a new file name (for example `logo-v2.png`) because image files are cached for a year.
 
 ## Maintenance switch (optional, during risky migrations)

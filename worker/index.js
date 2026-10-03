@@ -472,6 +472,9 @@ export async function handleRequest(request, env, ctx) {
     }
   }
 
+  // Reached only after Cloudflare Access has signed the visitor in. The landing page's Sign in button points here,
+  // because a redirect rule sends signed-out visitors from / to /welcome.
+  if (url.pathname === '/signin' && (request.method === 'GET' || request.method === 'HEAD')) return new Response(null, { status: 302, headers: { location: '/', 'cache-control': 'no-store' } });
   if (request.method !== 'GET' || !publicAssetPaths.has(url.pathname)) return new Response('Not found', { status: 404 });
   const assetPath = url.pathname === '/' ? '/index.html' : url.pathname === '/welcome' || url.pathname === '/welcome/' ? '/welcome/index.html' : url.pathname;
   return fetchAsset(request, env, assetPath);
