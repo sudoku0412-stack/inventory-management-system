@@ -1,0 +1,7 @@
+# Public marketing page for the Inventory Management System. Static files only, no code and no data.
+# Deploy from this folder: npx wrangler deploy
+name = "inventory-management-landing"
+compatibility_date = "2025-04-01"
+
+[assets]
+directory = "./public"
