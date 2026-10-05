@@ -32,23 +32,48 @@ test('only the landing files are public under /welcome, and only for GET', async
   assert.ok(publicAssetPaths.has('/welcome') && publicAssetPaths.has('/welcome/') && publicAssetPaths.has('/welcome/landing.css'));
 });
 
-test('the landing page points sign-in at the app, loads no scripts, and names the product', async () => {
+test('the landing page points every sign-in at the app, runs only its own scripts, and names the product', async () => {
   const page = await html();
   assert.match(page, /<title>Inventory Management System<\/title>/);
-  assert.equal((page.match(/href="\/signin"/g) || []).length, 2, 'one Sign in button in the hero and one at the end, none in the header');
-  assert.doesNotMatch(page.match(/<header[\s\S]*?<\/header>/)[0], /signin/, 'the header carries no second Sign in button');
+  assert.equal((page.match(/href="\/signin"/g) || []).length, 3, 'Sign in in the header, the hero and the closing call to action');
   assert.doesNotMatch(page, /href="\/">/, 'nothing links to /, which sends signed-out visitors back here');
-  assert.doesNotMatch(page, /<script/i, 'no scripts: the page stays inside the strict CSP');
-  assert.doesNotMatch(page, /style=/i, 'no inline styles: the CSP allows only the stylesheet');
+  const scripts = [...page.matchAll(/<script\b[^>]*>/gi)].map(match => match[0]);
+  assert.equal(scripts.length, 2);
+  for (const tag of scripts) assert.match(tag, /src="\/welcome\/[\w.-]+\.js"/, 'every script is a file under /welcome, never inline');
+  assert.doesNotMatch(page, /<script\b[^>]*>\s*[^<\s]/i, 'no inline script body: the CSP allows only files');
+  assert.doesNotMatch(page, /style=|<style/i, 'no inline styles: the CSP allows only the stylesheet');
   assert.doesNotMatch(page, /medicine inventory|medicineinventory/i);
   assert.match(page, /href="\/welcome\/landing\.css"/);
   assert.match(page, /by invitation/i);
+  assert.doesNotMatch(page, /waitlist|join the list/i, 'there is no waitlist: access is by invitation');
 });
 
-test('the landing stylesheet supports dark mode and small screens', async () => {
+test('the landing files, fonts and scripts are public, only for GET, and revalidated where they change', async () => {
+  for (const path of ['/welcome/landing.js', '/welcome/theme.js', '/welcome/fonts/bricolage-grotesque-v1.woff2', '/welcome/fonts/instrument-sans-v1.woff2']) {
+    assert.ok(publicAssetPaths.has(path), `${path} must be allowed`);
+    const { response, asked } = await serve(path);
+    assert.equal(response.status, 200, path);
+    assert.deepEqual(asked, [path]);
+    assert.equal((await serve(path, 'POST')).response.status, 404);
+  }
+  assert.equal(assetCacheControl('/welcome/landing.js'), 'no-cache, must-revalidate');
+  assert.equal(assetCacheControl('/welcome/theme.js'), 'no-cache, must-revalidate');
+  for (const file of ['bricolage-grotesque-v1.woff2', 'instrument-sans-v1.woff2']) {
+    const bytes = await readFile(new URL(`../public/welcome/fonts/${file}`, import.meta.url));
+    assert.equal(bytes.subarray(0, 4).toString('latin1'), 'wOF2', `${file} is a real woff2`);
+  }
+});
+
+test('the landing stylesheet defines the animations, the dark theme and reduced motion', async () => {
   const css = await readFile(new URL('../public/welcome/landing.css', import.meta.url), 'utf8');
-  assert.match(css, /prefers-color-scheme:\s*dark/);
-  assert.match(css, /@media \(max-width: 560px\)/);
+  assert.match(css, /@keyframes float/);
+  assert.match(css, /@keyframes pulse-ring/);
+  assert.match(css, /\.dark\s*\{/);
+  assert.match(css, /prefers-reduced-motion:\s*reduce/);
+  assert.match(css, /\.js \[data-reveal\]/, 'content is hidden for the reveal only when the script runs');
+  assert.match(css, /font-family: "Bricolage Grotesque"/);
+  assert.match(css, /url\("\/welcome\/fonts\//, 'fonts come from this site, which the CSP requires');
+  assert.doesNotMatch(css, /https?:\/\//, 'nothing is loaded from another site');
 });
 
 test('the app itself still needs Access: root is not part of the public landing routes', async () => {
